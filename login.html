@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Log in — Lesson Scheduler</title>
+<style>
+  html,body{margin:0;padding:0}
+  body{
+    --ink:#1B2430; --ink-soft:#5A6675; --paper:#FBFAF8; --panel:#FFFFFF;
+    --rule:#DDD8CE; --sig:#832222;
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:var(--paper); color:var(--ink); min-height:100vh;
+  }
+  *{box-sizing:border-box}
+  .pad{padding:28px 20px;max-width:420px;margin:0 auto}
+  h1{font-size:19px;font-weight:640;margin:0 0 6px}
+  .sub{font-size:14px;color:var(--ink-soft);line-height:1.5;margin:0 0 22px}
+  input{width:100%;font:inherit;font-size:15px;padding:12px 14px;border-radius:9px;
+        border:1px solid var(--rule);background:var(--panel);color:var(--ink);margin-bottom:12px}
+  .btn{width:100%;font:inherit;font-size:15px;padding:13px;border-radius:9px;border:1px solid var(--sig);
+       background:var(--sig);color:#fff;font-weight:560;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:default}
+  .linkbox{margin-top:20px;padding:14px;border-radius:9px;border:1px solid var(--rule);background:var(--panel);
+           font-size:14px;line-height:1.5}
+  .linkbox a{color:var(--sig);font-weight:600;word-break:break-all}
+  .err{color:#B45309;font-size:13px;margin:-6px 0 12px}
+</style>
+</head>
+<body>
+<div class="pad">
+  <h1>Lesson Scheduler</h1>
+  <p class="sub">Enter your email and we'll give you a link to log in — no password needed.</p>
+  <div id="err"></div>
+  <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+  <button class="btn" id="go">Send my link</button>
+  <div id="result"></div>
+</div>
+<script>
+document.getElementById("go").addEventListener("click", async () => {
+  const email = document.getElementById("email").value.trim();
+  const errEl = document.getElementById("err");
+  const resultEl = document.getElementById("result");
+  const btn = document.getElementById("go");
+  errEl.innerHTML = "";
+  resultEl.innerHTML = "";
+  if (!email || !email.includes("@")) { errEl.innerHTML = '<p class="err">Enter a valid email.</p>'; return; }
+  btn.disabled = true; btn.textContent = "Sending…";
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.innerHTML = '<p class="err">' + (data.error || "Something went wrong.") + "</p>"; }
+    else {
+      resultEl.innerHTML = '<div class="linkbox">Email sending isn\u2019t set up yet, so here\u2019s your link directly \u2014 tap it to continue:<br><br><a href="' + data.link + '">' + data.link + "</a></div>";
+    }
+  } catch (e) {
+    errEl.innerHTML = '<p class="err">Couldn\u2019t reach the server \u2014 check your connection.</p>';
+  }
+  btn.disabled = false; btn.textContent = "Send my link";
+});
+</script>
+</body>
+</html>

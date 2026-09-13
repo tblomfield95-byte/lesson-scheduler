@@ -1,0 +1,13 @@
+name = "lesson-scheduler"
+main = "worker.js"
+compatibility_date = "2026-09-14"
+
+[assets]
+directory = "."
+binding = "ASSETS"
+run_worker_first = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lesson-scheduler-db"
+database_id = "PASTE-THE-NEW-DATABASE-ID-HERE"

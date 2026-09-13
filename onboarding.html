@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Set up your studio — Lesson Scheduler</title>
+<style>
+  html,body{margin:0;padding:0}
+  body{
+    --ink:#1B2430; --ink-soft:#5A6675; --paper:#FBFAF8; --panel:#FFFFFF;
+    --rule:#DDD8CE; --sig:#832222;
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:var(--paper); color:var(--ink); min-height:100vh;
+  }
+  *{box-sizing:border-box}
+  .pad{padding:24px 18px 60px;max-width:480px;margin:0 auto}
+  h1{font-size:19px;font-weight:640;margin:0 0 6px}
+  .sub{font-size:14px;color:var(--ink-soft);line-height:1.5;margin:0 0 20px}
+  label{display:block;font-size:13px;color:var(--ink-soft);margin:0 0 5px}
+  input{width:100%;font:inherit;font-size:15px;padding:11px 13px;border-radius:9px;
+        border:1px solid var(--rule);background:var(--panel);color:var(--ink);margin-bottom:16px}
+  .row{display:flex;gap:8px;align-items:flex-end;margin-bottom:8px}
+  .row input{margin-bottom:0}
+  .row .name{flex:2}
+  .row .hours{flex:1}
+  .x{font:inherit;font-size:18px;line-height:1;width:36px;height:44px;border-radius:9px;
+     border:1px solid var(--rule);background:var(--panel);color:var(--ink-soft);cursor:pointer;flex:none}
+  .add{font:inherit;font-size:13.5px;color:var(--sig);background:none;border:none;padding:4px 0 20px;cursor:pointer}
+  .btn{width:100%;font:inherit;font-size:15px;padding:13px;border-radius:9px;border:1px solid var(--sig);
+       background:var(--sig);color:#fff;font-weight:560;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:default}
+  .err{color:#B45309;font-size:13px;margin:-8px 0 14px}
+  h3{font-size:14px;font-weight:620;margin:24px 0 4px}
+</style>
+</head>
+<body>
+<div class="pad">
+  <h1>Set up your studio</h1>
+  <p class="sub">Just once — your name, instrument, and the students you teach with their allocated hours for the year.</p>
+  <div id="err"></div>
+
+  <label>Your name</label>
+  <input type="text" id="name" placeholder="Jane Smith">
+  <label>Instrument</label>
+  <input type="text" id="instrument" placeholder="Violin">
+
+  <h3>Students</h3>
+  <div id="students"></div>
+  <button class="add" id="addStudent">+ Add another student</button>
+
+  <button class="btn" id="go">Finish setup</button>
+</div>
+<script>
+let rows = [{ name: "", allocated: "" }];
+
+function renderRows() {
+  const el = document.getElementById("students");
+  el.innerHTML = rows.map((r, i) =>
+    '<div class="row">' +
+    '<input class="name" placeholder="Student name" data-i="' + i + '" data-f="name" value="' + r.name.replace(/"/g, "&quot;") + '">' +
+    '<input class="hours" type="number" step="0.5" min="0" placeholder="Hours" data-i="' + i + '" data-f="allocated" value="' + r.allocated + '">' +
+    (rows.length > 1 ? '<button class="x" data-remove="' + i + '">\u00d7</button>' : "") +
+    "</div>"
+  ).join("");
+  el.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("input", () => {
+      rows[Number(inp.dataset.i)][inp.dataset.f] = inp.value;
+    });
+  });
+  el.querySelectorAll("[data-remove]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      rows.splice(Number(btn.dataset.remove), 1);
+      renderRows();
+    });
+  });
+}
+renderRows();
+
+document.getElementById("addStudent").addEventListener("click", () => {
+  rows.push({ name: "", allocated: "" });
+  renderRows();
+});
+
+document.getElementById("go").addEventListener("click", async () => {
+  const name = document.getElementById("name").value.trim();
+  const instrument = document.getElementById("instrument").value.trim();
+  const students = rows.filter(r => r.name.trim());
+  const errEl = document.getElementById("err");
+  errEl.innerHTML = "";
+  if (!name || !instrument || !students.length) {
+    errEl.innerHTML = '<p class="err">Fill in your name, instrument, and at least one student.</p>';
+    return;
+  }
+  const btn = document.getElementById("go");
+  btn.disabled = true; btn.textContent = "Setting up…";
+  try {
+    const res = await fetch("/api/onboarding", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, instrument, students }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.innerHTML = '<p class="err">' + (data.error || "Something went wrong.") + "</p>"; btn.disabled = false; btn.textContent = "Finish setup"; return; }
+    window.location.href = "/admin.html";
+  } catch (e) {
+    errEl.innerHTML = '<p class="err">Couldn\u2019t reach the server \u2014 check your connection.</p>';
+    btn.disabled = false; btn.textContent = "Finish setup";
+  }
+});
+</script>
+</body>
+</html>

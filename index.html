@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Your availability</title>
+<style>
+  html,body{margin:0;padding:0}
+  body{
+    --ink:#1B2430; --ink-soft:#5A6675; --paper:#FBFAF8; --panel:#FFFFFF;
+    --rule:#DDD8CE; --sig:#832222; --warn:#B45309;
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:var(--paper); color:var(--ink); min-height:100vh;
+  }
+  *{box-sizing:border-box}
+  .pad{padding:20px 16px 60px}
+  h1{font-size:17px;font-weight:640;margin:0 0 4px}
+  .sub{font-size:13px;color:var(--ink-soft);margin:0 0 20px}
+  .lede{font-size:14px;line-height:1.5;color:var(--ink-soft);margin:0 0 16px}
+  .namebtn{display:block;width:100%;text-align:left;font:inherit;font-size:15px;padding:14px 16px;
+           margin-bottom:8px;border-radius:10px;border:1px solid var(--rule);background:var(--panel);
+           color:var(--ink);cursor:pointer}
+  .namebtn:active{background:var(--paper)}
+  .namebtn.replied{background:#F3E1E1;border-color:var(--sig)}
+  .replytag{display:block;font-size:12px;color:var(--sig);font-weight:600;margin-top:3px}
+  .back{font:inherit;font-size:13px;color:var(--sig);background:none;border:none;padding:0 0 16px;cursor:pointer}
+  .choice{display:block;width:100%;text-align:left;font:inherit;font-size:15px;padding:14px 16px;
+          margin-bottom:8px;border-radius:10px;border:1px solid var(--rule);background:var(--panel);
+          color:var(--ink);cursor:pointer}
+  .choice.sel{border-color:var(--sig);background:var(--sig);color:#fff;font-weight:560}
+  .grid-wrap{border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--panel);
+             touch-action:none;user-select:none;-webkit-user-select:none;margin:14px 0}
+  .grid-head{display:flex;border-bottom:1px solid var(--rule);background:var(--paper)}
+  .dayhead{flex:1;text-align:center;padding:8px 0;font-size:12px;font-weight:600;color:var(--ink-soft)}
+  .gutter{width:46px;flex:none}
+  .row{display:flex;height:25px}
+  .row .time{font-size:10.5px;color:var(--ink-soft);padding-right:6px;text-align:right;
+             line-height:25px;border-right:1px solid var(--rule)}
+  .cell{flex:1;border-right:1px solid #EFECE6;border-bottom:1px solid #EFECE6;cursor:pointer}
+  .cell:last-child{border-right:none}
+  .cell.on{background:var(--sig)}
+  .cell.muted{background:repeating-linear-gradient(45deg,#F6F4F0,#F6F4F0 4px,#FFF 4px,#FFF 8px);cursor:default}
+  .btn{font:inherit;font-size:14px;padding:12px 18px;border-radius:9px;border:1px solid var(--sig);
+       background:var(--sig);color:#fff;font-weight:560;cursor:pointer;width:100%}
+  .btn:disabled{opacity:.4;cursor:default}
+  .empty{font-size:14px;color:var(--ink-soft);line-height:1.55}
+  .done{font-size:15px;line-height:1.6}
+  .count{font-size:13px;color:var(--ink-soft);margin:6px 0 14px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+const START_HOUR = 9;
+const SLOT_MIN = 30;
+const SLOTS = 20;
+const slotTime = (i) => {
+  const total = START_HOUR * 60 + i * SLOT_MIN;
+  const h = Math.floor(total / 60), m = total % 60;
+  return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+};
+const key = (d, i) => d + "-" + i;
+
+const SLUG = (() => {
+  const m = window.location.pathname.match(/^\/s\/([^\/]+)/);
+  return m ? m[1] : "";
+})();
+
+let R = { loading: true, error: null, weekNo: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), submitted: false, submittedStatus: null, submitting: false, teacherName: null, instrument: null };
+
+async function boot() {
+  if (!SLUG) {
+    R.error = "This link is missing its studio code — ask your teacher for the correct link.";
+    R.loading = false; render(); return;
+  }
+  try {
+    const res = await fetch("/api/round?slug=" + encodeURIComponent(SLUG));
+    const data = await res.json();
+    if (!data.teacherName) {
+      R.error = "Couldn't find that studio — check the link is correct.";
+      R.loading = false; render(); return;
+    }
+    R.weekNo = data.weekNo;
+    R.offered = new Set(data.offered || []);
+    R.students = data.students || [];
+    R.teacherName = data.teacherName;
+    R.instrument = data.instrument;
+  } catch (e) {
+    R.error = "Couldn't reach the schedule — check your connection and reload.";
+  }
+  R.loading = false;
+  render();
+}
+
+function pick(id) {
+  R.picked = id;
+  R.stage = "ask";
+  const s = R.students.find(x => x.id === id);
+  R.avail = new Set((s && s.avail) || []);
+  render();
+}
+function editAgain() { R.submitted = false; R.stage = "ask"; render(); }
+function goGrid() { R.stage = "grid"; render(); }
+function back() { R.picked = null; R.stage = null; R.avail = new Set(); render(); }
+
+async function submitStatus(status) {
+  R.submitting = true; render();
+  try {
+    await fetch("/api/reply", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ slug: SLUG, studentId: R.picked, status, avail: status === "in" ? [...R.avail] : [] }),
+    });
+    R.submitted = true;
+    R.submittedStatus = status;
+    // Keep the in-memory record in sync, so going back to edit again in
+    // this same session shows what was just submitted — not whatever was
+    // true when the page first loaded.
+    const s = R.students.find(x => x.id === R.picked);
+    if (s) { s.status = status; s.avail = status === "in" ? [...R.avail] : []; }
+    R.submitting = false;
+  } catch (e) {
+    R.submitting = false;
+    render();
+    alert("Couldn't save that — check your connection and try again.");
+    return;
+  }
+  render();
+}
+
+function buildGridHTML(selected, offered) {
+  let head = '<div class="grid-head"><div class="gutter"></div>' + DAYS.map(d => '<div class="dayhead">' + d + "</div>").join("") + "</div>";
+  let rows = "";
+  for (let i = 0; i < SLOTS; i++) {
+    let cells = "";
+    for (let d = 0; d < DAYS.length; d++) {
+      const k = key(d, i);
+      const isOffered = offered.has(k);
+      const on = selected.has(k);
+      let cls = "cell" + (!isOffered ? " muted" : "") + (on ? " on" : "");
+      cells += '<div class="' + cls + '" data-d="' + d + '" data-i="' + i + '"></div>';
+    }
+    rows += '<div class="row"><div class="gutter time">' + (i % 2 === 0 ? slotTime(i) : "") + "</div>" + cells + "</div>";
+  }
+  return '<div class="grid-wrap" id="paintGrid">' + head + '<div class="grid-body">' + rows + "</div></div>";
+}
+
+function cellAt(el, x, y) {
+  const at = document.elementFromPoint(x, y);
+  const cell = at && at.closest ? at.closest("[data-d]") : null;
+  if (!cell || !el.contains(cell)) return null;
+  return { d: Number(cell.dataset.d), i: Number(cell.dataset.i), node: cell };
+}
+
+function mountGrid() {
+  const el = document.getElementById("paintGrid");
+  if (!el) return;
+  let painting = null, last = "";
+  const apply = (c, val) => {
+    const k = key(c.d, c.i);
+    if (!R.offered.has(k)) return;
+    val ? R.avail.add(k) : R.avail.delete(k);
+    c.node.classList.toggle("on", val);
+  };
+  const move = (x, y) => {
+    if (painting === null) return;
+    const c = cellAt(el, x, y);
+    if (!c) return;
+    const k = key(c.d, c.i);
+    if (k === last) return;
+    last = k; apply(c, painting);
+  };
+  const end = () => {
+    if (painting !== null) { painting = null; last = ""; updateAfterPaint(); }
+  };
+  el.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    const c = cellAt(el, t.clientX, t.clientY);
+    if (!c) return;
+    e.preventDefault();
+    const k = key(c.d, c.i);
+    if (!R.offered.has(k)) return;
+    painting = !R.avail.has(k); last = k; apply(c, painting);
+  }, { passive: false });
+  el.addEventListener("touchmove", (e) => {
+    if (painting === null) return;
+    e.preventDefault();
+    const t = e.touches[0];
+    move(t.clientX, t.clientY);
+  }, { passive: false });
+  el.addEventListener("touchend", end);
+  el.addEventListener("touchcancel", end);
+  el.addEventListener("mousedown", (e) => {
+    const c = cellAt(el, e.clientX, e.clientY);
+    if (!c) return;
+    const k = key(c.d, c.i);
+    if (!R.offered.has(k)) return;
+    painting = !R.avail.has(k); last = k; apply(c, painting);
+    window.__gridMouseUp = end;
+  });
+  el.addEventListener("mousemove", (e) => { if (e.buttons === 1) move(e.clientX, e.clientY); });
+}
+window.addEventListener("mouseup", () => { if (window.__gridMouseUp) { const fn = window.__gridMouseUp; window.__gridMouseUp = null; fn(); } });
+
+function updateAfterPaint() {
+  const cnt = document.getElementById("slotCount");
+  if (cnt) cnt.textContent = R.avail.size + " slot" + (R.avail.size === 1 ? "" : "s") + " selected";
+  const btn = document.getElementById("submitBtn");
+  if (btn) btn.disabled = R.avail.size === 0;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  const heading = (R.instrument ? R.instrument + " Lessons" : "Lessons") + (R.teacherName ? " — " + R.teacherName : "");
+
+  if (R.loading) { app.innerHTML = '<div class="pad"><p class="lede">Loading…</p></div>'; return; }
+  if (R.error) { app.innerHTML = '<div class="pad"><h1>Lessons</h1><p class="empty">' + R.error + "</p></div>"; return; }
+  if (!R.offered.size) {
+    app.innerHTML = '<div class="pad"><h1>' + heading + '</h1><p class="empty">No lesson times have been posted for this week yet — check back once your teacher sends the link round.</p></div>';
+    return;
+  }
+
+  if (R.submitted) {
+    const name = (R.students.find(s => s.id === R.picked) || {}).name || "";
+    const first = name ? name.split(" ")[0] : "";
+    const msg = R.submittedStatus === "skip" ? "No lesson needed this week — got it."
+      : R.submittedStatus === "none" ? "Thanks for letting us know — your teacher will sort something out."
+      : "Got your times for week " + R.weekNo + ".";
+    app.innerHTML = '<div class="pad"><h1>Thanks' + (first ? ", " + first : "") + '!</h1><p class="done">' + msg + '</p>' +
+      '<button class="back" style="margin-top:16px" onclick="editAgain()">\u2190 Change your answer</button></div>';
+    return;
+  }
+
+  if (!R.picked) {
+    app.innerHTML = '<div class="pad"><h1>' + heading + ' — week ' + R.weekNo + '</h1>' +
+      '<p class="sub">Tap your name to give your times.</p>' +
+      R.students.map(s => {
+        if (s.status) {
+          const label = s.status === "in" ? "Times given" : s.status === "skip" ? "Not needed this week" : "None of these worked";
+          return '<button class="namebtn replied" onclick="pick(\'' + s.id + '\')">' + s.name +
+            '<span class="replytag">\u2713 ' + label + ' \u2014 tap to edit</span></button>';
+        }
+        return '<button class="namebtn" onclick="pick(\'' + s.id + '\')">' + s.name + "</button>";
+      }).join("") +
+      "</div>";
+    return;
+  }
+
+  const name = (R.students.find(s => s.id === R.picked) || {}).name || "";
+  const prevStatus = (R.students.find(s => s.id === R.picked) || {}).status || null;
+
+  if (R.stage === "ask") {
+    app.innerHTML = '<div class="pad"><button class="back" onclick="back()">← Not ' + name.split(" ")[0] + "?</button>" +
+      "<h1>" + name + "</h1><p class=\"sub\">Week " + R.weekNo + '</p>' +
+      '<button class="choice' + (prevStatus === "skip" ? " sel" : "") + '" onclick="submitStatus(\'skip\')">Not needed this week</button>' +
+      '<button class="choice' + (prevStatus === "in" ? " sel" : "") + '" onclick="goGrid()">Yes, show me the times</button>' +
+      "</div>";
+    return;
+  }
+
+  // stage === "grid" — show what's on offer, decide once you've actually seen it
+  let body = '<div class="pad"><button class="back" onclick="back()">← Not ' + name.split(" ")[0] + "?</button>" +
+    "<h1>" + name + "</h1><p class=\"sub\">Week " + R.weekNo + '</p>' +
+    '<p class="lede">Drag across the times you could do:</p>' +
+    buildGridHTML(R.avail, R.offered) +
+    '<p class="count" id="slotCount">' + R.avail.size + " slot" + (R.avail.size === 1 ? "" : "s") + " selected</p>" +
+    '<button class="choice' + (prevStatus === "none" ? " sel" : "") + '" onclick="submitStatus(\'none\')" ' + (R.submitting ? "disabled" : "") + '>None of these times work</button>' +
+    '<button class="btn" id="submitBtn" onclick="submitStatus(\'in\')" ' + (R.avail.size === 0 || R.submitting ? "disabled" : "") + '>' + (R.submitting ? "Saving…" : "Submit") + "</button></div>";
+
+  app.innerHTML = body;
+  mountGrid();
+}
+
+boot();
+</script>
+</body>
+</html>

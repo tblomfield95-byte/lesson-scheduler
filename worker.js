@@ -96,11 +96,14 @@ async function handleVerify(url, env) {
   if (!row || row.used || new Date(row.expires_at) < new Date()) {
     return new Response("This link has expired or already been used. Request a new one from the login page.", { status: 400 });
   }
-  await env.DB.prepare("UPDATE login_tokens SET used = 1 WHERE token = ?").bind(token).run();
 
   const teacher = await env.DB.prepare("SELECT onboarded FROM teachers WHERE id = ?").bind(row.teacher_id).first();
   const cookieVal = await makeSessionCookie(row.teacher_id, env);
   const dest = teacher && teacher.onboarded ? "/admin.html" : "/onboarding.html";
+
+  // Only burn the token once the session is actually built — an earlier
+  // failure (a missing secret, say) shouldn't waste a one-time link.
+  await env.DB.prepare("UPDATE login_tokens SET used = 1 WHERE token = ?").bind(token).run();
 
   const headers = new Headers();
   headers.set("Location", dest);

@@ -55,6 +55,119 @@
   .field label{display:block;font-size:13px;color:var(--ink-soft);margin:0 0 5px}
   .field input{width:100%;font:inherit;font-size:15px;padding:11px 13px;border-radius:9px;
                border:1px solid var(--rule);background:var(--panel);color:var(--ink)}
+
+  /* Students page — roomier editing controls to match the rest of the app */
+  .students-panel{padding:16px}
+  .student-edit-row{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 104px 38px;
+    gap:10px;
+    align-items:center;
+    padding:12px 0;
+    border-bottom:1px solid var(--rule);
+  }
+  .student-edit-row:first-child{padding-top:2px}
+  .student-edit-row:last-of-type{border-bottom:none}
+  .student-edit-row input,
+  .student-add-row input{
+    width:100%;
+    min-width:0;
+    height:44px;
+    font:inherit;
+    font-size:15px;
+    padding:10px 12px;
+    border-radius:9px;
+    border:1px solid var(--rule);
+    background:var(--panel);
+    color:var(--ink);
+  }
+  .student-hours-wrap{position:relative}
+  .student-hours-wrap input{padding-right:29px}
+  .student-hours-wrap::after{
+    content:"h";
+    position:absolute;
+    right:11px;
+    top:50%;
+    transform:translateY(-50%);
+    color:var(--ink-soft);
+    font-size:13px;
+    pointer-events:none;
+  }
+  .student-delete{
+    width:38px;
+    height:38px;
+    border-radius:19px;
+    font-size:20px;
+  }
+  .student-add-row{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 104px auto;
+    gap:10px;
+    align-items:center;
+    padding-top:14px;
+    margin-top:2px;
+    border-top:1px solid var(--rule);
+  }
+  .student-add-row .btn{height:44px;padding:9px 16px}
+
+  /* Term Dates — each term is one clear visual group */
+  .term-count-card{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    padding:13px 14px;
+    margin-bottom:12px;
+    border:1px solid var(--rule);
+    border-radius:10px;
+    background:var(--panel);
+  }
+  .term-count-card label{font-size:14px;font-weight:580;color:var(--ink)}
+  .term-count-card input{
+    width:68px;
+    font:inherit;
+    font-size:15px;
+    text-align:center;
+    padding:9px 8px;
+    border-radius:8px;
+    border:1px solid var(--rule);
+    background:var(--paper);
+    color:var(--ink);
+  }
+  .term-card{
+    border:1px solid var(--rule);
+    border-radius:12px;
+    background:var(--panel);
+    padding:14px;
+    margin-bottom:12px;
+  }
+  .term-card-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:11px;
+  }
+  .term-card-head h3{margin:0;font-size:14.5px;font-weight:620}
+  .term-card-head span{
+    font-size:11px;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  .term-date-grid{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    gap:10px;
+  }
+  .term-date-grid .field{margin:0;min-width:0}
+  .term-date-grid .field label{font-size:12.5px;margin-bottom:5px}
+  .term-date-grid input{
+    width:100%;
+    min-width:0;
+    font-size:14px;
+    padding:10px 9px;
+    background:var(--paper);
+  }
   .title{font-size:15.5px;font-weight:640;letter-spacing:-0.01em;margin:0}
   .wk{font-size:13px;color:var(--ink-soft);white-space:nowrap}
   .tabs{display:flex;gap:2px;padding:0 12px 10px;overflow-x:auto}
@@ -1165,32 +1278,37 @@ function renderProfileSection() {
 
 function renderStudentsSection() {
   const studentRows = S.students.map(s =>
-    '<div class="entry">' +
-    '<input type="text" data-bind="studentName" data-id="' + s.id + '" value="' + escapeHTML(s.name) + '" style="flex:2;margin-right:6px">' +
-    '<input type="number" step="0.5" min="0" data-bind="studentHours" data-id="' + s.id + '" value="' + s.allocated + '" style="width:64px;margin-right:6px">' +
-    '<button class="x" data-action="removeStudent" data-id="' + s.id + '">×</button>' +
+    '<div class="student-edit-row">' +
+    '<input type="text" data-bind="studentName" data-id="' + s.id + '" value="' + escapeHTML(s.name) + '" aria-label="Student name">' +
+    '<div class="student-hours-wrap"><input type="number" step="0.5" min="0" data-bind="studentHours" data-id="' + s.id + '" value="' + s.allocated + '" aria-label="Allocated hours"></div>' +
+    '<button class="x student-delete" data-action="removeStudent" data-id="' + s.id + '" aria-label="Remove ' + escapeHTML(s.name) + '">×</button>' +
     "</div>"
   ).join("");
   return '<div class="pad">' +
-    '<p class="lede">Removing someone here stops them appearing in future weeks — hours already logged for them stay on record.</p>' +
-    '<div class="panel">' + studentRows +
-    '<div class="addrow"><input type="text" data-bind="newStudentName" value="' + escapeHTML(newStudentDraft.name) + '" placeholder="New student\u2019s name" style="flex:2">' +
-    '<input type="number" step="0.5" min="0" data-bind="newStudentAllocated" value="' + newStudentDraft.allocated + '" placeholder="Hours" style="width:64px">' +
-    '<button class="btn" data-action="addStudent">Add</button></div>' +
+    '<p class="lede">Edit names or allocated hours here. Removing someone stops them appearing in future weeks — hours already logged for them stay on record.</p>' +
+    '<div class="panel students-panel">' + studentRows +
+    '<div class="student-add-row"><input type="text" data-bind="newStudentName" value="' + escapeHTML(newStudentDraft.name) + '" placeholder="New student\u2019s name">' +
+    '<div class="student-hours-wrap"><input type="number" step="0.5" min="0" data-bind="newStudentAllocated" value="' + newStudentDraft.allocated + '" placeholder="Hours" aria-label="Allocated hours"></div>' +
+    '<button class="btn primary" data-action="addStudent">Add</button></div>' +
     "</div></div>";
 }
 
 function renderTermDatesSection() {
   const d = termDraft;
   const rows = d.ranges.map((r, i) =>
-    '<div class="field"><label>Term ' + (i + 1) + ' start</label><input type="date" data-bind="termStart" data-idx="' + i + '" value="' + (r.start || "") + '"></div>' +
-    '<div class="field"><label>Term ' + (i + 1) + ' end</label><input type="date" data-bind="termEnd" data-idx="' + i + '" value="' + (r.end || "") + '"></div>'
+    '<div class="term-card">' +
+      '<div class="term-card-head"><h3>Term ' + (i + 1) + '</h3><span>Teaching dates</span></div>' +
+      '<div class="term-date-grid">' +
+        '<div class="field"><label>Start date</label><input type="date" data-bind="termStart" data-idx="' + i + '" value="' + (r.start || "") + '"></div>' +
+        '<div class="field"><label>End date</label><input type="date" data-bind="termEnd" data-idx="' + i + '" value="' + (r.end || "") + '"></div>' +
+      '</div>' +
+    '</div>'
   ).join("");
   return '<div class="pad">' +
-    '<p class="lede">Used to work out real calendar dates for each week, and to jump straight to the next term\u2019s start rather than into the holidays. Reading weeks aren\u2019t entered here — mark those as "Not teaching" on the Offer tab as they come round.</p>' +
-    '<div class="field"><label>Number of terms</label><input type="number" min="1" max="6" data-bind="termCount" value="' + d.count + '"></div>' +
+    '<p class="lede">These dates set the teaching weeks and let the scheduler jump over holidays automatically. Reading weeks are still marked as “Not teaching” from the Offer tab.</p>' +
+    '<div class="term-count-card"><label>Number of terms</label><input type="number" min="1" max="6" data-bind="termCount" value="' + d.count + '"></div>' +
     rows +
-    '<div class="btnrow"><button class="btn sig" data-action="saveTermDates">Save changes</button></div>' +
+    '<div class="btnrow" style="margin-top:16px"><button class="btn sig" data-action="saveTermDates">Save changes</button></div>' +
     "</div>";
 }
 

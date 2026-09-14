@@ -232,7 +232,7 @@ async function handleReply(request, env) {
   let body;
   try { body = JSON.parse(await request.text()); } catch (e) { return json({ error: "invalid json" }, 400); }
   const { slug, week, studentId, status, avail } = body || {};
-  if (!slug || !week || !studentId || !["in", "skip", "none"].includes(status) || !Array.isArray(avail)) {
+  if (!slug || !week || !studentId || !["in", "skip", "none", "clear"].includes(status) || !Array.isArray(avail)) {
     return json({ error: "invalid reply" }, 400);
   }
   const teacher = await env.DB.prepare("SELECT id FROM teachers WHERE slug = ?").bind(slug).first();
@@ -244,8 +244,15 @@ async function handleReply(request, env) {
   const wk = String(week);
   state.rounds[wk] = state.rounds[wk] || { weekStart: null, offered: [], replies: {}, plan: null, result: null, chosen: 0 };
   state.rounds[wk].replies = state.rounds[wk].replies || {};
-  const prevLesson = (state.rounds[wk].replies[studentId] && state.rounds[wk].replies[studentId].lesson) || 2;
-  state.rounds[wk].replies[studentId] = { status, avail, lesson: prevLesson };
+  
+  // If status is "clear", delete the reply entirely instead of storing a cleared response
+  if (status === "clear") {
+    delete state.rounds[wk].replies[studentId];
+  } else {
+    const prevLesson = (state.rounds[wk].replies[studentId] && state.rounds[wk].replies[studentId].lesson) || 2;
+    state.rounds[wk].replies[studentId] = { status, avail, lesson: prevLesson };
+  }
+  
   await env.DB.prepare(
     `INSERT INTO app_state (id, data, updated_at) VALUES (?, ?, datetime('now'))
      ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`

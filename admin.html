@@ -814,16 +814,6 @@ async function saveProfile() {
   }
 }
 
-async function copyProfileLink() {
-  const url = window.location.origin + "/s/" + (ME.slug || "") + "/" + S.weekNo;
-  try {
-    await navigator.clipboard.writeText(url);
-    flash("Student link copied to clipboard");
-  } catch (e) {
-    flash("Couldn't copy — the link is " + url);
-  }
-}
-
 // Transient — the "add a student" row on the Profile page, cleared once added.
 let newStudentDraft = { name: "", allocated: "" };
 function addStudent() {
@@ -1008,6 +998,7 @@ function mountAllGrids() {
 let sidebarOpen = false;
 let currentSection = "scheduler"; // "scheduler" | "profile"
 let sidebarCloseTimer = null;
+let showStartingWeekControl = false;
 
 function render() {
   const app = document.getElementById("app");
@@ -1066,7 +1057,6 @@ function closeSidebar() { sidebarOpen = false; syncSidebarDOM(); }
 function goSection(section) { currentSection = section; sidebarOpen = false; syncSidebarDOM(); render(); }
 
 function renderProfileSection() {
-  const link = window.location.origin + "/s/" + (ME.slug || "") + "/" + S.weekNo;
   const studentRows = S.students.map(s =>
     '<div class="entry">' +
     '<input type="text" data-bind="studentName" data-id="' + s.id + '" value="' + escapeHTML(s.name) + '" style="flex:2;margin-right:6px">' +
@@ -1081,8 +1071,7 @@ function renderProfileSection() {
     '<div class="field"><label>Instrument</label><input type="text" data-bind="profileInstrument" value="' + escapeHTML(ME.instrument || "") + '"></div>' +
     '<div class="btnrow"><button class="btn sig" data-action="saveProfile">Save changes</button></div>' +
     '<div class="panel"><h3>Your student link</h3>' +
-    '<p style="font-size:13px;color:var(--ink-soft);word-break:break-all;margin:0 0 10px">' + link + '</p>' +
-    '<button class="btn" data-action="copyProfileLink">Copy link</button></div>' +
+    '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 10px">Every week has its own link, since students need to know which week they\u2019re answering for. Get the right one from <b>Offer \u2192 Send to students</b> \u2014 it always copies the link for whichever week you\u2019re currently planning.</p></div>' +
     '<div class="panel"><h3>Students</h3>' +
     '<p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px">Removing someone here stops them appearing in future weeks — hours already logged for them stay on record.</p>' +
     studentRows +
@@ -1116,9 +1105,13 @@ function renderOfferTab() {
   const rnd = activeRound();
   const isCurrent = S.activeWeek === S.weekNo;
   const hours = (rnd.offered.size * SLOT_MIN) / 60;
+  const startingWeekBlock = showStartingWeekControl
+    ? '<div class="panel"><p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px">This only matters once — it\u2019s what the Hours tab measures your pace against, and the only week you can End or mark Not Teaching. It moves on its own after that; you shouldn\u2019t normally need to touch it again.</p>' +
+      '<label class="dateline"><span>Official current week</span><span><input type="number" inputmode="numeric" min="1" max="' + TERM_WEEKS + '" data-bind="weekNo" value="' + S.weekNo + '"> of ' + TERM_WEEKS + '</span></label></div>'
+    : '<button class="back" style="padding:0 0 14px" data-action="toggleStartingWeek">Not starting at week 1? Set your starting week</button>';
   return '<div class="pad">' +
     renderWeekPicker() +
-    '<label class="dateline" style="margin-bottom:8px">Current week <span><input type="number" inputmode="numeric" min="1" max="' + TERM_WEEKS + '" data-bind="weekNo" value="' + S.weekNo + '"> of ' + TERM_WEEKS + '</span></label>' +
+    startingWeekBlock +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
     '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + ' — check this matches the week you mean; correct it if a reading week or anything else has thrown it off.</p>' +
     '<p class="lede">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
@@ -1346,13 +1339,13 @@ document.getElementById("app").addEventListener("click", (e) => {
     S.tab = el.dataset.tab; render();
   }
   else if (action === "clearOffer") clearOffer();
+  else if (action === "toggleStartingWeek") { showStartingWeekControl = !showStartingWeekControl; render(); }
   else if (action === "skipWeek") skipWeek();
   else if (action === "prevWeek") prevWeek();
   else if (action === "nextWeek") nextWeek();
   else if (action === "goReplies") goReplies();
   else if (action === "toggleSidebar") toggleSidebar();
   else if (action === "saveProfile") saveProfile();
-  else if (action === "copyProfileLink") copyProfileLink();
   else if (action === "addStudent") addStudent();
   else if (action === "removeStudent") removeStudent(id);
   else if (action === "sampleReplies") sampleReplies();

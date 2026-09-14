@@ -226,7 +226,7 @@ async function handleRound(url, env) {
     instrument: teacher.instrument,
     students: ((state && state.students) || []).map((s) => {
       const r = replies[s.id];
-      return { id: s.id, name: s.name, status: r ? r.status : null, avail: r ? r.avail : [] };
+      return { id: s.id, name: s.name, status: r ? r.status : null, avail: r ? r.avail : [], lesson: r ? (r.lesson || 2) : 2 };
     }),
   });
 }
@@ -234,7 +234,7 @@ async function handleRound(url, env) {
 async function handleReply(request, env) {
   let body;
   try { body = JSON.parse(await request.text()); } catch (e) { return json({ error: "invalid json" }, 400); }
-  const { slug, week, studentId, status, avail } = body || {};
+  const { slug, week, studentId, status, avail, lesson } = body || {};
   if (!slug || !week || !studentId || !["in", "skip", "none", "clear"].includes(status) || !Array.isArray(avail)) {
     return json({ error: "invalid reply" }, 400);
   }
@@ -253,7 +253,9 @@ async function handleReply(request, env) {
     delete state.rounds[wk].replies[studentId];
   } else {
     const prevLesson = (state.rounds[wk].replies[studentId] && state.rounds[wk].replies[studentId].lesson) || 2;
-    state.rounds[wk].replies[studentId] = { status, avail, lesson: prevLesson };
+    const requestedLesson = Number(lesson);
+    const validLesson = Number.isInteger(requestedLesson) && requestedLesson >= 1 && requestedLesson <= 4 ? requestedLesson : prevLesson;
+    state.rounds[wk].replies[studentId] = { status, avail, lesson: validLesson };
   }
   
   await env.DB.prepare(

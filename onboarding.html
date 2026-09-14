@@ -3,34 +3,39 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Set up your studio — Lesson Scheduler</title>
+<title>Set up your studio — Cadence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   html,body{margin:0;padding:0}
   body{
-    --ink:#1B2430; --ink-soft:#5A6675; --paper:#FBFAF8; --panel:#FFFFFF;
-    --rule:#DDD8CE; --sig:#832222;
-    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --ink:#211C17; --ink-soft:#6B6157; --paper:#F2EFE7; --panel:#FFFFFF;
+    --rule:#DCD5C6; --sig:#6E1423;
+    --serif: "Source Serif 4", Georgia, serif;
+    font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
     background:var(--paper); color:var(--ink); min-height:100vh;
   }
   *{box-sizing:border-box}
   .pad{padding:24px 18px 60px;max-width:480px;margin:0 auto}
-  h1{font-size:19px;font-weight:640;margin:0 0 6px}
+  .brand{font-family:var(--serif);font-size:15px;font-weight:600;color:var(--sig);margin:0 0 18px}
+  h1{font-family:var(--serif);font-size:21px;font-weight:600;margin:0 0 6px}
   .sub{font-size:14px;color:var(--ink-soft);line-height:1.5;margin:0 0 20px}
   label{display:block;font-size:13px;color:var(--ink-soft);margin:0 0 5px}
-  input{width:100%;font:inherit;font-size:15px;padding:11px 13px;border-radius:9px;
+  input{width:100%;font:inherit;font-size:15px;padding:11px 13px;border-radius:7px;
         border:1px solid var(--rule);background:var(--panel);color:var(--ink);margin-bottom:16px}
   .row{display:flex;gap:8px;align-items:flex-end;margin-bottom:8px}
   .row input{margin-bottom:0}
   .row .name{flex:2}
   .row .hours{flex:1}
-  .x{font:inherit;font-size:18px;line-height:1;width:36px;height:44px;border-radius:9px;
+  .x{font:inherit;font-size:18px;line-height:1;width:36px;height:44px;border-radius:7px;
      border:1px solid var(--rule);background:var(--panel);color:var(--ink-soft);cursor:pointer;flex:none}
   .add{font:inherit;font-size:13.5px;color:var(--sig);background:none;border:none;padding:4px 0 20px;cursor:pointer}
-  .btn{width:100%;font:inherit;font-size:15px;padding:13px;border-radius:9px;border:1px solid var(--sig);
+  .btn{width:100%;font:inherit;font-size:15px;padding:13px;border-radius:7px;border:1px solid var(--sig);
        background:var(--sig);color:#fff;font-weight:560;cursor:pointer}
   .btn:disabled{opacity:.5;cursor:default}
-  .err{color:#B45309;font-size:13px;margin:-8px 0 14px}
-  h3{font-size:14px;font-weight:620;margin:24px 0 4px}
+  .err{color:#96591A;font-size:13px;margin:-8px 0 14px}
+  h3{font-family:var(--serif);font-size:16px;font-weight:600;margin:26px 0 6px}
 
   .term-count-card{
     display:flex;
@@ -40,7 +45,7 @@
     padding:13px 14px;
     margin-bottom:12px;
     border:1px solid var(--rule);
-    border-radius:10px;
+    border-radius:8px;
     background:var(--panel);
   }
   .term-count-card label{
@@ -66,22 +71,12 @@
     padding:14px;
     margin-bottom:12px;
   }
-  .term-card-head{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    margin-bottom:11px;
-  }
+  .term-card-head{margin-bottom:11px}
   .term-card-head h4{
     margin:0;
-    font-size:14.5px;
-    font-weight:620;
-  }
-  .term-card-head span{
-    font-size:11px;
-    color:var(--ink-soft);
-    text-transform:uppercase;
-    letter-spacing:.04em;
+    font-family:var(--serif);
+    font-size:16px;
+    font-weight:600;
   }
   .term-date-grid{
     display:grid;
@@ -113,7 +108,7 @@
     padding:10px 6px;
     margin:0;
     text-align:center;
-    border-radius:9px;
+    border-radius:7px;
     border:1px solid var(--rule);
     background:var(--paper);
     color:var(--ink);
@@ -133,6 +128,7 @@
 </head>
 <body>
 <div class="pad">
+  <p class="brand">Cadence</p>
   <h1>Set up your studio</h1>
   <p class="sub">Just once — your name, instrument, and the students you teach with their allocated hours for the year.</p>
   <div id="err"></div>
@@ -187,7 +183,7 @@ function renderTerms() {
   const el = document.getElementById("terms");
   el.innerHTML = terms.map((t, i) =>
     '<div class="term-card">' +
-      '<div class="term-card-head"><h4>Term ' + (i + 1) + '</h4><span>Teaching dates</span></div>' +
+      '<div class="term-card-head"><h4>Term ' + (i + 1) + '</h4></div>' +
       '<div class="term-date-grid">' +
         '<div class="term-field"><label>Start date</label><input type="date" data-i="' + i + '" data-f="start" value="' + (t.start || "") + '"></div>' +
         '<div class="term-field"><label>End date</label><input type="date" data-i="' + i + '" data-f="end" value="' + (t.end || "") + '"></div>' +

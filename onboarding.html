@@ -48,10 +48,17 @@
   <div id="students"></div>
   <button class="add" id="addStudent">+ Add another student</button>
 
+  <h3>Term dates</h3>
+  <p class="sub" style="margin-top:-2px">Used to work out real calendar dates for each week. Reading weeks aren't entered here — mark those "Not teaching" as they come round instead.</p>
+  <label>Number of terms</label>
+  <input type="number" id="termCount" min="1" max="6" value="3" style="margin-bottom:12px">
+  <div id="terms"></div>
+
   <button class="btn" id="go">Finish setup</button>
 </div>
 <script>
 let rows = [{ name: "", allocated: "" }];
+let terms = [{ start: "", end: "" }, { start: "", end: "" }, { start: "", end: "" }];
 
 function renderRows() {
   const el = document.getElementById("students");
@@ -76,6 +83,29 @@ function renderRows() {
 }
 renderRows();
 
+function renderTerms() {
+  const el = document.getElementById("terms");
+  el.innerHTML = terms.map((t, i) =>
+    '<label>Term ' + (i + 1) + ' start</label><input type="date" data-i="' + i + '" data-f="start" value="' + (t.start || "") + '">' +
+    '<label>Term ' + (i + 1) + ' end</label><input type="date" data-i="' + i + '" data-f="end" value="' + (t.end || "") + '">'
+  ).join("");
+  el.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("input", () => {
+      terms[Number(inp.dataset.i)][inp.dataset.f] = inp.value;
+    });
+  });
+}
+renderTerms();
+
+document.getElementById("termCount").addEventListener("input", (e) => {
+  let n = parseInt(e.target.value, 10);
+  if (!isFinite(n) || n < 1) n = 1;
+  if (n > 6) n = 6;
+  while (terms.length < n) terms.push({ start: "", end: "" });
+  terms.length = n;
+  renderTerms();
+});
+
 document.getElementById("addStudent").addEventListener("click", () => {
   rows.push({ name: "", allocated: "" });
   renderRows();
@@ -85,10 +115,15 @@ document.getElementById("go").addEventListener("click", async () => {
   const name = document.getElementById("name").value.trim();
   const instrument = document.getElementById("instrument").value.trim();
   const students = rows.filter(r => r.name.trim());
+  const termRanges = terms.filter(t => t.start && t.end);
   const errEl = document.getElementById("err");
   errEl.innerHTML = "";
   if (!name || !instrument || !students.length) {
     errEl.innerHTML = '<p class="err">Fill in your name, instrument, and at least one student.</p>';
+    return;
+  }
+  if (termRanges.length !== terms.length) {
+    errEl.innerHTML = '<p class="err">Fill in a start and end date for every term.</p>';
     return;
   }
   const btn = document.getElementById("go");
@@ -97,7 +132,7 @@ document.getElementById("go").addEventListener("click", async () => {
     const res = await fetch("/api/onboarding", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, instrument, students }),
+      body: JSON.stringify({ name, instrument, students, termRanges }),
     });
     const data = await res.json();
     if (!res.ok) { errEl.innerHTML = '<p class="err">' + (data.error || "Something went wrong.") + "</p>"; btn.disabled = false; btn.textContent = "Finish setup"; return; }

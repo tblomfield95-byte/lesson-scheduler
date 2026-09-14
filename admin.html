@@ -17,6 +17,22 @@
   *{box-sizing:border-box}
   .bar{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1px solid var(--rule)}
   .bartop{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:14px 16px 8px}
+  .hbrow{display:flex;align-items:center;gap:10px;min-width:0}
+  .hamburger{font-size:19px;line-height:1;background:none;border:none;color:var(--ink);
+             cursor:pointer;padding:2px 2px 2px 0;flex:none}
+  .hamburger:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
+  .sidebar-backdrop{position:fixed;inset:0;background:rgba(27,36,48,.45);z-index:60}
+  .sidebar-panel{position:fixed;top:0;left:0;bottom:0;width:230px;max-width:80vw;background:var(--panel);
+                 z-index:61;box-shadow:2px 0 16px rgba(0,0,0,.18);padding:18px 0;overflow-y:auto}
+  .sidebar-head{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);
+                padding:2px 18px 14px}
+  .sidebar-item{display:block;width:100%;text-align:left;font:inherit;font-size:15px;padding:12px 18px;
+                border:none;background:none;color:var(--ink);cursor:pointer}
+  .sidebar-item.sel{background:var(--sig-soft);color:var(--sig);font-weight:600}
+  .field{margin-bottom:16px}
+  .field label{display:block;font-size:13px;color:var(--ink-soft);margin:0 0 5px}
+  .field input{width:100%;font:inherit;font-size:15px;padding:11px 13px;border-radius:9px;
+               border:1px solid var(--rule);background:var(--panel);color:var(--ink)}
   .title{font-size:15.5px;font-weight:640;letter-spacing:-0.01em;margin:0}
   .wk{font-size:13px;color:var(--ink-soft);white-space:nowrap}
   .tabs{display:flex;gap:2px;padding:0 12px 10px;overflow-x:auto}
@@ -703,6 +719,34 @@ async function goReplies() {
   }
 }
 
+async function saveProfile() {
+  const name = (ME.name || "").trim();
+  const instrument = (ME.instrument || "").trim();
+  if (!name || !instrument) { flash("Enter both your name and instrument"); return; }
+  try {
+    const res = await fetch("/api/profile", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, instrument }),
+    });
+    if (!res.ok) { flash("Couldn't save — try again"); return; }
+    flash("Profile updated");
+    render();
+  } catch (e) {
+    flash("Couldn't save — check your connection");
+  }
+}
+
+async function copyProfileLink() {
+  const url = window.location.origin + "/s/" + (ME.slug || "");
+  try {
+    await navigator.clipboard.writeText(url);
+    flash("Student link copied to clipboard");
+  } catch (e) {
+    flash("Couldn't copy — the link is " + url);
+  }
+}
+
 function addEntry(studentId) {
   if (!S.draft.date || !S.draft.hours) return;
   S.log.push({ id: "m" + Date.now(), studentId, date: S.draft.date, hours: Number(S.draft.hours), manual: true });
@@ -710,6 +754,28 @@ function addEntry(studentId) {
   render();
 }
 function removeEntry(id) { S.log = S.log.filter(e => e.id !== id); render(); }
+
+// Transient — which single log entry (if any) is being edited right now,
+// and the working copy of its date/hours while that's open.
+let editingEntryId = null;
+let editDraft = { date: "", hours: 1 };
+function startEditEntry(id) {
+  const e = S.log.find(x => x.id === id);
+  if (!e) return;
+  editingEntryId = id;
+  editDraft = { date: e.date, hours: e.hours };
+  render();
+}
+function cancelEditEntry() { editingEntryId = null; render(); }
+function saveEditEntry(id) {
+  const e = S.log.find(x => x.id === id);
+  if (!e || !editDraft.date || !editDraft.hours) return;
+  e.date = editDraft.date;
+  e.hours = Number(editDraft.hours);
+  editingEntryId = null;
+  flash("Entry updated");
+  render();
+}
 
 function resetYear() {
   S.students.forEach(s => { s.lesson = 2; });
@@ -844,9 +910,14 @@ function mountAllGrids() {
 /*  Render                                                             */
 /* ================================================================== */
 
+// Transient — sidebar and section are pure navigation, never synced.
+let sidebarOpen = false;
+let currentSection = "scheduler"; // "scheduler" | "profile"
+
 function render() {
   const app = document.getElementById("app");
-  app.innerHTML = renderHeader() + renderTabContent();
+  app.innerHTML = renderHeader() + renderSidebar() +
+    (currentSection === "profile" ? renderProfileSection() : renderTabContent());
   mountAllGrids();
   scheduleSave();
 }
@@ -854,10 +925,39 @@ function render() {
 function renderHeader() {
   const tabs = [["week", "Offer"], ["replies", "Replies"], ["plan", "Schedule"], ["hours", "Hours"]];
   const title = (ME.instrument ? ME.instrument + " Lessons" : "Lesson Scheduler") + (ME.name ? " - " + ME.name : "");
-  return '<div class="bar"><div class="bartop"><h1 class="title">' + title + '</h1>' +
-    '<div class="wk">Week ' + S.weekNo + " of " + TERM_WEEKS + '</div></div><div class="tabs">' +
-    tabs.map(([k, label]) => '<button class="tab' + (S.tab === k ? " sel" : "") + '" data-action="tab" data-tab="' + k + '">' + label + "</button>").join("") +
-    "</div></div>";
+  let header = '<div class="bar"><div class="bartop">' +
+    '<span class="hbrow"><button class="hamburger" data-action="toggleSidebar" aria-label="Menu">\u2630</button>' +
+    '<h1 class="title">' + (currentSection === "profile" ? "Profile" : title) + '</h1></span>' +
+    (currentSection === "scheduler" ? '<div class="wk">Week ' + S.weekNo + " of " + TERM_WEEKS + '</div>' : '<span></span>') +
+    '</div>';
+  if (currentSection === "scheduler") {
+    header += '<div class="tabs">' +
+      tabs.map(([k, label]) => '<button class="tab' + (S.tab === k ? " sel" : "") + '" data-action="tab" data-tab="' + k + '">' + label + "</button>").join("") +
+      "</div>";
+  }
+  return header + "</div>";
+}
+
+function renderSidebar() {
+  if (!sidebarOpen) return "";
+  const items = [["scheduler", "Scheduler"], ["profile", "Profile"]];
+  return '<div class="sidebar-backdrop" data-action="closeSidebar"></div>' +
+    '<div class="sidebar-panel"><div class="sidebar-head">Menu</div>' +
+    items.map(([k, label]) => '<button class="sidebar-item' + (currentSection === k ? " sel" : "") + '" data-action="goSection" data-section="' + k + '">' + label + "</button>").join("") +
+    "</div>";
+}
+
+function renderProfileSection() {
+  const link = window.location.origin + "/s/" + (ME.slug || "");
+  return '<div class="pad">' +
+    '<p class="lede">This is what was collected when you first set up your account.</p>' +
+    '<div class="field"><label>Your name</label><input type="text" data-bind="profileName" value="' + escapeHTML(ME.name || "") + '"></div>' +
+    '<div class="field"><label>Instrument</label><input type="text" data-bind="profileInstrument" value="' + escapeHTML(ME.instrument || "") + '"></div>' +
+    '<div class="btnrow"><button class="btn sig" data-action="saveProfile">Save changes</button></div>' +
+    '<div class="panel"><h3>Your student link</h3>' +
+    '<p style="font-size:13px;color:var(--ink-soft);word-break:break-all;margin:0 0 10px">' + link + '</p>' +
+    '<button class="btn" data-action="copyProfileLink">Copy link</button></div>' +
+    "</div>";
 }
 
 function renderTabContent() {
@@ -1044,9 +1144,19 @@ function renderHoursTab() {
     let ledger = "";
     if (open) {
       const entryRows = entries.length === 0 ? '<div class="entry faint">Nothing logged yet</div>' :
-        entries.map(e => '<div class="entry"><span>' + fmtDateShort(e.date) +
-          (e.manual ? '<i class="tag">by hand</i>' : "") + (e.lateCancel ? '<i class="tag">late cancel</i>' : "") + "</span>" +
-          '<span class="entryright">' + e.hours + 'h<button class="x" data-action="removeEntry" data-id="' + e.id + '">×</button></span></div>').join("");
+        entries.map(e => {
+          if (editingEntryId === e.id) {
+            return '<div class="entry"><input type="date" data-bind="editDate" value="' + editDraft.date + '" style="flex:1;margin-right:6px">' +
+              '<select data-bind="editHours" style="margin-right:6px">' + [0.5, 1, 1.5, 2, 2.5, 3].map(h =>
+                '<option value="' + h + '" ' + (parseFloat(editDraft.hours) === h ? "selected" : "") + ">" + h + "h</option>").join("") + "</select>" +
+              '<span class="entryright"><button class="btn" style="padding:5px 10px;font-size:12.5px" data-action="saveEditEntry" data-id="' + e.id + '">Save</button>' +
+              '<button class="x" data-action="cancelEditEntry">×</button></span></div>';
+          }
+          return '<div class="entry"><span>' + fmtDateShort(e.date) +
+            (e.manual ? '<i class="tag">by hand</i>' : "") + (e.lateCancel ? '<i class="tag">late cancel</i>' : "") + "</span>" +
+            '<span class="entryright">' + e.hours + 'h<button class="x" data-action="editEntry" data-id="' + e.id + '" title="Edit">\u270E</button>' +
+            '<button class="x" data-action="removeEntry" data-id="' + e.id + '">×</button></span></div>';
+        }).join("");
       ledger = '<div class="ledger">' + entryRows +
         '<div class="addrow"><input type="date" data-bind="draftDate" value="' + S.draft.date + '">' +
         '<select data-bind="draftHours">' + [0.5, 1, 1.5, 2, 2.5, 3].map(h =>
@@ -1083,6 +1193,11 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "clearOffer") clearOffer();
   else if (action === "skipWeek") skipWeek();
   else if (action === "goReplies") goReplies();
+  else if (action === "toggleSidebar") { sidebarOpen = !sidebarOpen; render(); }
+  else if (action === "closeSidebar") { sidebarOpen = false; render(); }
+  else if (action === "goSection") { currentSection = el.dataset.section; sidebarOpen = false; render(); }
+  else if (action === "saveProfile") saveProfile();
+  else if (action === "copyProfileLink") copyProfileLink();
   else if (action === "sampleReplies") sampleReplies();
   else if (action === "toggleStudentOpen") { S.openStudent = S.openStudent === id ? null : id; render(); }
   else if (action === "setStatus") {
@@ -1107,6 +1222,9 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "endWeek") endWeek();
   else if (action === "toggleHoursOpen") { S.openHours = S.openHours === id ? null : id; render(); }
   else if (action === "removeEntry") removeEntry(id);
+  else if (action === "editEntry") startEditEntry(id);
+  else if (action === "saveEditEntry") saveEditEntry(id);
+  else if (action === "cancelEditEntry") cancelEditEntry();
   else if (action === "addEntry") addEntry(id);
   else if (action === "resetYearConfirm") handleResetClick();
 });
@@ -1124,6 +1242,10 @@ document.getElementById("app").addEventListener("change", (e) => {
   }
   else if (bind === "draftDate") { S.draft.date = el.value; }
   else if (bind === "draftHours") { S.draft.hours = el.value; }
+  else if (bind === "editDate") { editDraft.date = el.value; }
+  else if (bind === "editHours") { editDraft.hours = el.value; }
+  else if (bind === "profileName") { ME.name = el.value; }
+  else if (bind === "profileInstrument") { ME.instrument = el.value; }
 });
 
 /* ================================================================== */

@@ -27,30 +27,38 @@
     margin:0 auto;
   }
 
-  /* Permanent wordmark position. Hidden until the intro mark lands. */
+  /* Permanent resting wordmark. Its metrics are deliberately identical
+     to the travelling wordmark apart from font size. */
   #brandWordmark{
     font-family:var(--serif);
     font-size:24px;
+    line-height:1;
     font-weight:700;
+    letter-spacing:-0.025em;
     margin:0 0 6px;
     color:var(--sig);
     opacity:0;
+    white-space:nowrap;
+    text-rendering:optimizeLegibility;
+    -webkit-font-smoothing:antialiased;
   }
 
-  /*
-    Intro wordmark lives in its own fixed overlay, so it is genuinely
-    centred from the first painted frame — no starting from the page's
-    normal heading position and no sideways "fly in".
-  */
+  /* Full-screen intro layer. */
   #brandIntro{
     position:fixed;
     inset:0;
     z-index:100;
-    display:grid;
-    place-items:center;
     pointer-events:none;
   }
+
+  /* The travelling mark itself is absolutely centred at rest, then FLIP
+     transformed to the exact final heading rectangle. */
   #brandIntroMark{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    transform-origin:top left;
     font-family:var(--serif);
     font-size:clamp(58px,15vw,86px);
     line-height:1;
@@ -58,8 +66,7 @@
     letter-spacing:-0.025em;
     color:var(--sig);
     white-space:nowrap;
-    transform-origin:center center;
-    will-change:transform,opacity;
+    will-change:transform;
     text-rendering:optimizeLegibility;
     -webkit-font-smoothing:antialiased;
   }
@@ -175,40 +182,36 @@ async function playCadenceIntro() {
     return;
   }
 
-  // Wait for the real display font before measuring either wordmark.
-  // That keeps the landing point exact and avoids a typeface swap mid-animation.
+  // Ensure both measurements use the final webfont, avoiding any typeface
+  // swap while the wordmark is moving.
   try {
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
   } catch (e) {}
 
-  // Hold the large centred wordmark in place long enough to read as
-  // an intentional splash rather than the beginning of a transition.
-  await new Promise(resolve => setTimeout(resolve, 1500));
+  // Let the centred mark sit as a deliberate splash screen.
+  await new Promise(resolve => setTimeout(resolve, 1600));
 
   const from = introMark.getBoundingClientRect();
   const to = finalMark.getBoundingClientRect();
 
-  const fromCX = from.left + from.width / 2;
-  const fromCY = from.top + from.height / 2;
-  const toCX = to.left + to.width / 2;
-  const toCY = to.top + to.height / 2;
-
-  const dx = toCX - fromCX;
-  const dy = toCY - fromCY;
-
-  // Scale based on the actual rendered word widths, so the intro mark
-  // lands at exactly the same apparent size as the permanent heading.
+  /*
+    CSS currently includes translate(-50%,-50%) to centre the mark.
+    We animate from that exact computed position to a matrix based on the
+    two measured rectangles. Using top-left geometry rather than centres
+    guarantees the travelling wordmark finishes at the exact resting point.
+  */
+  const dx = to.left - from.left;
+  const dy = to.top - from.top;
   const scale = to.width / from.width;
 
   const animation = introMark.animate(
     [
       {
-        transform:"translate(0px,0px) scale(1)",
-        opacity:1
+        transform:"translate(-50%,-50%) scale(1)"
       },
       {
-        transform:"translate(" + dx + "px," + dy + "px) scale(" + scale + ")",
-        opacity:1
+        transform:
+          "translate(calc(-50% + " + dx + "px), calc(-50% + " + dy + "px)) scale(" + scale + ")"
       }
     ],
     {
@@ -222,12 +225,21 @@ async function playCadenceIntro() {
     await animation.finished;
   } catch (e) {}
 
-  // Swap the travelling mark for the real heading at the exact endpoint.
+  /*
+    At this point the travelling mark and permanent mark occupy the same
+    rectangle. Reveal the real heading underneath first, then remove the
+    overlay on the next paint. There is therefore no visible jump.
+  */
   finalMark.style.opacity = "1";
+
+  await new Promise(resolve => requestAnimationFrame(() => {
+    requestAnimationFrame(resolve);
+  }));
+
   overlay.style.display = "none";
 
-  // Then let the rest of the interface arrive.
-  await new Promise(resolve => setTimeout(resolve, 120));
+  // Only after the wordmark has fully settled does the login UI appear.
+  await new Promise(resolve => setTimeout(resolve, 140));
   content.classList.add("revealed");
 }
 

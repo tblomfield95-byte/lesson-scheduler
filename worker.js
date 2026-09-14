@@ -154,11 +154,12 @@ async function handleOnboarding(request, env) {
     .bind(name, instrument, slug, teacherId).run();
 
   const initialState = {
-    tab: "week", weekNo: 1,
+    tab: "week",
     students: students.map((s, i) => ({
       id: "s" + i + "-" + Date.now(), name: s.name, course: "", allocated: Number(s.allocated) || 0,
     })),
-    activeWeek: 1,
+    week: 1,
+    weeksCompleted: 0,
     rounds: {},
     log: [],
     draft: { date: new Date().toISOString().slice(0, 10), hours: 1 },
@@ -205,7 +206,7 @@ async function handleRound(url, env) {
 
   const row = await env.DB.prepare("SELECT data FROM app_state WHERE id = ?").bind(teacher.id).first();
   const state = row ? JSON.parse(row.data) : null;
-  const weekNo = weekParam ? Number(weekParam) : (state ? state.weekNo : 1);
+  const weekNo = weekParam ? Number(weekParam) : (state ? state.week : 1);
   const rnd = state && state.rounds ? state.rounds[String(weekNo)] : null;
   const replies = (rnd && rnd.replies) || {};
   return json({

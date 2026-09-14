@@ -156,10 +156,12 @@ async function handleOnboarding(request, env) {
   const initialState = {
     tab: "week", weekNo: 1,
     students: students.map((s, i) => ({
-      id: "s" + i + "-" + Date.now(), name: s.name, course: "", allocated: Number(s.allocated) || 0, lesson: 2,
+      id: "s" + i + "-" + Date.now(), name: s.name, course: "", allocated: Number(s.allocated) || 0,
     })),
-    offered: [], replies: {}, chosen: 0, log: [], plan: null,
-    draft: { date: new Date().toISOString().slice(0, 10), hours: 1 }, result: null,
+    activeWeek: 1,
+    rounds: {},
+    log: [],
+    draft: { date: new Date().toISOString().slice(0, 10), hours: 1 },
   };
   await env.DB.prepare(
     `INSERT INTO app_state (id, data, updated_at) VALUES (?, ?, datetime('now'))
@@ -197,15 +199,19 @@ async function handleState(request, env, teacherId) {
 
 async function handleRound(url, env) {
   const slug = url.searchParams.get("slug") || "";
+  const weekParam = url.searchParams.get("week");
   const teacher = await env.DB.prepare("SELECT id, name, instrument FROM teachers WHERE slug = ?").bind(slug).first();
-  if (!teacher) return json({ weekNo: 1, offered: [], students: [], teacherName: null, instrument: null });
+  if (!teacher) return json({ weekNo: null, weekStart: null, offered: [], students: [], teacherName: null, instrument: null });
 
   const row = await env.DB.prepare("SELECT data FROM app_state WHERE id = ?").bind(teacher.id).first();
   const state = row ? JSON.parse(row.data) : null;
-  const replies = (state && state.replies) || {};
+  const weekNo = weekParam ? Number(weekParam) : (state ? state.weekNo : 1);
+  const rnd = state && state.rounds ? state.rounds[String(weekNo)] : null;
+  const replies = (rnd && rnd.replies) || {};
   return json({
-    weekNo: state ? state.weekNo : 1,
-    offered: (state && state.offered) || [],
+    weekNo,
+    weekStart: rnd ? rnd.weekStart : null,
+    offered: (rnd && rnd.offered) || [],
     teacherName: teacher.name,
     instrument: teacher.instrument,
     students: ((state && state.students) || []).map((s) => {
@@ -218,8 +224,8 @@ async function handleRound(url, env) {
 async function handleReply(request, env) {
   let body;
   try { body = JSON.parse(await request.text()); } catch (e) { return json({ error: "invalid json" }, 400); }
-  const { slug, studentId, status, avail } = body || {};
-  if (!slug || !studentId || !["in", "skip", "none"].includes(status) || !Array.isArray(avail)) {
+  const { slug, week, studentId, status, avail } = body || {};
+  if (!slug || !week || !studentId || !["in", "skip", "none"].includes(status) || !Array.isArray(avail)) {
     return json({ error: "invalid reply" }, 400);
   }
   const teacher = await env.DB.prepare("SELECT id FROM teachers WHERE slug = ?").bind(slug).first();
@@ -227,8 +233,12 @@ async function handleReply(request, env) {
 
   const row = await env.DB.prepare("SELECT data FROM app_state WHERE id = ?").bind(teacher.id).first();
   const state = row ? JSON.parse(row.data) : {};
-  state.replies = state.replies || {};
-  state.replies[studentId] = { status, avail };
+  state.rounds = state.rounds || {};
+  const wk = String(week);
+  state.rounds[wk] = state.rounds[wk] || { weekStart: null, offered: [], replies: {}, plan: null, result: null, chosen: 0 };
+  state.rounds[wk].replies = state.rounds[wk].replies || {};
+  const prevLesson = (state.rounds[wk].replies[studentId] && state.rounds[wk].replies[studentId].lesson) || 2;
+  state.rounds[wk].replies[studentId] = { status, avail, lesson: prevLesson };
   await env.DB.prepare(
     `INSERT INTO app_state (id, data, updated_at) VALUES (?, ?, datetime('now'))
      ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
@@ -273,7 +283,8 @@ export default {
       return env.ASSETS.fetch(new Request(new URL("/onboarding.html", url), request));
     }
 
-    // Student links: /s/<slug> — always the same page, slug read client-side
+    // Student links: /s/<slug>/<week> — always the same page, slug and
+    // week both read client-side from the URL
     if (path.startsWith("/s/")) {
       return env.ASSETS.fetch(new Request(new URL("/index.html", url), request));
     }

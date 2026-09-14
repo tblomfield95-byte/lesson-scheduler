@@ -17,7 +17,7 @@
   h1{font-size:17px;font-weight:640;margin:0 0 4px}
   .sub{font-size:13px;color:var(--ink-soft);margin:0 0 20px}
   .lede{font-size:14px;line-height:1.5;color:var(--ink-soft);margin:0 0 16px}
-  .namebtn{display:block;width:100%;text-align:left;font:inherit;font-size:15px;padding:14px 16px;
+  .namebtn{display:block;width:100%;text-align:center;font:inherit;font-size:15px;padding:14px 16px;
            margin-bottom:8px;border-radius:10px;border:1px solid var(--rule);background:var(--panel);
            color:var(--ink);cursor:pointer}
   .namebtn:active{background:var(--paper)}
@@ -59,12 +59,9 @@
 <div id="app"></div>
 
 <script>
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-const START_HOUR = 9;
 const SLOT_MIN = 30;
-const SLOTS = 20;
 const slotTime = (i) => {
-  const total = START_HOUR * 60 + i * SLOT_MIN;
+  const total = R.startHour * 60 + i * SLOT_MIN;
   const h = Math.floor(total / 60), m = total % 60;
   return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
 };
@@ -90,7 +87,7 @@ function weekRangeLabel(iso) {
     : mon.getUTCDate() + " " + monMonth + " \u2013 " + fri.getUTCDate() + " " + friMonth + " " + fri.getUTCFullYear();
 }
 
-let R = { loading: true, error: null, weekNo: null, weekStart: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), submitted: false, submittedStatus: null, submitting: false };
+let R = { loading: true, error: null, weekNo: null, weekStart: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), submitted: false, submittedStatus: null, submitting: false, days: ["Mon", "Tue", "Wed", "Thu", "Fri"], startHour: 9, slots: 20 };
 
 async function boot() {
   if (!SLUG || !WEEK) {
@@ -110,6 +107,11 @@ async function boot() {
     R.students = data.students || [];
     R.teacherName = data.teacherName;
     R.instrument = data.instrument;
+    const startHour = data.dayStartHour != null ? data.dayStartHour : 9;
+    const endHour = data.dayEndHour != null ? data.dayEndHour : 19;
+    R.days = data.includeWeekends ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    R.startHour = startHour;
+    R.slots = (endHour - startHour) * 2;
   } catch (e) {
     R.error = "Couldn't reach the schedule — check your connection and reload.";
   }
@@ -181,11 +183,11 @@ async function submitStatus(status) {
 }
 
 function buildGridHTML(selected, offered) {
-  let head = '<div class="grid-head"><div class="gutter"></div>' + DAYS.map(d => '<div class="dayhead">' + d + "</div>").join("") + "</div>";
+  let head = '<div class="grid-head"><div class="gutter"></div>' + R.days.map(d => '<div class="dayhead">' + d + "</div>").join("") + "</div>";
   let rows = "";
-  for (let i = 0; i < SLOTS; i++) {
+  for (let i = 0; i < R.slots; i++) {
     let cells = "";
-    for (let d = 0; d < DAYS.length; d++) {
+    for (let d = 0; d < R.days.length; d++) {
       const k = key(d, i);
       const isOffered = offered.has(k);
       const on = selected.has(k);

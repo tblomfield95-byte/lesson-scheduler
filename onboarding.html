@@ -31,6 +31,102 @@
   .btn:disabled{opacity:.5;cursor:default}
   .err{color:#B45309;font-size:13px;margin:-8px 0 14px}
   h3{font-size:14px;font-weight:620;margin:24px 0 4px}
+
+  .term-count-card{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    padding:13px 14px;
+    margin-bottom:12px;
+    border:1px solid var(--rule);
+    border-radius:10px;
+    background:var(--panel);
+  }
+  .term-count-card label{
+    margin:0;
+    font-size:14px;
+    font-weight:580;
+    color:var(--ink);
+  }
+  .term-count-card input{
+    width:68px;
+    margin:0;
+    text-align:center;
+    padding:9px 8px;
+    background:var(--paper);
+  }
+  .term-card{
+    width:100%;
+    min-width:0;
+    overflow:hidden;
+    border:1px solid var(--rule);
+    border-radius:12px;
+    background:var(--panel);
+    padding:14px;
+    margin-bottom:12px;
+  }
+  .term-card-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:11px;
+  }
+  .term-card-head h4{
+    margin:0;
+    font-size:14.5px;
+    font-weight:620;
+  }
+  .term-card-head span{
+    font-size:11px;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  .term-date-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:14px;
+    width:100%;
+    min-width:0;
+  }
+  .term-date-grid .term-field{
+    min-width:0;
+    width:100%;
+  }
+  .term-date-grid label{
+    font-size:12.5px;
+    margin-bottom:6px;
+  }
+  .term-date-grid input[type="date"]{
+    display:block;
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    height:44px;
+    box-sizing:border-box;
+    font:inherit;
+    font-size:13.5px;
+    line-height:1;
+    padding:10px 6px;
+    margin:0;
+    text-align:center;
+    border-radius:9px;
+    border:1px solid var(--rule);
+    background:var(--paper);
+    color:var(--ink);
+    -webkit-appearance:none;
+    appearance:none;
+  }
+  @media (max-width:390px){
+    .term-card{padding:12px}
+    .term-date-grid{gap:10px}
+    .term-date-grid input[type="date"]{
+      font-size:13px;
+      padding-left:4px;
+      padding-right:4px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -50,8 +146,10 @@
 
   <h3>Term dates</h3>
   <p class="sub" style="margin-top:-2px">Used to work out real calendar dates for each week. Reading weeks aren't entered here — mark those "Not teaching" as they come round instead.</p>
-  <label>Number of terms</label>
-  <input type="number" id="termCount" min="1" max="6" value="3" style="margin-bottom:12px">
+  <div class="term-count-card">
+    <label for="termCount">Number of terms</label>
+    <input type="number" id="termCount" min="1" max="6" value="3">
+  </div>
   <div id="terms"></div>
 
   <button class="btn" id="go">Finish setup</button>
@@ -86,8 +184,13 @@ renderRows();
 function renderTerms() {
   const el = document.getElementById("terms");
   el.innerHTML = terms.map((t, i) =>
-    '<label>Term ' + (i + 1) + ' start</label><input type="date" data-i="' + i + '" data-f="start" value="' + (t.start || "") + '">' +
-    '<label>Term ' + (i + 1) + ' end</label><input type="date" data-i="' + i + '" data-f="end" value="' + (t.end || "") + '">'
+    '<div class="term-card">' +
+      '<div class="term-card-head"><h4>Term ' + (i + 1) + '</h4><span>Teaching dates</span></div>' +
+      '<div class="term-date-grid">' +
+        '<div class="term-field"><label>Start date</label><input type="date" data-i="' + i + '" data-f="start" value="' + (t.start || "") + '"></div>' +
+        '<div class="term-field"><label>End date</label><input type="date" data-i="' + i + '" data-f="end" value="' + (t.end || "") + '"></div>' +
+      '</div>' +
+    '</div>'
   ).join("");
   el.querySelectorAll("input").forEach(inp => {
     inp.addEventListener("input", () => {

@@ -270,7 +270,7 @@
   }
   .dayprefs-head b{font-size:13.5px;font-weight:620}
   .dayprefs-head span{font-size:11.5px;color:var(--ink-soft)}
-  .dayprefs-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+  .dayprefs-grid{display:grid;gap:6px}
   .daypref{
     min-width:0;
     font:inherit;
@@ -429,17 +429,26 @@
 /*  Constants                                                          */
 /* ================================================================== */
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-const START_HOUR = 9;
 const SLOT_MIN = 30;
-const SLOTS = 20; // 09:00 -> 19:00
 
-const slotTime = (i) => {
-  const total = START_HOUR * 60 + i * SLOT_MIN;
+// Every round snapshots includeWeekends/dayStartHour/dayEndHour at the
+// moment it's created (see blankRound), rather than reading a live global
+// — so changing the Settings page only shapes weeks you haven't painted
+// yet. A week already on the grid keeps meaning exactly what it always
+// did, even if the setting changes later.
+function roundDays(rnd) {
+  const base = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+  return rnd.includeWeekends ? base.concat(["Sat", "Sun"]) : base;
+}
+function roundSlots(rnd) {
+  return (rnd.dayEndHour - rnd.dayStartHour) * 2;
+}
+function slotTimeFor(startHour, i) {
+  const total = startHour * 60 + i * SLOT_MIN;
   const h = Math.floor(total / 60);
   const m = total % 60;
   return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
-};
+}
 
 const key = (d, i) => d + "-" + i;
 
@@ -534,11 +543,11 @@ const hashStr = (s) => {
 
 const bitCount = (n) => { let c = 0; while (n) { n &= n - 1; c++; } return c; };
 
-function buildCandidates(participants, offered) {
+function buildCandidates(participants, offered, days, slots) {
   return participants.map((p) => {
     const cands = [];
-    for (let d = 0; d < DAYS.length; d++) {
-      for (let i = 0; i + p.lesson <= SLOTS; i++) {
+    for (let d = 0; d < days.length; d++) {
+      for (let i = 0; i + p.lesson <= slots; i++) {
         let ok = true;
         for (let k = 0; k < p.lesson; k++) {
           const kk = key(d, i + k);
@@ -578,8 +587,8 @@ function combinations(arr, k) {
   return out;
 }
 
-function dayBlockers(withCands, offered) {
-  return DAYS.map((label, d) => {
+function dayBlockers(withCands, offered, days) {
+  return days.map((label, d) => {
     const dayWasOffered = [...offered].some((k) => Number(k.split("-")[0]) === d);
     if (!dayWasOffered) return null; // nothing to negotiate — you never offered this day
     const blocked = withCands.filter((p) => !p.cands.some((c) => c.d === d)).map((p) => p.name);
@@ -587,11 +596,11 @@ function dayBlockers(withCands, offered) {
   }).filter(Boolean).sort((a, b) => a.blocked.length - b.blocked.length);
 }
 
-function solve(participants, offered, dayPreferences = {}) {
-  const withCands = buildCandidates(participants, offered);
+function solve(participants, offered, dayPreferences = {}, days, slots) {
+  const withCands = buildCandidates(participants, offered, days, slots);
 
   const masks = [];
-  for (let m = 1; m < 1 << DAYS.length; m++) masks.push(m);
+  for (let m = 1; m < 1 << days.length; m++) masks.push(m);
   masks.sort((a, b) => bitCount(a) - bitCount(b) || a - b);
 
   const tryMask = (mask, people) => {
@@ -681,7 +690,7 @@ function solve(participants, offered, dayPreferences = {}) {
         ok: true,
         options: rankAndDedupe(allBest, 12),
         unplaced: [],
-        blockers: dayBlockers(withCands, offered)
+        blockers: dayBlockers(withCands, offered, days)
       };
     }
   }
@@ -727,11 +736,11 @@ function solve(participants, offered, dayPreferences = {}) {
       ok: false,
       options: rankAndDedupe(partialFound, 12),
       unplaced: withCands.filter((p) => !bestPlacedIds.has(p.id)).map((p) => p.name),
-      blockers: dayBlockers(withCands, offered),
+      blockers: dayBlockers(withCands, offered, days),
     };
   }
 
-  return { ok: false, options: [], unplaced: withCands.map((p) => p.name), blockers: dayBlockers(withCands, offered) };
+  return { ok: false, options: [], unplaced: withCands.map((p) => p.name), blockers: dayBlockers(withCands, offered, days) };
 }
 
 /* ================================================================== */
@@ -759,8 +768,11 @@ function blankRound(weekStart) {
     result: null,
     chosen: 0,
     notTeaching: false,
-    dayPreferences: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 },
+    dayPreferences: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
     optionsExpanded: false,
+    includeWeekends: S.settings.includeWeekends,
+    dayStartHour: S.settings.dayStartHour,
+    dayEndHour: S.settings.dayEndHour,
   };
 }
 
@@ -769,7 +781,8 @@ let S = {
   week: 1,
   weeksCompleted: 0,
   termRanges: DEFAULT_TERM_RANGES.map(r => ({ ...r })),
-  rounds: { "1": blankRound(DEFAULT_TERM_RANGES[0].start) },
+  settings: { includeWeekends: false, dayStartHour: 9, dayEndHour: 19 },
+  rounds: {},
   students: [],
   openStudent: null,
   log: [],
@@ -779,6 +792,7 @@ let S = {
   fallbackText: "",
   imgUrl: "",
 };
+S.rounds["1"] = blankRound(DEFAULT_TERM_RANGES[0].start);
 
 function ensureRound(weekNo) {
   const k = String(weekNo);
@@ -819,7 +833,10 @@ function serializeState() {
       result: rr.result,
       chosen: rr.chosen,
       notTeaching: !!rr.notTeaching,
-      dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 },
+      dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+      includeWeekends: !!rr.includeWeekends,
+      dayStartHour: rr.dayStartHour,
+      dayEndHour: rr.dayEndHour,
     };
   });
   return JSON.stringify({
@@ -827,6 +844,7 @@ function serializeState() {
     week: S.week,
     weeksCompleted: S.weeksCompleted,
     termRanges: S.termRanges,
+    settings: S.settings,
     rounds,
     students: S.students,
     log: S.log,
@@ -841,6 +859,7 @@ function applySavedState(saved) {
   S.week = saved.week || S.week;
   S.weeksCompleted = saved.weeksCompleted || 0;
   S.termRanges = (saved.termRanges && saved.termRanges.length) ? saved.termRanges : S.termRanges;
+  S.settings = saved.settings || S.settings;
   S.students = saved.students || S.students;
   S.log = saved.log || [];
   S.hoursSort = saved.hoursSort || "first";
@@ -860,7 +879,12 @@ function applySavedState(saved) {
       result: rr.result || null,
       chosen: rr.chosen || 0,
       notTeaching: !!rr.notTeaching,
-      dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 },
+      dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+      // A round saved before this feature existed has none of these — default
+      // to exactly what was hardcoded before, so nothing already painted shifts.
+      includeWeekends: !!rr.includeWeekends,
+      dayStartHour: rr.dayStartHour != null ? rr.dayStartHour : 9,
+      dayEndHour: rr.dayEndHour != null ? rr.dayEndHour : 19,
       optionsExpanded: false,
     };
   });
@@ -975,7 +999,7 @@ function runSolver() {
   if (!rnd.offered.size) { flash("Paint some blocks first"); return; }
   const participants = getParticipants(rnd);
   if (!participants.length) { flash("No students available this week"); return; }
-  rnd.result = solve(participants, rnd.offered, rnd.dayPreferences || {});
+  rnd.result = solve(participants, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd));
   rnd.chosen = 0;
   rnd.optionsExpanded = false;
   S.tab = "plan";
@@ -1002,25 +1026,25 @@ function toggleMoreOptions() {
   render();
 }
 
-function buildShareText(assign, weekNoLabel, weekStartISO) {
+function buildShareText(assign, weekNoLabel, weekStartISO, startHour) {
   const by = groupByDay(assign);
   const heading = (ME.instrument ? ME.instrument + " lessons" : "Lessons") + " — week " + weekNoLabel;
   let out = heading;
   Object.keys(by).sort().forEach(d => {
     out += "\n\n" + dayDateLong(weekStartISO, +d) + "\n";
-    by[d].forEach(a => { out += slotTime(a.start) + "–" + slotTime(a.start + a.lesson) + "  " + a.name.split(" ")[0] + "\n"; });
+    by[d].forEach(a => { out += slotTimeFor(startHour, a.start) + "–" + slotTimeFor(startHour, a.start + a.lesson) + "  " + a.name.split(" ")[0] + "\n"; });
   });
   return out.trim();
 }
 
-async function doCopy(assign, weekNoLabel, weekStartISO) {
-  const t = buildShareText(assign, weekNoLabel, weekStartISO);
+async function doCopy(assign, weekNoLabel, weekStartISO, startHour) {
+  const t = buildShareText(assign, weekNoLabel, weekStartISO, startHour);
   try { await navigator.clipboard.writeText(t); S.fallbackText = ""; flash("Copied — paste into WhatsApp"); }
   catch (e) { S.fallbackText = t; }
   render();
 }
 
-async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo) {
+async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startHour) {
   const by = groupByDay(assign);
   const days = Object.keys(by).sort();
   const rows = assign.length;
@@ -1046,7 +1070,7 @@ async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo) {
 
     by[d].forEach(a => {
       x.fillStyle = "#1B2430"; x.font = "500 32px " + FONT;
-      x.fillText(slotTime(a.start) + "–" + slotTime(a.start + a.lesson), 64, y + 32);
+      x.fillText(slotTimeFor(startHour, a.start) + "–" + slotTimeFor(startHour, a.start + a.lesson), 64, y + 32);
       x.font = "600 32px " + FONT;
       x.fillText(a.name.split(" ")[0], 360, y + 32);
       x.fillStyle = "#5A6675"; x.font = "400 26px " + FONT; x.textAlign = "right";
@@ -1099,7 +1123,7 @@ function rescheduleWeek() {
     avail: (rnd.replies[l.id] && rnd.replies[l.id].avail) || new Set(),
   }));
   if (!pool.length) { flash("Nobody left to reschedule"); return; }
-  const solved = solve(pool, rnd.offered, rnd.dayPreferences || {});
+  const solved = solve(pool, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd));
   if (!solved.options.length) { flash("No tighter arrangement available"); return; }
   const fresh = solved.options[0].assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" }));
   rnd.plan.lessons = [...rnd.plan.lessons.filter(l => l.status !== "planned"), ...fresh];
@@ -1288,17 +1312,40 @@ function saveTermDates() {
 }
 
 /* ================================================================== */
+/*  Settings — same snapshot-on-open, save-on-demand pattern as Term   */
+/*  Dates. Applies to weeks not yet painted; a round that already has  */
+/*  offered blocks keeps whatever shape it was created with.           */
+/* ================================================================== */
+
+let settingsDraft = { includeWeekends: false, dayStartHour: 9, dayEndHour: 19 };
+function openSettingsDraft() {
+  settingsDraft = { ...S.settings };
+}
+function toggleWeekendSetting() {
+  settingsDraft.includeWeekends = !settingsDraft.includeWeekends;
+  render();
+}
+function saveSettings() {
+  const start = Number(settingsDraft.dayStartHour);
+  const end = Number(settingsDraft.dayEndHour);
+  if (!(end > start)) { flash("End time must be after start time"); return; }
+  S.settings = { includeWeekends: !!settingsDraft.includeWeekends, dayStartHour: start, dayEndHour: end };
+  flash("Settings updated — applies to weeks you paint from now on");
+  render();
+}
+
+/* ================================================================== */
 /*  Grid: drag-to-paint (state + one class toggle per cell; no         */
 /*  re-render mid-gesture — that's what breaks touch dragging)         */
 /* ================================================================== */
 
 function buildGridHTML(role, opts) {
-  const { selected, offered, heat, studentId } = opts;
-  let head = '<div class="grid-head"><div class="gutter"></div>' + DAYS.map(d => '<div class="dayhead">' + d + '</div>').join("") + "</div>";
+  const { selected, offered, heat, studentId, days, slots, startHour } = opts;
+  let head = '<div class="grid-head"><div class="gutter"></div>' + days.map(d => '<div class="dayhead">' + d + '</div>').join("") + "</div>";
   let rows = "";
-  for (let i = 0; i < SLOTS; i++) {
+  for (let i = 0; i < slots; i++) {
     let cells = "";
-    for (let d = 0; d < DAYS.length; d++) {
+    for (let d = 0; d < days.length; d++) {
       const k = key(d, i);
       const isOffered = !offered || offered.has(k);
       const on = selected && selected.has(k);
@@ -1310,7 +1357,7 @@ function buildGridHTML(role, opts) {
       const style = h > 0 ? ' style="opacity:' + (0.25 + Math.min(h, 4) * 0.18) + '"' : "";
       cells += '<div class="' + cls + '" data-d="' + d + '" data-i="' + i + '"' + style + ">" + (h > 0 ? '<span class="heatnum">' + h + "</span>" : "") + "</div>";
     }
-    rows += '<div class="row"><div class="gutter time">' + (i % 2 === 0 ? slotTime(i) : "") + "</div>" + cells + "</div>";
+    rows += '<div class="row"><div class="gutter time">' + (i % 2 === 0 ? slotTimeFor(startHour, i) : "") + "</div>" + cells + "</div>";
   }
   const attrs = 'data-role="' + role + '"' + (studentId ? ' data-student="' + studentId + '"' : "");
   return '<div class="grid-wrap" ' + attrs + ">" + head + '<div class="grid-body">' + rows + "</div></div>";
@@ -1469,6 +1516,7 @@ function closeSidebar() { sidebarOpen = false; syncSidebarDOM(); }
 function goSection(section) {
   currentSection = section;
   if (section === "termdates") openTermDatesDraft();
+  if (section === "settings") openSettingsDraft();
   sidebarOpen = false; syncSidebarDOM(); render();
 }
 
@@ -1518,8 +1566,22 @@ function renderTermDatesSection() {
 }
 
 function renderSettingsSection() {
+  const d = settingsDraft;
+  const hourOptions = (selected) => {
+    let opts = "";
+    for (let h = 6; h <= 22; h++) {
+      opts += '<option value="' + h + '"' + (h === Number(selected) ? " selected" : "") + '>' + String(h).padStart(2, "0") + ":00</option>";
+    }
+    return opts;
+  };
   return '<div class="pad">' +
-    '<p class="lede">Not built yet — I want to check exactly what you mean by \u201cweek start date\u201d before doing this one, since it changes how the grid and solver both work underneath. \u201cInclude weekends\u201d is clear and is next once that\u2019s settled.</p>' +
+    '<p class="lede">These shape the grid on the Offer tab. They only apply to weeks you haven\u2019t painted yet \u2014 a week that already has blocks on it keeps the shape it was created with, so nothing already there silently moves.</p>' +
+    '<div class="field"><label>Weekends</label>' +
+    '<button class="btn' + (d.includeWeekends ? " notteaching-active" : "") + '" style="width:100%" data-action="toggleWeekendSetting">' +
+    (d.includeWeekends ? "Weekends included \u2014 tap to go back to weekdays only" : "Weekdays only \u2014 tap to include Saturday and Sunday") + '</button></div>' +
+    '<div class="field"><label>Grid starts at</label><select data-bind="settingsStartHour">' + hourOptions(d.dayStartHour) + '</select></div>' +
+    '<div class="field"><label>Grid ends at</label><select data-bind="settingsEndHour">' + hourOptions(d.dayEndHour) + '</select></div>' +
+    '<div class="btnrow"><button class="btn sig" data-action="saveSettings">Save changes</button></div>' +
     "</div>";
 }
 
@@ -1549,14 +1611,14 @@ function renderOfferTab() {
   const hours = (rnd.offered.size * SLOT_MIN) / 60;
   const gridBlock = rnd.notTeaching
     ? '<div class="grid-locked">Marked as not teaching this week.<br>Tap \u201cNot teaching this week\u201d again, or \u201cClear\u201d, to paint times.</div>'
-    : buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null });
+    : buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour });
   return '<div class="pad">' +
     renderWeekPicker() +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
     '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + ' — check this matches the week you mean; correct it if a reading week or anything else has thrown it off.</p>' +
     '<p class="lede">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
     '<div class="dayprefs"><div class="dayprefs-head"><b>Teaching day preference</b><span>Tap to cycle Neutral → Preferred → Avoid</span></div>' +
-    '<div class="dayprefs-grid">' + DAYS.map((d, i) => {
+    '<div class="dayprefs-grid" style="grid-template-columns:repeat(' + roundDays(rnd).length + ',minmax(0,1fr))">' + roundDays(rnd).map((d, i) => {
       const v = Number((rnd.dayPreferences && rnd.dayPreferences[i]) || 0);
       const cls = v === -1 ? " preferred" : v === 1 ? " avoid" : "";
       return '<button class="daypref' + cls + '" data-action="cycleDayPref" data-day="' + i + '"><strong>' + d + '</strong><span>' + preferenceLabel(v) + '</span></button>';
@@ -1600,7 +1662,7 @@ function renderRepliesTab() {
       let gridBlock = "";
       if (!isStudentReply && S.openStudent === s.id) {
         const avail = (r && r.avail) || new Set();
-        gridBlock = '<div style="padding:4px 0 14px">' + buildGridHTML("reply", { selected: avail, offered: rnd.offered, studentId: s.id }) + "</div>";
+        gridBlock = '<div style="padding:4px 0 14px">' + buildGridHTML("reply", { selected: avail, offered: rnd.offered, studentId: s.id, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour }) + "</div>";
       }
       return '<div class="srow-group">' +
         '<div class="srow"><div class="sname"' + (!isStudentReply ? ' data-action="toggleStudentOpen" data-id="' + s.id + '" style="cursor:pointer"' : '') + '>' +
@@ -1615,7 +1677,7 @@ function renderRepliesTab() {
 
   let heatPanel = "";
   if (rnd.offered.size > 0 && Object.keys(heat).length > 0) {
-    heatPanel = '<div class="panel"><h3>Everyone, overlaid</h3>' + buildGridHTML("heat", { selected: new Set(), offered: rnd.offered, heat }) + "</div>";
+    heatPanel = '<div class="panel"><h3>Everyone, overlaid</h3>' + buildGridHTML("heat", { selected: new Set(), offered: rnd.offered, heat, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour }) + "</div>";
   }
 
   const participants = getParticipants(rnd);
@@ -1645,10 +1707,11 @@ function renderPreConfirmPlanTab() {
   }
 
   const visibleOptions = rnd.optionsExpanded ? r.options : r.options.slice(0, 3);
+  const days = roundDays(rnd);
   const optionsHTML = visibleOptions.map((opt, idx) => {
     const actualIdx = r.options.indexOf(opt);
     const dayNums = [...new Set(opt.assign.map(a => a.d))].sort();
-    const daysLabel = dayNums.map(d => DAYS[d]).join(" + ");
+    const daysLabel = dayNums.map(d => days[d]).join(" + ");
     const gapsLabel = opt.gaps === 0 ? "no gaps" : ((opt.gaps * SLOT_MIN) / 60) + "h idle";
     const prefValues = dayNums.map(d => Number((rnd.dayPreferences && rnd.dayPreferences[d]) || 0));
     const allPreferred = prefValues.length && prefValues.every(v => v === -1);
@@ -1659,7 +1722,7 @@ function renderPreConfirmPlanTab() {
         ? '<span class="prefavoid">Includes an avoided day</span>'
         : 'Neutral day preference';
     const lines = opt.assign.slice().sort((a, b) => a.d - b.d || a.start - b.start).map(a =>
-      '<div class="line"><span>' + DAYS[a.d] + " " + slotTime(a.start) + "–" + slotTime(a.start + a.lesson) + "</span><span>" + a.name + "</span></div>"
+      '<div class="line"><span>' + days[a.d] + " " + slotTimeFor(rnd.dayStartHour, a.start) + "–" + slotTimeFor(rnd.dayStartHour, a.start + a.lesson) + "</span><span>" + a.name + "</span></div>"
     ).join("");
     return '<div class="opt' + (actualIdx === rnd.chosen ? " sel" : "") + '" data-action="chooseOption" data-idx="' + actualIdx + '">' +
       '<div class="opthead"><b>' + daysLabel + "</b><span>" + gapsLabel + "</span></div>" + lines +
@@ -1706,7 +1769,7 @@ function renderLivePlanTab() {
 
   const dayPanels = Object.keys(by).sort().map(d => {
     const lessons = by[d].map(l =>
-      '<div class="live"><div class="livetop"><b>' + l.name.split(" ")[0] + "</b><span>" + slotTime(l.start) + "–" + slotTime(l.start + l.lesson) + "</span></div>" +
+      '<div class="live"><div class="livetop"><b>' + l.name.split(" ")[0] + "</b><span>" + slotTimeFor(rnd.dayStartHour, l.start) + "–" + slotTimeFor(rnd.dayStartHour, l.start + l.lesson) + "</span></div>" +
       '<div class="cancels"><button class="mini" data-action="cancelEarly" data-id="' + l.key + '">Cancelled, 24h+ notice</button>' +
       '<button class="mini warnb" data-action="cancelLate" data-id="' + l.key + '">Cancelled late</button></div></div>'
     ).join("");
@@ -1717,8 +1780,9 @@ function renderLivePlanTab() {
 
   let cancelledPanel = "";
   if (cancelled.length > 0) {
+    const days = roundDays(rnd);
     cancelledPanel = '<div class="panel"><h3>Cancelled</h3>' + cancelled.map(l =>
-      '<div class="entry"><span class="struck">' + DAYS[l.d] + " " + slotTime(l.start) + " · " + l.name.split(" ")[0] +
+      '<div class="entry"><span class="struck">' + days[l.d] + " " + slotTimeFor(rnd.dayStartHour, l.start) + " · " + l.name.split(" ")[0] +
       '<i class="tag">' + (l.status === "cancelled_late" ? "charged" : "slot freed") + "</i></span>" +
       '<button class="x" data-action="uncancel" data-id="' + l.key + '">↺</button></div>'
     ).join("") + "</div>";
@@ -1849,6 +1913,8 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "addStudent") addStudent();
   else if (action === "removeStudent") removeStudent(id);
   else if (action === "saveTermDates") saveTermDates();
+  else if (action === "toggleWeekendSetting") toggleWeekendSetting();
+  else if (action === "saveSettings") saveSettings();
   else if (action === "sampleReplies") sampleReplies();
   else if (action === "toggleStudentOpen") {
     const r = activeRound().replies[id];
@@ -1886,15 +1952,15 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "adjustLength") adjustLength(id, Number(el.dataset.delta));
   else if (action === "runSolver") runSolver();
   else if (action === "chooseOption") { activeRound().chosen = Number(el.dataset.idx); render(); }
-  else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart); }
-  else if (action === "imageChosen") { const rnd = activeRound(); doImage(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, S.week); }
+  else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, rnd.dayStartHour); }
+  else if (action === "imageChosen") { const rnd = activeRound(); doImage(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, S.week, rnd.dayStartHour); }
   else if (action === "confirmSchedule") confirmSchedule();
   else if (action === "cancelEarly") setLessonStatus(id, "cancelled_early");
   else if (action === "cancelLate") setLessonStatus(id, "cancelled_late");
   else if (action === "uncancel") setLessonStatus(id, "planned");
   else if (action === "closeGaps") rescheduleWeek();
-  else if (action === "copyLive") { const rnd = activeRound(); doCopy(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart); }
-  else if (action === "imageLive") { const rnd = activeRound(); doImage(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.plan.weekNo); }
+  else if (action === "copyLive") { const rnd = activeRound(); doCopy(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.dayStartHour); }
+  else if (action === "imageLive") { const rnd = activeRound(); doImage(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.plan.weekNo, rnd.dayStartHour); }
   else if (action === "endWeek") endWeek();
   else if (action === "toggleHoursOpen") { S.openHours = S.openHours === id ? null : id; render(); }
   else if (action === "removeEntry") removeEntry(id);
@@ -1938,6 +2004,8 @@ document.getElementById("app").addEventListener("change", (e) => {
   else if (bind === "termCount") { setTermCount(parseInt(el.value, 10)); }
   else if (bind === "termStart") { termDraft.ranges[Number(el.dataset.idx)].start = el.value; }
   else if (bind === "termEnd") { termDraft.ranges[Number(el.dataset.idx)].end = el.value; }
+  else if (bind === "settingsStartHour") { settingsDraft.dayStartHour = Number(el.value); }
+  else if (bind === "settingsEndHour") { settingsDraft.dayEndHour = Number(el.value); }
 });
 
 /* ================================================================== */

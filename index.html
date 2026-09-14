@@ -44,11 +44,15 @@
        background:var(--sig);color:#fff;font-weight:560;cursor:pointer;width:100%}
   .btn:disabled{opacity:.4;cursor:default}
   .btn-secondary{border-color:var(--rule);background:var(--panel);color:var(--ink)}
+  .btn-secondary:disabled{opacity:.4}
   .empty{font-size:14px;color:var(--ink-soft);line-height:1.55}
   .done{font-size:15px;line-height:1.6}
   .count{font-size:13px;color:var(--ink-soft);margin:6px 0 14px}
-  .button-group{display:flex;gap:8px;flex-wrap:wrap}
-  .button-group .btn{flex:1;min-width:120px}
+  .button-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+  .button-group .btn{flex:1}
+  .confirmation-box{background:var(--sig-soft);border:1px solid var(--sig);border-radius:10px;padding:16px;margin-bottom:16px;text-align:center}
+  .confirmation-box .tick{font-size:32px;line-height:1;margin:0 0 8px}
+  .confirmation-box .msg{font-size:13px;color:var(--ink);line-height:1.5}
 </style>
 </head>
 <body>
@@ -123,6 +127,7 @@ function pick(id) {
 function editAgain() { R.submitted = false; R.stage = "ask"; render(); }
 function goGrid() { R.stage = "grid"; render(); }
 function back() { R.picked = null; R.stage = null; R.avail = new Set(); render(); }
+function done() { R.picked = null; R.stage = null; R.avail = new Set(); R.submitted = false; render(); }
 
 async function clearResponse() {
   R.submitting = true; render();
@@ -141,7 +146,6 @@ async function clearResponse() {
     R.stage = null;
     R.avail = new Set();
     R.submitting = false;
-    flash("Response cleared");
   } catch (e) {
     R.submitting = false;
     render();
@@ -281,9 +285,15 @@ function render() {
     const msg = R.submittedStatus === "skip" ? "No lesson needed this week — got it."
       : R.submittedStatus === "none" ? "Thanks for letting us know — your teacher will sort something out."
       : "Got your times for " + weekLabel.toLowerCase() + ".";
-    app.innerHTML = '<div class="pad"><h1>Thanks' + (first ? ", " + first : "") + '!</h1><p class="done">' + msg + '</p>' +
-      '<div class="button-group" style="margin-top:16px">' +
-      '<button class="back" style="flex:1;font-size:14px;padding:12px 18px" onclick="editAgain()">\u2190 Change your answer</button>' +
+    app.innerHTML = '<div class="pad">' +
+      '<div class="confirmation-box">' +
+      '<div class="tick">\u2713</div>' +
+      '<div class="msg">Response recorded</div>' +
+      '</div>' +
+      '<h1>Thanks' + (first ? ", " + first : "") + '!</h1><p class="done">' + msg + '</p>' +
+      '<div class="button-group" style="flex-direction:column">' +
+      '<button class="btn" onclick="done()" style="margin-bottom:8px">Done</button>' +
+      '<button class="btn btn-secondary" onclick="editAgain()" style="margin-bottom:0">Change answer</button>' +
       '<button class="btn btn-secondary" onclick="clearResponse()" ' + (R.submitting ? "disabled" : "") + '>Clear response</button>' +
       '</div></div>';
     return;
@@ -322,9 +332,7 @@ function render() {
     buildGridHTML(R.avail, R.offered) +
     '<p class="count" id="slotCount">' + R.avail.size + " slot" + (R.avail.size === 1 ? "" : "s") + " selected</p>" +
     '<button class="choice' + (prevStatus === "none" ? " sel" : "") + '" onclick="submitStatus(\'none\')" ' + (R.submitting ? "disabled" : "") + '>None of these times work</button>' +
-    '<div class="button-group">' +
-    '<button class="btn" id="submitBtn" onclick="submitStatus(\'in\')" ' + (R.avail.size === 0 || R.submitting ? "disabled" : "") + ' style="flex:2">' + (R.submitting ? "Saving…" : "Submit") + '</button>' +
-    '</div></div>';
+    '<button class="btn" id="submitBtn" onclick="submitStatus(\'in\')" ' + (R.avail.size === 0 || R.submitting ? "disabled" : "") + '>' + (R.submitting ? "Saving…" : "Submit") + "</button></div>";
 
   app.innerHTML = body;
   mountGrid();

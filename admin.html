@@ -37,7 +37,8 @@
   .bartop{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:14px 16px 8px}
   .hbrow{display:flex;align-items:center;gap:10px;min-width:0}
   .hamburger{font-size:19px;line-height:1;background:none;border:none;color:var(--ink);
-             cursor:pointer;padding:2px 2px 2px 0;flex:none}
+             cursor:pointer;padding:0;flex:none;width:24px;height:24px;
+             display:flex;align-items:center;justify-content:center}
   .hamburger:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
   .sidebar-backdrop{position:fixed;inset:0;background:rgba(27,36,48,0);z-index:60;
                      opacity:0;pointer-events:none;transition:opacity .48s ease, background-color .48s ease}
@@ -200,7 +201,7 @@
     .term-date-grid{gap:10px}
     .term-date-grid input[type="date"]{font-size:13px;padding-left:4px;padding-right:4px}
   }
-  .title{font-size:15.5px;font-weight:640;letter-spacing:-0.01em;margin:0}
+  .title{font-size:15.5px;font-weight:640;letter-spacing:-0.01em;margin:0;line-height:1}
   .wk{font-size:13px;color:var(--ink-soft);white-space:nowrap}
   .tabs{display:flex;gap:2px;padding:0 12px 10px;overflow-x:auto}
   .tab{flex:1;min-width:74px;border:none;background:none;padding:7px 6px;font:inherit;font-size:13px;

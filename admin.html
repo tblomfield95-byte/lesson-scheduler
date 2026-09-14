@@ -57,6 +57,12 @@
   .btn:disabled{opacity:.4;cursor:default}
   .btn:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
 
+  .weekpicker{display:flex;align-items:center;justify-content:space-between;gap:10px;
+              padding:10px 12px;margin-bottom:14px;border:1px solid var(--rule);border-radius:10px;background:var(--panel)}
+  .weekpicker-mid{text-align:center;flex:1;min-width:0}
+  .weekpicker-mid b{display:block;font-size:14px}
+  .weekpicker-mid span{display:block;font-size:12px;color:var(--ink-soft);margin-top:2px}
+
   .grid-wrap{border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--panel);
              touch-action:none;user-select:none;-webkit-user-select:none}
   .grid-head{display:flex;border-bottom:1px solid var(--rule);background:var(--paper)}
@@ -198,10 +204,6 @@ const slotTime = (i) => {
 };
 
 const key = (d, i) => d + "-" + i;
-
-const INITIAL_STUDENTS = [];
-
-function cloneStudents() { return INITIAL_STUDENTS.map(s => ({ ...s })); }
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -413,7 +415,8 @@ function solve(participants, offered) {
 }
 
 /* ================================================================== */
-/*  State                                                              */
+/*  State — one round per week (offered/replies/plan/result/chosen),   */
+/*  so several weeks can be in flight at once without colliding.       */
 /* ================================================================== */
 
 // Who's logged in — fetched once from /api/me, never synced back as part
@@ -427,23 +430,41 @@ async function loadMe() {
   } catch (e) { /* offline — header just shows the generic title */ }
 }
 
+function blankRound(weekStart) {
+  return { weekStart, offered: new Set(), replies: {}, plan: null, result: null, chosen: 0 };
+}
+
 let S = {
   tab: "week",
-  weekNo: 1,
-  weekStart: TERM_RANGES[0].start,
-  students: cloneStudents(),
-  offered: new Set(),
-  replies: {},          // id -> {status:'in'|'skip'|'none', avail:Set}
-  result: null,
-  chosen: 0,
+  weekNo: 1,           // the official current week — only endWeek()/skipWeek() advance this
+  activeWeek: 1,        // whichever week's round the Offer/Replies/Schedule tabs are showing
+  rounds: { "1": blankRound(TERM_RANGES[0].start) },
+  students: [],
   openStudent: null,
-  log: [],               // [{id, studentId, date, hours, manual, lateCancel}]
-  plan: null,             // {weekNo, weekStart, lessons:[{id,name,d,start,lesson,key,status}]}
+  log: [],               // [{id, studentId, date, hours, manual, lateCancel}] — unaffected by rounds
   openHours: null,
   draft: { date: todayISO(), hours: 1 },
   fallbackText: "",
   imgUrl: "",
 };
+
+// Ensures a round exists for the given week, creating a blank one (with a
+// sensibly walked-forward date) the first time that week is visited.
+function ensureRound(weekNo) {
+  const k = String(weekNo);
+  if (S.rounds[k]) return S.rounds[k];
+  let fromWeek = S.weekNo;
+  let fromStart = (S.rounds[String(S.weekNo)] && S.rounds[String(S.weekNo)].weekStart) || TERM_RANGES[0].start;
+  for (let w = weekNo - 1; w > fromWeek; w--) {
+    if (S.rounds[String(w)]) { fromWeek = w; fromStart = S.rounds[String(w)].weekStart; break; }
+  }
+  let cur = fromStart;
+  for (let w = fromWeek; w < weekNo; w++) cur = nextWeekStart(cur);
+  S.rounds[k] = blankRound(cur);
+  return S.rounds[k];
+}
+function activeRound() { return ensureRound(S.activeWeek); }
+const lessonFor = (rnd, id) => (rnd.replies[id] && rnd.replies[id].lesson) || 2;
 
 /* ================================================================== */
 /*  Persistence — one JSON blob synced to D1 via a Pages Function      */
@@ -452,18 +473,26 @@ let S = {
 const DEV_MODE = false; // shows the "Load sample replies" button while testing solo
 
 function serializeState() {
+  const rounds = {};
+  Object.keys(S.rounds).forEach(k => {
+    const rr = S.rounds[k];
+    rounds[k] = {
+      weekStart: rr.weekStart,
+      offered: [...rr.offered],
+      replies: Object.fromEntries(Object.entries(rr.replies).map(([id, rep]) => [id, { status: rep.status, avail: [...rep.avail], lesson: rep.lesson || 2 }])),
+      plan: rr.plan,
+      result: rr.result,
+      chosen: rr.chosen,
+    };
+  });
   return JSON.stringify({
     tab: S.tab,
     weekNo: S.weekNo,
-    weekStart: S.weekStart,
+    activeWeek: S.activeWeek,
+    rounds,
     students: S.students,
-    offered: [...S.offered],
-    replies: Object.fromEntries(Object.entries(S.replies).map(([id, r]) => [id, { status: r.status, avail: [...r.avail] }])),
-    chosen: S.chosen,
     log: S.log,
-    plan: S.plan,
     draft: S.draft,
-    result: S.result,
   });
 }
 
@@ -471,16 +500,23 @@ function applySavedState(saved) {
   if (!saved) return;
   S.tab = saved.tab || S.tab;
   S.weekNo = saved.weekNo || S.weekNo;
-  S.weekStart = saved.weekStart || S.weekStart;
+  S.activeWeek = saved.activeWeek || S.weekNo;
   S.students = saved.students || S.students;
-  S.offered = new Set(saved.offered || []);
-  S.replies = {};
-  Object.entries(saved.replies || {}).forEach(([id, r]) => { S.replies[id] = { status: r.status, avail: new Set(r.avail || []) }; });
-  S.chosen = saved.chosen || 0;
   S.log = saved.log || [];
-  S.plan = saved.plan || null;
   S.draft = saved.draft || S.draft;
-  S.result = saved.result || null;
+  S.rounds = {};
+  Object.entries(saved.rounds || {}).forEach(([k, rr]) => {
+    S.rounds[k] = {
+      weekStart: rr.weekStart,
+      offered: new Set(rr.offered || []),
+      replies: Object.fromEntries(Object.entries(rr.replies || {}).map(([id, rep]) => [id, { status: rep.status, avail: new Set(rep.avail || []), lesson: rep.lesson || 2 }])),
+      plan: rr.plan || null,
+      result: rr.result || null,
+      chosen: rr.chosen || 0,
+    };
+  });
+  ensureRound(S.weekNo);
+  ensureRound(S.activeWeek);
 }
 
 let saveTimer = null;
@@ -503,12 +539,12 @@ async function loadState() {
 }
 
 const taughtFor = (id) => S.log.filter(e => e.studentId === id).reduce((s, e) => s + e.hours, 0);
-const getParticipants = () => S.students
-  .filter(s => S.replies[s.id] && S.replies[s.id].status === "in" && S.replies[s.id].avail.size > 0)
-  .map(s => ({ id: s.id, name: s.name, lesson: s.lesson, avail: S.replies[s.id].avail }));
-const getHeat = () => {
+const getParticipants = (rnd) => S.students
+  .filter(s => rnd.replies[s.id] && rnd.replies[s.id].status === "in" && rnd.replies[s.id].avail.size > 0)
+  .map(s => ({ id: s.id, name: s.name, lesson: lessonFor(rnd, s.id), avail: rnd.replies[s.id].avail }));
+const getHeat = (rnd) => {
   const h = {};
-  Object.values(S.replies).forEach(r => { if (r.status !== "in") return; r.avail.forEach(k => { h[k] = (h[k] || 0) + 1; }); });
+  Object.values(rnd.replies).forEach(r => { if (r.status !== "in") return; r.avail.forEach(k => { h[k] = (h[k] || 0) + 1; }); });
   return h;
 };
 const groupByDay = (assign) => {
@@ -540,40 +576,44 @@ function flash(msg) {
 /*  Actions                                                            */
 /* ================================================================== */
 
-function clearOffer() { S.offered = new Set(); S.result = null; render(); }
+function clearOffer() { const rnd = activeRound(); rnd.offered = new Set(); rnd.result = null; render(); }
 
 function sampleReplies() {
+  const rnd = activeRound();
   const next = {};
   S.students.forEach(s => {
-    const rnd = mulberry(hashStr(s.id + "w" + S.weekNo));
+    const rand = mulberry(hashStr(s.id + "w" + S.activeWeek));
     const need = s.allocated / TERM_WEEKS;
-    const wants = rnd() < Math.min(0.95, need + 0.25);
-    if (!wants) { next[s.id] = { status: "skip", avail: new Set() }; return; }
+    const wants = rand() < Math.min(0.95, need + 0.25);
+    if (!wants) { next[s.id] = { status: "skip", avail: new Set(), lesson: 2 }; return; }
     const avail = new Set();
-    S.offered.forEach(k => { if (rnd() < 0.45) avail.add(k); });
-    next[s.id] = { status: avail.size ? "in" : "none", avail };
+    rnd.offered.forEach(k => { if (rand() < 0.45) avail.add(k); });
+    next[s.id] = { status: avail.size ? "in" : "none", avail, lesson: 2 };
   });
-  S.replies = next; S.result = null;
+  rnd.replies = next; rnd.result = null;
   flash("Sample replies loaded");
   render();
 }
 
 function adjustLength(id, delta) {
+  const rnd = activeRound();
   const s = S.students.find(x => x.id === id);
-  if (!s) return;
+  if (!s || !rnd.replies[id]) return;
   const cap = Math.max(1, Math.round((s.allocated - taughtFor(id)) * 2));
-  const next = Math.min(4, Math.max(1, s.lesson + delta));
-  s.lesson = Math.min(next, cap);
-  S.result = null;
+  const cur = lessonFor(rnd, id);
+  const next = Math.min(4, Math.max(1, cur + delta));
+  rnd.replies[id].lesson = Math.min(next, cap);
+  rnd.result = null;
   render();
 }
 
 function runSolver() {
-  if (!S.offered.size) { flash("Paint some blocks first"); return; }
-  const participants = getParticipants();
+  const rnd = activeRound();
+  if (!rnd.offered.size) { flash("Paint some blocks first"); return; }
+  const participants = getParticipants(rnd);
   if (!participants.length) { flash("No students available this week"); return; }
-  S.result = solve(participants, S.offered);
-  S.chosen = 0; S.tab = "plan";
+  rnd.result = solve(participants, rnd.offered);
+  rnd.chosen = 0; S.tab = "plan";
   render();
 }
 
@@ -646,43 +686,48 @@ async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo) {
 }
 
 function confirmSchedule() {
-  const opt = S.result && S.result.options[S.chosen];
+  const rnd = activeRound();
+  const opt = rnd.result && rnd.result.options[rnd.chosen];
   if (!opt) return;
-  S.plan = {
-    weekNo: S.weekNo,
-    weekStart: S.weekStart,
+  rnd.plan = {
+    weekNo: S.activeWeek,
+    weekStart: rnd.weekStart,
     lessons: opt.assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" })),
   };
-  S.result = null; S.imgUrl = ""; S.fallbackText = "";
+  rnd.result = null; S.imgUrl = ""; S.fallbackText = "";
   flash("Week confirmed — post it to the group");
   render();
 }
 
 function setLessonStatus(k, status) {
-  S.plan.lessons = S.plan.lessons.map(l => l.key === k ? { ...l, status } : l);
+  const rnd = activeRound();
+  rnd.plan.lessons = rnd.plan.lessons.map(l => l.key === k ? { ...l, status } : l);
   S.imgUrl = ""; S.fallbackText = "";
   render();
 }
 
 function rescheduleWeek() {
-  const staying = S.plan.lessons.filter(l => l.status === "planned");
+  const rnd = activeRound();
+  const staying = rnd.plan.lessons.filter(l => l.status === "planned");
   const pool = staying.map(l => ({
     id: l.id, name: l.name, lesson: l.lesson,
-    avail: (S.replies[l.id] && S.replies[l.id].avail) || new Set(),
+    avail: (rnd.replies[l.id] && rnd.replies[l.id].avail) || new Set(),
   }));
   if (!pool.length) { flash("Nobody left to reschedule"); return; }
-  const r = solve(pool, S.offered);
-  if (!r.options.length) { flash("No tighter arrangement available"); return; }
-  const fresh = r.options[0].assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" }));
-  S.plan.lessons = [...S.plan.lessons.filter(l => l.status !== "planned"), ...fresh];
+  const solved = solve(pool, rnd.offered);
+  if (!solved.options.length) { flash("No tighter arrangement available"); return; }
+  const fresh = solved.options[0].assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" }));
+  rnd.plan.lessons = [...rnd.plan.lessons.filter(l => l.status !== "planned"), ...fresh];
   S.imgUrl = ""; S.fallbackText = "";
   flash("Rescheduled — repost to the group");
   render();
 }
 
 function endWeek() {
-  const base = new Date(S.plan.weekStart + "T00:00:00");
-  const billable = S.plan.lessons.filter(l => l.status === "planned" || l.status === "cancelled_late");
+  const rnd = S.rounds[String(S.weekNo)];
+  if (!rnd || !rnd.plan) return;
+  const base = new Date(rnd.plan.weekStart + "T00:00:00");
+  const billable = rnd.plan.lessons.filter(l => l.status === "planned" || l.status === "cancelled_late");
   const entries = billable.map(l => {
     const d = new Date(base); d.setDate(d.getDate() + l.d);
     return {
@@ -692,31 +737,45 @@ function endWeek() {
     };
   });
   S.log.push(...entries);
-  S.students.forEach(s => { s.lesson = 2; });
+  delete S.rounds[String(S.weekNo)]; // this round's job is done
   S.weekNo = Math.min(TERM_WEEKS, S.weekNo + 1);
-  S.weekStart = nextWeekStart(S.weekStart);
-  S.plan = null; S.offered = new Set(); S.replies = {};
+  ensureRound(S.weekNo);
+  S.activeWeek = S.weekNo;
   S.imgUrl = ""; S.fallbackText = ""; S.tab = "hours";
   flash(entries.length + " lessons logged");
   render();
 }
 
 function skipWeek() {
-  if (S.plan) { flash("Finish or clear this week's schedule first"); return; }
+  const rnd = S.rounds[String(S.weekNo)];
+  if (rnd && rnd.plan) { flash("Finish or clear this week's schedule first"); return; }
   const skipped = S.weekNo;
-  S.students.forEach(s => { s.lesson = 2; });
+  delete S.rounds[String(S.weekNo)];
   S.weekNo = Math.min(TERM_WEEKS, S.weekNo + 1);
-  S.weekStart = nextWeekStart(S.weekStart);
-  S.offered = new Set(); S.replies = {}; S.result = null;
+  ensureRound(S.weekNo);
+  S.activeWeek = S.weekNo;
   S.imgUrl = ""; S.fallbackText = "";
   flash("Week " + skipped + " marked as not teaching");
+  render();
+}
+
+function prevWeek() {
+  S.activeWeek = Math.max(1, S.activeWeek - 1);
+  ensureRound(S.activeWeek);
+  S.imgUrl = ""; S.fallbackText = "";
+  render();
+}
+function nextWeek() {
+  S.activeWeek = Math.min(TERM_WEEKS, S.activeWeek + 1);
+  ensureRound(S.activeWeek);
+  S.imgUrl = ""; S.fallbackText = "";
   render();
 }
 
 async function goReplies() {
   S.tab = "replies";
   render();
-  const url = window.location.origin + "/s/" + (ME.slug || "");
+  const url = window.location.origin + "/s/" + (ME.slug || "") + "/" + S.activeWeek;
   try {
     await navigator.clipboard.writeText(url);
     flash("Student link copied to clipboard");
@@ -744,7 +803,7 @@ async function saveProfile() {
 }
 
 async function copyProfileLink() {
-  const url = window.location.origin + "/s/" + (ME.slug || "");
+  const url = window.location.origin + "/s/" + (ME.slug || "") + "/" + S.weekNo;
   try {
     await navigator.clipboard.writeText(url);
     flash("Student link copied to clipboard");
@@ -759,7 +818,7 @@ function addStudent() {
   const name = (newStudentDraft.name || "").trim();
   if (!name) { flash("Enter a student name"); return; }
   const allocated = Number(newStudentDraft.allocated) || 0;
-  S.students.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2, 6), name, course: "", allocated, lesson: 2 });
+  S.students.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2, 6), name, course: "", allocated });
   newStudentDraft = { name: "", allocated: "" };
   flash("Student added");
   render();
@@ -800,9 +859,9 @@ function saveEditEntry(id) {
 }
 
 function resetYear() {
-  S.students.forEach(s => { s.lesson = 2; });
-  S.log = []; S.plan = null; S.weekNo = 1; S.weekStart = TERM_RANGES[0].start;
-  S.offered = new Set(); S.replies = {}; S.result = null; S.openHours = null;
+  S.log = []; S.weekNo = 1; S.activeWeek = 1;
+  S.rounds = { "1": blankRound(TERM_RANGES[0].start) };
+  S.openHours = null;
   flash("Year reset");
   render();
 }
@@ -865,20 +924,21 @@ window.addEventListener("mouseup", () => { if (activeEnd) { const fn = activeEnd
 function mountPaintGrid(el) {
   const role = el.dataset.role;
   const studentId = el.dataset.student;
-  const offeredSet = role === "offer" ? null : S.offered;
+  const rnd = activeRound();
+  const offeredSet = role === "offer" ? null : rnd.offered;
   let painting = null, last = "";
 
-  const isSelected = (k) => role === "offer" ? S.offered.has(k) : !!(S.replies[studentId] && S.replies[studentId].avail.has(k));
+  const isSelected = (k) => role === "offer" ? rnd.offered.has(k) : !!(rnd.replies[studentId] && rnd.replies[studentId].avail.has(k));
 
   const apply = (c, val) => {
     const k = key(c.d, c.i);
     if (offeredSet && !offeredSet.has(k)) return;
     if (role === "offer") {
-      val ? S.offered.add(k) : S.offered.delete(k);
+      val ? rnd.offered.add(k) : rnd.offered.delete(k);
     } else {
-      if (!S.replies[studentId]) S.replies[studentId] = { status: "in", avail: new Set() };
-      val ? S.replies[studentId].avail.add(k) : S.replies[studentId].avail.delete(k);
-      S.replies[studentId].status = "in";
+      if (!rnd.replies[studentId]) rnd.replies[studentId] = { status: "in", avail: new Set(), lesson: 2 };
+      val ? rnd.replies[studentId].avail.add(k) : rnd.replies[studentId].avail.delete(k);
+      rnd.replies[studentId].status = "in";
     }
     c.node.classList.toggle("on", val);
   };
@@ -994,7 +1054,7 @@ function closeSidebar() { sidebarOpen = false; syncSidebarDOM(); }
 function goSection(section) { currentSection = section; sidebarOpen = false; syncSidebarDOM(); render(); }
 
 function renderProfileSection() {
-  const link = window.location.origin + "/s/" + (ME.slug || "");
+  const link = window.location.origin + "/s/" + (ME.slug || "") + "/" + S.weekNo;
   const studentRows = S.students.map(s =>
     '<div class="entry">' +
     '<input type="text" data-bind="studentName" data-id="' + s.id + '" value="' + escapeHTML(s.name) + '" style="flex:2;margin-right:6px">' +
@@ -1024,50 +1084,67 @@ function renderProfileSection() {
 function renderTabContent() {
   if (S.tab === "week") return renderOfferTab();
   if (S.tab === "replies") return renderRepliesTab();
-  if (S.tab === "plan") return S.plan ? renderLivePlanTab() : renderPreConfirmPlanTab();
+  if (S.tab === "plan") return activeRound().plan ? renderLivePlanTab() : renderPreConfirmPlanTab();
   if (S.tab === "hours") return renderHoursTab();
   return "";
 }
 
+function renderWeekPicker() {
+  const rnd = activeRound();
+  const isCurrent = S.activeWeek === S.weekNo;
+  return '<div class="weekpicker">' +
+    '<button class="step" data-action="prevWeek" ' + (S.activeWeek <= 1 ? "disabled" : "") + '>\u2039</button>' +
+    '<div class="weekpicker-mid"><b>Planning for week ' + S.activeWeek + '</b>' +
+    '<span>' + (weekRangeLabel(rnd.weekStart) || "") + (isCurrent ? " · current week" : "") + '</span></div>' +
+    '<button class="step" data-action="nextWeek" ' + (S.activeWeek >= TERM_WEEKS ? "disabled" : "") + '>\u203a</button>' +
+    "</div>";
+}
+
 function renderOfferTab() {
-  const hours = (S.offered.size * SLOT_MIN) / 60;
+  const rnd = activeRound();
+  const isCurrent = S.activeWeek === S.weekNo;
+  const hours = (rnd.offered.size * SLOT_MIN) / 60;
   return '<div class="pad">' +
+    renderWeekPicker() +
     '<label class="dateline" style="margin-bottom:8px">Current week <span><input type="number" inputmode="numeric" min="1" max="' + TERM_WEEKS + '" data-bind="weekNo" value="' + S.weekNo + '"> of ' + TERM_WEEKS + '</span></label>' +
-    '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + S.weekStart + '"></label>' +
-    '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(S.weekStart) || "") + ' — check this matches the week you mean; correct it if a reading week or anything else has thrown it off.</p>' +
+    '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
+    '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + ' — check this matches the week you mean; correct it if a reading week or anything else has thrown it off.</p>' +
     '<p class="lede">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
     '<div class="btnrow"><button class="btn" data-action="clearOffer">Clear</button>' +
-    '<button class="btn" data-action="skipWeek">Not teaching this week</button></div>' +
-    buildGridHTML("offer", { selected: S.offered, offered: null, heat: null }) +
+    (isCurrent ? '<button class="btn" data-action="skipWeek">Not teaching this week</button>' : "") +
+    '</div>' +
+    buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null }) +
     '<div class="meter"><span>Offered this week</span><b>' + hours + 'h</b></div>' +
-    '<div class="btnrow" style="margin-top:16px"><button class="btn primary" data-action="goReplies" ' + (S.offered.size ? "" : "disabled") + '>Send to students</button></div>' +
+    '<div class="btnrow" style="margin-top:16px"><button class="btn primary" data-action="goReplies" ' + (rnd.offered.size ? "" : "disabled") + '>Send to students</button></div>' +
     "</div>";
 }
 
 function renderRepliesTab() {
-  const heat = getHeat();
+  const rnd = activeRound();
+  const heat = getHeat(rnd);
   let body;
-  if (!S.offered.size) {
+  if (!rnd.offered.size) {
     body = '<p class="empty">Paint your blocks on the Offer tab first.</p>';
   } else {
     body = '<div class="panel">' + S.students.map(s => {
-      const r = S.replies[s.id];
+      const r = rnd.replies[s.id];
       const st = r ? r.status : "waiting";
       const statusText = st === "in" ? (r.avail.size + " slots free") : st === "skip" ? "Not this week" : st === "none" ? "Nothing works" : "Waiting";
+      const curLesson = lessonFor(rnd, s.id);
       let lenrow = "";
       if (st === "in") {
-        const dec = s.lesson <= 1;
-        const inc = s.lesson >= 4 || (s.lesson + 1) * 0.5 > s.allocated - taughtFor(s.id);
+        const dec = curLesson <= 1;
+        const inc = curLesson >= 4 || (curLesson + 1) * 0.5 > s.allocated - taughtFor(s.id);
         lenrow = '<div class="lenrow"><span>Lesson length</span><div class="stepper">' +
           '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="-1" ' + (dec ? "disabled" : "") + ">–</button>" +
-          "<b>" + (s.lesson * SLOT_MIN) + " min</b>" +
+          "<b>" + (curLesson * SLOT_MIN) + " min</b>" +
           '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="1" ' + (inc ? "disabled" : "") + ">+</button>" +
           "</div></div>";
       }
       let gridBlock = "";
       if (S.openStudent === s.id) {
         const avail = (r && r.avail) || new Set();
-        gridBlock = '<div style="padding:4px 0 14px">' + buildGridHTML("reply", { selected: avail, offered: S.offered, studentId: s.id }) + "</div>";
+        gridBlock = '<div style="padding:4px 0 14px">' + buildGridHTML("reply", { selected: avail, offered: rnd.offered, studentId: s.id }) + "</div>";
       }
       return "<div>" +
         '<div class="srow"><div class="sname" data-action="toggleStudentOpen" data-id="' + s.id + '" style="cursor:pointer">' +
@@ -1081,27 +1158,28 @@ function renderRepliesTab() {
   }
 
   let heatPanel = "";
-  if (S.offered.size > 0 && Object.keys(heat).length > 0) {
-    heatPanel = '<div class="panel"><h3>Everyone, overlaid</h3>' + buildGridHTML("heat", { selected: new Set(), offered: S.offered, heat }) + "</div>";
+  if (rnd.offered.size > 0 && Object.keys(heat).length > 0) {
+    heatPanel = '<div class="panel"><h3>Everyone, overlaid</h3>' + buildGridHTML("heat", { selected: new Set(), offered: rnd.offered, heat }) + "</div>";
   }
 
-  const participants = getParticipants();
-  const lede = S.offered.size
+  const participants = getParticipants(rnd);
+  const lede = rnd.offered.size
     ? '<p class="lede">Each student says whether they want a lesson, then paints inside your blocks. Tap a name to edit their grid.</p>'
     : "";
-  return '<div class="pad">' +
+  return '<div class="pad">' + renderWeekPicker() +
     lede +
-    (DEV_MODE ? '<div class="btnrow"><button class="btn sig" data-action="sampleReplies" ' + (S.offered.size ? "" : "disabled") + ">Load sample replies</button></div>" : "") +
+    (DEV_MODE ? '<div class="btnrow"><button class="btn sig" data-action="sampleReplies" ' + (rnd.offered.size ? "" : "disabled") + ">Load sample replies</button></div>" : "") +
     body + heatPanel +
     '<div class="btnrow"><button class="btn primary" data-action="runSolver" ' + (participants.length ? "" : "disabled") + ">Work out the schedule</button></div>" +
     "</div>";
 }
 
 function renderPreConfirmPlanTab() {
-  if (!S.result) {
-    return '<div class="pad"><p class="empty">Nothing solved yet. Collect replies, then tap “Work out the schedule”.</p></div>';
+  const rnd = activeRound();
+  if (!rnd.result) {
+    return '<div class="pad">' + renderWeekPicker() + '<p class="empty">Nothing solved yet. Collect replies, then tap “Work out the schedule”.</p></div>';
   }
-  const r = S.result;
+  const r = rnd.result;
   let intro;
   if (r.ok) {
     const days = r.options[0].days;
@@ -1116,7 +1194,7 @@ function renderPreConfirmPlanTab() {
     const lines = opt.assign.slice().sort((a, b) => a.d - b.d || a.start - b.start).map(a =>
       '<div class="line"><span>' + DAYS[a.d] + " " + slotTime(a.start) + "–" + slotTime(a.start + a.lesson) + "</span><span>" + a.name + "</span></div>"
     ).join("");
-    return '<div class="opt' + (idx === S.chosen ? " sel" : "") + '" data-action="chooseOption" data-idx="' + idx + '">' +
+    return '<div class="opt' + (idx === rnd.chosen ? " sel" : "") + '" data-action="chooseOption" data-idx="' + idx + '">' +
       '<div class="opthead"><b>' + daysLabel + "</b><span>" + gapsLabel + "</span></div>" + lines + "</div>";
   }).join("");
 
@@ -1128,21 +1206,23 @@ function renderPreConfirmPlanTab() {
   let sharePanel = "", confirmBtn = "";
   if (r.options.length > 0) {
     sharePanel = '<div class="panel"><h3>Post it to the group</h3>' +
-      '<label class="dateline">Week beginning <input type="date" data-bind="weekStart" value="' + S.weekStart + '"></label>' +
+      '<label class="dateline">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
       '<div class="btnrow" style="margin:12px 0 0">' +
       '<button class="btn" data-action="copyChosen">Copy as text</button>' +
       '<button class="btn" data-action="imageChosen">Make an image</button></div>' +
       (S.fallbackText ? '<textarea class="fallback" readonly rows="' + (S.fallbackText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.fallbackText) + "</textarea>" : "") +
-      (S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + S.weekNo + '.png">Save image</a></div>' : "") +
+      (S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + S.activeWeek + '.png">Save image</a></div>' : "") +
       "</div>";
     confirmBtn = '<div class="btnrow"><button class="btn sig" data-action="confirmSchedule">Confirm and log hours</button></div>';
   }
 
-  return '<div class="pad">' + intro + optionsHTML + blockersHTML + sharePanel + confirmBtn + "</div>";
+  return '<div class="pad">' + renderWeekPicker() + intro + optionsHTML + blockersHTML + sharePanel + confirmBtn + "</div>";
 }
 
 function renderLivePlanTab() {
-  const plan = S.plan;
+  const rnd = activeRound();
+  const plan = rnd.plan;
+  const isCurrent = S.activeWeek === S.weekNo;
   const live = plan.lessons.filter(l => l.status === "planned");
   const cancelled = plan.lessons.filter(l => l.status !== "planned");
   const freed = plan.lessons.filter(l => l.status === "cancelled_early");
@@ -1178,9 +1258,11 @@ function renderLivePlanTab() {
 
   const fallback = S.fallbackText ? '<textarea class="fallback" readonly rows="' + (S.fallbackText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.fallbackText) + "</textarea>" : "";
   const imgBlock = S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + plan.weekNo + '.png">Save image</a></div>' : "";
-  const endRow = '<div class="btnrow"><button class="btn sig" data-action="endWeek">End week and log hours</button></div>';
+  const endRow = isCurrent
+    ? '<div class="btnrow"><button class="btn sig" data-action="endWeek">End week and log hours</button></div>'
+    : '<p style="font-size:12.5px;color:var(--ink-soft);margin:10px 0 0">You\u2019re planning ahead — ending the week and logging hours becomes available once this is the current week.</p>';
 
-  return '<div class="pad">' + intro + dayPanels + emptyMsg + cancelledPanel + actionRow + fallback + imgBlock + endRow + "</div>";
+  return '<div class="pad">' + renderWeekPicker() + intro + dayPanels + emptyMsg + cancelledPanel + actionRow + fallback + imgBlock + endRow + "</div>";
 }
 
 function renderHoursTab() {
@@ -1194,13 +1276,13 @@ function renderHoursTab() {
     const perWeek = remaining / weeksLeft;
     const behind = perWeek > 1.05;
     const pct = Math.min(100, (taught / s.allocated) * 100);
-    const lessonsLeft = Math.max(1, Math.round(remaining / (s.lesson * 0.5)));
+    const lessonsLeft = Math.max(1, Math.round(remaining));
     const entries = S.log.filter(e => e.studentId === s.id).sort((a, b) => (a.date < b.date ? 1 : -1));
     const open = S.openHours === s.id;
 
     const note = remaining <= 0 ? "Allocation complete"
       : behind ? "Needs " + perWeek.toFixed(1) + "h a week to finish in time"
-      : remaining + "h left — about " + lessonsLeft + " more lesson" + (lessonsLeft === 1 ? "" : "s") + " at " + (s.lesson * SLOT_MIN) + " min";
+      : remaining + "h left — roughly " + lessonsLeft + " more hour-long lesson" + (lessonsLeft === 1 ? "" : "s");
 
     let ledger = "";
     if (open) {
@@ -1253,6 +1335,8 @@ document.getElementById("app").addEventListener("click", (e) => {
   }
   else if (action === "clearOffer") clearOffer();
   else if (action === "skipWeek") skipWeek();
+  else if (action === "prevWeek") prevWeek();
+  else if (action === "nextWeek") nextWeek();
   else if (action === "goReplies") goReplies();
   else if (action === "toggleSidebar") toggleSidebar();
   else if (action === "saveProfile") saveProfile();
@@ -1262,24 +1346,26 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "sampleReplies") sampleReplies();
   else if (action === "toggleStudentOpen") { S.openStudent = S.openStudent === id ? null : id; render(); }
   else if (action === "setStatus") {
+    const rnd = activeRound();
     const status = el.dataset.status;
-    S.replies[id] = { status, avail: (S.replies[id] && S.replies[id].avail) || new Set() };
-    S.result = null;
+    const prevLesson = lessonFor(rnd, id);
+    rnd.replies[id] = { status, avail: (rnd.replies[id] && rnd.replies[id].avail) || new Set(), lesson: prevLesson };
+    rnd.result = null;
     if (status === "in") S.openStudent = id;
     render();
   }
   else if (action === "adjustLength") adjustLength(id, Number(el.dataset.delta));
   else if (action === "runSolver") runSolver();
-  else if (action === "chooseOption") { S.chosen = Number(el.dataset.idx); render(); }
-  else if (action === "copyChosen") doCopy(S.result.options[S.chosen].assign, S.weekNo, S.weekStart);
-  else if (action === "imageChosen") doImage(S.result.options[S.chosen].assign, S.weekNo, S.weekStart, S.weekNo);
+  else if (action === "chooseOption") { activeRound().chosen = Number(el.dataset.idx); render(); }
+  else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.activeWeek, rnd.weekStart); }
+  else if (action === "imageChosen") { const rnd = activeRound(); doImage(rnd.result.options[rnd.chosen].assign, S.activeWeek, rnd.weekStart, S.activeWeek); }
   else if (action === "confirmSchedule") confirmSchedule();
   else if (action === "cancelEarly") setLessonStatus(id, "cancelled_early");
   else if (action === "cancelLate") setLessonStatus(id, "cancelled_late");
   else if (action === "uncancel") setLessonStatus(id, "planned");
   else if (action === "closeGaps") rescheduleWeek();
-  else if (action === "copyLive") doCopy(S.plan.lessons.filter(l => l.status === "planned"), S.plan.weekNo, S.plan.weekStart);
-  else if (action === "imageLive") doImage(S.plan.lessons.filter(l => l.status === "planned"), S.plan.weekNo, S.plan.weekStart, S.plan.weekNo);
+  else if (action === "copyLive") { const rnd = activeRound(); doCopy(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart); }
+  else if (action === "imageLive") { const rnd = activeRound(); doImage(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.plan.weekNo); }
   else if (action === "endWeek") endWeek();
   else if (action === "toggleHoursOpen") { S.openHours = S.openHours === id ? null : id; render(); }
   else if (action === "removeEntry") removeEntry(id);
@@ -1294,11 +1380,13 @@ document.getElementById("app").addEventListener("change", (e) => {
   const el = e.target.closest("[data-bind]");
   if (!el) return;
   const bind = el.dataset.bind;
-  if (bind === "weekStart") { S.weekStart = el.value; S.imgUrl = ""; S.fallbackText = ""; render(); }
+  if (bind === "weekStart") { activeRound().weekStart = el.value; S.imgUrl = ""; S.fallbackText = ""; render(); }
   else if (bind === "weekNo") {
     let n = parseInt(el.value, 10);
     if (!isFinite(n)) n = S.weekNo;
     S.weekNo = Math.max(1, Math.min(TERM_WEEKS, n));
+    ensureRound(S.weekNo);
+    S.activeWeek = S.weekNo;
     render();
   }
   else if (bind === "draftDate") { S.draft.date = el.value; }

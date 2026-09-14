@@ -141,6 +141,7 @@ async function handleOnboarding(request, env) {
   const name = (body.name || "").trim();
   const instrument = (body.instrument || "").trim();
   const students = Array.isArray(body.students) ? body.students.filter(s => s && s.name) : [];
+  const termRangesIn = Array.isArray(body.termRanges) ? body.termRanges.filter(t => t && t.start && t.end) : [];
   if (!name || !instrument || !students.length) return json({ error: "Fill in your name, instrument and at least one student" }, 400);
 
   let slugBase = slugify(name), slug = slugBase, n = 2;
@@ -153,6 +154,10 @@ async function handleOnboarding(request, env) {
   await env.DB.prepare("UPDATE teachers SET name = ?, instrument = ?, slug = ?, onboarded = 1 WHERE id = ?")
     .bind(name, instrument, slug, teacherId).run();
 
+  const termRanges = termRangesIn.length
+    ? termRangesIn.map(t => ({ start: t.start, end: t.end }))
+    : [{ start: "2026-09-14", end: "2026-12-04" }]; // defensive fallback — the onboarding form always sends real dates
+
   const initialState = {
     tab: "week",
     students: students.map((s, i) => ({
@@ -160,6 +165,7 @@ async function handleOnboarding(request, env) {
     })),
     week: 1,
     weeksCompleted: 0,
+    termRanges,
     rounds: {},
     log: [],
     draft: { date: new Date().toISOString().slice(0, 10), hours: 1 },

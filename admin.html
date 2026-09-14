@@ -205,7 +205,7 @@ const slotTime = (i) => {
 
 const key = (d, i) => d + "-" + i;
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => { const n = new Date(); return new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())).toISOString().slice(0, 10); };
 
 // The real term boundaries, 2026-27 — used only to detect when advancing a
 // week would walk off the end of a term, so it can jump straight to the
@@ -219,10 +219,21 @@ const TERM_RANGES = [
   { start: "2027-04-12", end: "2027-07-02" },
 ];
 
+// Parses a plain "YYYY-MM-DD" into its UTC calendar components. Building
+// dates via new Date(iso + "T00:00:00") and reading them back with
+// .toISOString() is the classic trap here: the first half is local time,
+// the second is always UTC, and in any positive-UTC-offset timezone (BST
+// included) that silently loses a day on every round trip — compounding
+// further each time a computed date feeds into the next one. Working in
+// Date.UTC(...) throughout sidesteps the mismatch entirely.
+function isoParts(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return { y, m, d };
+}
+
 function nextWeekStart(iso) {
-  const naive = new Date(iso + "T00:00:00");
-  naive.setDate(naive.getDate() + 7);
-  const naiveISO = naive.toISOString().slice(0, 10);
+  const { y, m, d } = isoParts(iso);
+  const naiveISO = new Date(Date.UTC(y, m - 1, d + 7)).toISOString().slice(0, 10);
   const term = TERM_RANGES.find(t => iso >= t.start && iso <= t.end);
   if (!term) return naiveISO; // outside any known term — just roll forward
   if (naiveISO > term.end) {
@@ -234,14 +245,15 @@ function nextWeekStart(iso) {
 
 function weekRangeLabel(iso) {
   if (!iso) return "";
-  const mon = new Date(iso + "T00:00:00");
-  const fri = new Date(mon.getTime()); fri.setDate(fri.getDate() + 4);
-  const sameMonth = mon.getMonth() === fri.getMonth() && mon.getFullYear() === fri.getFullYear();
-  const monMonth = mon.toLocaleDateString("en-GB", { month: "short" });
-  const friMonth = fri.toLocaleDateString("en-GB", { month: "short" });
+  const { y, m, d } = isoParts(iso);
+  const mon = new Date(Date.UTC(y, m - 1, d));
+  const fri = new Date(Date.UTC(y, m - 1, d + 4));
+  const sameMonth = mon.getUTCMonth() === fri.getUTCMonth() && mon.getUTCFullYear() === fri.getUTCFullYear();
+  const monMonth = mon.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
+  const friMonth = fri.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
   return sameMonth
-    ? mon.getDate() + "\u2013" + fri.getDate() + " " + friMonth + " " + fri.getFullYear()
-    : mon.getDate() + " " + monMonth + " \u2013 " + fri.getDate() + " " + friMonth + " " + fri.getFullYear();
+    ? mon.getUTCDate() + "\u2013" + fri.getUTCDate() + " " + friMonth + " " + fri.getUTCFullYear()
+    : mon.getUTCDate() + " " + monMonth + " \u2013 " + fri.getUTCDate() + " " + friMonth + " " + fri.getUTCFullYear();
 }
 
 function escapeHTML(s) {
@@ -453,9 +465,9 @@ let S = {
 function ensureRound(weekNo) {
   const k = String(weekNo);
   if (S.rounds[k]) return S.rounds[k];
-  let fromWeek = S.weekNo;
-  let fromStart = (S.rounds[String(S.weekNo)] && S.rounds[String(S.weekNo)].weekStart) || TERM_RANGES[0].start;
-  for (let w = weekNo - 1; w > fromWeek; w--) {
+  let fromWeek = 1;
+  let fromStart = TERM_RANGES[0].start;
+  for (let w = weekNo - 1; w >= 1; w--) {
     if (S.rounds[String(w)]) { fromWeek = w; fromStart = S.rounds[String(w)].weekStart; break; }
   }
   let cur = fromStart;
@@ -726,13 +738,13 @@ function rescheduleWeek() {
 function endWeek() {
   const rnd = S.rounds[String(S.weekNo)];
   if (!rnd || !rnd.plan) return;
-  const base = new Date(rnd.plan.weekStart + "T00:00:00");
+  const { y, m, d } = isoParts(rnd.plan.weekStart);
   const billable = rnd.plan.lessons.filter(l => l.status === "planned" || l.status === "cancelled_late");
   const entries = billable.map(l => {
-    const d = new Date(base); d.setDate(d.getDate() + l.d);
+    const dateISO = new Date(Date.UTC(y, m - 1, d + l.d)).toISOString().slice(0, 10);
     return {
       id: "s" + Date.now() + "-" + l.key, studentId: l.id,
-      date: d.toISOString().slice(0, 10), hours: (l.lesson * SLOT_MIN) / 60,
+      date: dateISO, hours: (l.lesson * SLOT_MIN) / 60,
       manual: false, lateCancel: l.status === "cancelled_late",
     };
   });

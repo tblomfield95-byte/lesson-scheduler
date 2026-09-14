@@ -63,26 +63,41 @@ const slotTime = (i) => {
 };
 const key = (d, i) => d + "-" + i;
 
-const SLUG = (() => {
-  const m = window.location.pathname.match(/^\/s\/([^\/]+)/);
-  return m ? m[1] : "";
+const SLUG_WEEK = (() => {
+  const m = window.location.pathname.match(/^\/s\/([^\/]+)\/(\d+)/);
+  return m ? { slug: m[1], week: m[2] } : { slug: "", week: "" };
 })();
+const SLUG = SLUG_WEEK.slug;
+const WEEK = SLUG_WEEK.week;
 
-let R = { loading: true, error: null, weekNo: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), submitted: false, submittedStatus: null, submitting: false, teacherName: null, instrument: null };
+function weekRangeLabel(iso) {
+  if (!iso) return "";
+  const mon = new Date(iso + "T00:00:00");
+  const fri = new Date(mon.getTime()); fri.setDate(fri.getDate() + 4);
+  const sameMonth = mon.getMonth() === fri.getMonth() && mon.getFullYear() === fri.getFullYear();
+  const monMonth = mon.toLocaleDateString("en-GB", { month: "short" });
+  const friMonth = fri.toLocaleDateString("en-GB", { month: "short" });
+  return sameMonth
+    ? mon.getDate() + "\u2013" + fri.getDate() + " " + friMonth + " " + fri.getFullYear()
+    : mon.getDate() + " " + monMonth + " \u2013 " + fri.getDate() + " " + friMonth + " " + fri.getFullYear();
+}
+
+let R = { loading: true, error: null, weekNo: null, weekStart: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), submitted: false, submittedStatus: null, submitting: false, teacherName: null, instrument: null };
 
 async function boot() {
-  if (!SLUG) {
-    R.error = "This link is missing its studio code — ask your teacher for the correct link.";
+  if (!SLUG || !WEEK) {
+    R.error = "This link is missing its studio or week code — ask your teacher for the correct link.";
     R.loading = false; render(); return;
   }
   try {
-    const res = await fetch("/api/round?slug=" + encodeURIComponent(SLUG));
+    const res = await fetch("/api/round?slug=" + encodeURIComponent(SLUG) + "&week=" + encodeURIComponent(WEEK));
     const data = await res.json();
     if (!data.teacherName) {
       R.error = "Couldn't find that studio — check the link is correct.";
       R.loading = false; render(); return;
     }
     R.weekNo = data.weekNo;
+    R.weekStart = data.weekStart;
     R.offered = new Set(data.offered || []);
     R.students = data.students || [];
     R.teacherName = data.teacherName;
@@ -111,7 +126,7 @@ async function submitStatus(status) {
     await fetch("/api/reply", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ slug: SLUG, studentId: R.picked, status, avail: status === "in" ? [...R.avail] : [] }),
+      body: JSON.stringify({ slug: SLUG, week: WEEK, studentId: R.picked, status, avail: status === "in" ? [...R.avail] : [] }),
     });
     R.submitted = true;
     R.submittedStatus = status;
@@ -214,6 +229,7 @@ function updateAfterPaint() {
 function render() {
   const app = document.getElementById("app");
   const heading = (R.instrument ? R.instrument + " Lessons" : "Lessons") + (R.teacherName ? " — " + R.teacherName : "");
+  const weekLabel = "Week " + R.weekNo + (R.weekStart ? " (" + weekRangeLabel(R.weekStart) + ")" : "");
 
   if (R.loading) { app.innerHTML = '<div class="pad"><p class="lede">Loading…</p></div>'; return; }
   if (R.error) { app.innerHTML = '<div class="pad"><h1>Lessons</h1><p class="empty">' + R.error + "</p></div>"; return; }
@@ -227,15 +243,14 @@ function render() {
     const first = name ? name.split(" ")[0] : "";
     const msg = R.submittedStatus === "skip" ? "No lesson needed this week — got it."
       : R.submittedStatus === "none" ? "Thanks for letting us know — your teacher will sort something out."
-      : "Got your times for week " + R.weekNo + ".";
+      : "Got your times for " + weekLabel.toLowerCase() + ".";
     app.innerHTML = '<div class="pad"><h1>Thanks' + (first ? ", " + first : "") + '!</h1><p class="done">' + msg + '</p>' +
       '<button class="back" style="margin-top:16px" onclick="editAgain()">\u2190 Change your answer</button></div>';
     return;
   }
 
   if (!R.picked) {
-    app.innerHTML = '<div class="pad"><h1>' + heading + ' — week ' + R.weekNo + '</h1>' +
-      '<p class="sub">Tap your name to give your times.</p>' +
+    app.innerHTML = '<div class="pad"><h1>' + heading + '</h1><p class="sub">' + weekLabel + ' \u2014 tap your name to give your times.</p>' +
       R.students.map(s => {
         if (s.status) {
           const label = s.status === "in" ? "Times given" : s.status === "skip" ? "Not needed this week" : "None of these worked";
@@ -253,7 +268,7 @@ function render() {
 
   if (R.stage === "ask") {
     app.innerHTML = '<div class="pad"><button class="back" onclick="back()">← Not ' + name.split(" ")[0] + "?</button>" +
-      "<h1>" + name + "</h1><p class=\"sub\">Week " + R.weekNo + '</p>' +
+      "<h1>" + name + "</h1><p class=\"sub\">" + weekLabel + '</p>' +
       '<button class="choice' + (prevStatus === "skip" ? " sel" : "") + '" onclick="submitStatus(\'skip\')">Not needed this week</button>' +
       '<button class="choice' + (prevStatus === "in" ? " sel" : "") + '" onclick="goGrid()">Yes, show me the times</button>' +
       "</div>";
@@ -262,7 +277,7 @@ function render() {
 
   // stage === "grid" — show what's on offer, decide once you've actually seen it
   let body = '<div class="pad"><button class="back" onclick="back()">← Not ' + name.split(" ")[0] + "?</button>" +
-    "<h1>" + name + "</h1><p class=\"sub\">Week " + R.weekNo + '</p>' +
+    "<h1>" + name + "</h1><p class=\"sub\">" + weekLabel + '</p>' +
     '<p class="lede">Drag across the times you could do:</p>' +
     buildGridHTML(R.avail, R.offered) +
     '<p class="count" id="slotCount">' + R.avail.size + " slot" + (R.avail.size === 1 ? "" : "s") + " selected</p>" +

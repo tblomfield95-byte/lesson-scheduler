@@ -60,7 +60,12 @@
   .weekpicker{display:flex;align-items:center;justify-content:space-between;gap:10px;
               padding:10px 12px;margin-bottom:14px;border:1px solid var(--rule);border-radius:10px;background:var(--panel)}
   .weekpicker-mid{text-align:center;flex:1;min-width:0}
-  .weekpicker-mid b{display:block;font-size:14px}
+  .weekpicker-mid label{display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;font-weight:600}
+  .weekpicker-mid input{font:inherit;font-size:14px;font-weight:600;width:36px;text-align:center;
+                         padding:3px 2px;border-radius:6px;border:1px solid var(--rule);background:var(--paper);color:var(--ink);
+                         -moz-appearance:textfield}
+  .weekpicker-mid input::-webkit-outer-spin-button,
+  .weekpicker-mid input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   .weekpicker-mid span{display:block;font-size:12px;color:var(--ink-soft);margin-top:2px}
 
   .grid-wrap{border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--panel);
@@ -84,8 +89,9 @@
          font-size:13px;color:var(--ink-soft)}
   .meter b{font-size:22px;color:var(--ink);font-weight:640;letter-spacing:-0.02em}
 
-  .srow{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--rule)}
-  .srow:last-child{border-bottom:none}
+  .srow-group{border-bottom:1px solid var(--rule)}
+  .srow-group:last-child{border-bottom:none}
+  .srow{display:flex;align-items:center;gap:10px;padding:11px 0}
   .sname{flex:1;min-width:0}
   .sname strong{display:block;font-size:14.5px;font-weight:580}
   .sname span{font-size:12px;color:var(--ink-soft)}
@@ -97,7 +103,7 @@
   .chip.sel.warn{background:var(--warn);border-color:var(--warn)}
 
   .lenrow{display:flex;align-items:center;justify-content:space-between;
-          padding:0 0 11px;margin-top:-4px;border-bottom:1px solid var(--rule);
+          padding:0 0 11px;
           font-size:12.5px;color:var(--ink-soft)}
   .stepper{display:flex;align-items:center;gap:10px}
   .stepper b{font-size:13px;font-weight:600;color:var(--ink);min-width:58px;text-align:center}
@@ -223,8 +229,7 @@ const TERM_RANGES = [
 // dates via new Date(iso + "T00:00:00") and reading them back with
 // .toISOString() is the classic trap here: the first half is local time,
 // the second is always UTC, and in any positive-UTC-offset timezone (BST
-// included) that silently loses a day on every round trip — compounding
-// further each time a computed date feeds into the next one. Working in
+// included) that silently loses a day on every round trip. Working in
 // Date.UTC(...) throughout sidesteps the mismatch entirely.
 function isoParts(iso) {
   const [y, m, d] = iso.split("-").map(Number);
@@ -427,8 +432,11 @@ function solve(participants, offered) {
 }
 
 /* ================================================================== */
-/*  State — one round per week (offered/replies/plan/result/chosen),   */
-/*  so several weeks can be in flight at once without colliding.       */
+/*  State — one round per week (offered/replies/plan/result/chosen).   */
+/*  There is deliberately only ONE week number now: S.week. It's what  */
+/*  the picker shows, what "End week" and "Not teaching" both act on,  */
+/*  and what you type into directly if you're starting mid-term — no   */
+/*  separate hidden "official" counter to keep in sync with it.        */
 /* ================================================================== */
 
 // Who's logged in — fetched once from /api/me, never synced back as part
@@ -448,8 +456,8 @@ function blankRound(weekStart) {
 
 let S = {
   tab: "week",
-  weekNo: 1,           // the official current week — only endWeek()/skipWeek() advance this
-  activeWeek: 1,        // whichever week's round the Offer/Replies/Schedule tabs are showing
+  week: 1,                // the one and only week number — no separate "current" counter
+  weeksCompleted: 0,       // tally of finished rounds, purely for Hours-tab pacing — never gates anything
   rounds: { "1": blankRound(TERM_RANGES[0].start) },
   students: [],
   openStudent: null,
@@ -475,7 +483,7 @@ function ensureRound(weekNo) {
   S.rounds[k] = blankRound(cur);
   return S.rounds[k];
 }
-function activeRound() { return ensureRound(S.activeWeek); }
+function activeRound() { return ensureRound(S.week); }
 const lessonFor = (rnd, id) => (rnd.replies[id] && rnd.replies[id].lesson) || 2;
 
 /* ================================================================== */
@@ -499,8 +507,8 @@ function serializeState() {
   });
   return JSON.stringify({
     tab: S.tab,
-    weekNo: S.weekNo,
-    activeWeek: S.activeWeek,
+    week: S.week,
+    weeksCompleted: S.weeksCompleted,
     rounds,
     students: S.students,
     log: S.log,
@@ -511,8 +519,8 @@ function serializeState() {
 function applySavedState(saved) {
   if (!saved) return;
   S.tab = saved.tab || S.tab;
-  S.weekNo = saved.weekNo || S.weekNo;
-  S.activeWeek = saved.activeWeek || S.weekNo;
+  S.week = saved.week || S.week;
+  S.weeksCompleted = saved.weeksCompleted || 0;
   S.students = saved.students || S.students;
   S.log = saved.log || [];
   S.draft = saved.draft || S.draft;
@@ -527,8 +535,7 @@ function applySavedState(saved) {
       chosen: rr.chosen || 0,
     };
   });
-  ensureRound(S.weekNo);
-  ensureRound(S.activeWeek);
+  ensureRound(S.week);
 }
 
 let saveTimer = null;
@@ -594,7 +601,7 @@ function sampleReplies() {
   const rnd = activeRound();
   const next = {};
   S.students.forEach(s => {
-    const rand = mulberry(hashStr(s.id + "w" + S.activeWeek));
+    const rand = mulberry(hashStr(s.id + "w" + S.week));
     const need = s.allocated / TERM_WEEKS;
     const wants = rand() < Math.min(0.95, need + 0.25);
     if (!wants) { next[s.id] = { status: "skip", avail: new Set(), lesson: 2 }; return; }
@@ -702,7 +709,7 @@ function confirmSchedule() {
   const opt = rnd.result && rnd.result.options[rnd.chosen];
   if (!opt) return;
   rnd.plan = {
-    weekNo: S.activeWeek,
+    weekNo: S.week,
     weekStart: rnd.weekStart,
     lessons: opt.assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" })),
   };
@@ -735,9 +742,13 @@ function rescheduleWeek() {
   render();
 }
 
+// End and Skip both act on whichever week the picker is currently showing
+// — there's no separate "official current week" restricting this any more.
+// Advancing S.week afterward is just a convenience (move on to the next
+// one); nothing stops you working somewhere else immediately after.
 function endWeek() {
-  const rnd = S.rounds[String(S.weekNo)];
-  if (!rnd || !rnd.plan) return;
+  const rnd = activeRound();
+  if (!rnd.plan) return;
   const { y, m, d } = isoParts(rnd.plan.weekStart);
   const billable = rnd.plan.lessons.filter(l => l.status === "planned" || l.status === "cancelled_late");
   const entries = billable.map(l => {
@@ -749,37 +760,37 @@ function endWeek() {
     };
   });
   S.log.push(...entries);
-  delete S.rounds[String(S.weekNo)]; // this round's job is done
-  S.weekNo = Math.min(TERM_WEEKS, S.weekNo + 1);
-  ensureRound(S.weekNo);
-  S.activeWeek = S.weekNo;
+  delete S.rounds[String(S.week)]; // this round's job is done
+  S.weeksCompleted++;
+  S.week = Math.min(TERM_WEEKS, S.week + 1);
+  ensureRound(S.week);
   S.imgUrl = ""; S.fallbackText = ""; S.tab = "hours";
   flash(entries.length + " lessons logged");
   render();
 }
 
 function skipWeek() {
-  const rnd = S.rounds[String(S.weekNo)];
-  if (rnd && rnd.plan) { flash("Finish or clear this week's schedule first"); return; }
-  const skipped = S.weekNo;
-  delete S.rounds[String(S.weekNo)];
-  S.weekNo = Math.min(TERM_WEEKS, S.weekNo + 1);
-  ensureRound(S.weekNo);
-  S.activeWeek = S.weekNo;
+  const rnd = activeRound();
+  if (rnd.plan) { flash("Finish or clear this week's schedule first"); return; }
+  const skipped = S.week;
+  delete S.rounds[String(S.week)];
+  S.weeksCompleted++;
+  S.week = Math.min(TERM_WEEKS, S.week + 1);
+  ensureRound(S.week);
   S.imgUrl = ""; S.fallbackText = "";
   flash("Week " + skipped + " marked as not teaching");
   render();
 }
 
 function prevWeek() {
-  S.activeWeek = Math.max(1, S.activeWeek - 1);
-  ensureRound(S.activeWeek);
+  S.week = Math.max(1, S.week - 1);
+  ensureRound(S.week);
   S.imgUrl = ""; S.fallbackText = "";
   render();
 }
 function nextWeek() {
-  S.activeWeek = Math.min(TERM_WEEKS, S.activeWeek + 1);
-  ensureRound(S.activeWeek);
+  S.week = Math.min(TERM_WEEKS, S.week + 1);
+  ensureRound(S.week);
   S.imgUrl = ""; S.fallbackText = "";
   render();
 }
@@ -787,7 +798,7 @@ function nextWeek() {
 async function goReplies() {
   S.tab = "replies";
   render();
-  const url = window.location.origin + "/s/" + (ME.slug || "") + "/" + S.activeWeek;
+  const url = window.location.origin + "/s/" + (ME.slug || "") + "/" + S.week;
   try {
     await navigator.clipboard.writeText(url);
     flash("Student link copied to clipboard");
@@ -861,7 +872,7 @@ function saveEditEntry(id) {
 }
 
 function resetYear() {
-  S.log = []; S.weekNo = 1; S.activeWeek = 1;
+  S.log = []; S.week = 1; S.weeksCompleted = 0;
   S.rounds = { "1": blankRound(TERM_RANGES[0].start) };
   S.openHours = null;
   flash("Year reset");
@@ -998,7 +1009,6 @@ function mountAllGrids() {
 let sidebarOpen = false;
 let currentSection = "scheduler"; // "scheduler" | "profile"
 let sidebarCloseTimer = null;
-let showStartingWeekControl = false;
 
 function render() {
   const app = document.getElementById("app");
@@ -1014,7 +1024,7 @@ function renderHeader() {
   let header = '<div class="bar"><div class="bartop">' +
     '<span class="hbrow"><button class="hamburger" data-action="toggleSidebar" aria-label="Menu">\u2630</button>' +
     '<h1 class="title">' + (currentSection === "profile" ? "Profile" : title) + '</h1></span>' +
-    (currentSection === "scheduler" ? '<div class="wk">Week ' + S.weekNo + " of " + TERM_WEEKS + '</div>' : '<span></span>') +
+    (currentSection === "scheduler" ? '<div class="wk">' + S.weeksCompleted + " of " + TERM_WEEKS + ' weeks done</div>' : '<span></span>') +
     '</div>';
   if (currentSection === "scheduler") {
     header += '<div class="tabs">' +
@@ -1090,33 +1100,31 @@ function renderTabContent() {
   return "";
 }
 
+// The one and only week control. Type directly into the number to jump
+// anywhere — including the very first time, to set where you're actually
+// starting — or nudge with the arrows. Whatever week this shows is what
+// Offer/Replies/Schedule all act on, with no separate "official" week
+// hiding underneath it.
 function renderWeekPicker() {
   const rnd = activeRound();
-  const isCurrent = S.activeWeek === S.weekNo;
   return '<div class="weekpicker">' +
-    '<button class="step" data-action="prevWeek" ' + (S.activeWeek <= 1 ? "disabled" : "") + '>\u2039</button>' +
-    '<div class="weekpicker-mid"><b>Planning for week ' + S.activeWeek + '</b>' +
-    '<span>' + (weekRangeLabel(rnd.weekStart) || "") + (isCurrent ? " · current week" : "") + '</span></div>' +
-    '<button class="step" data-action="nextWeek" ' + (S.activeWeek >= TERM_WEEKS ? "disabled" : "") + '>\u203a</button>' +
+    '<button class="step" data-action="prevWeek" ' + (S.week <= 1 ? "disabled" : "") + '>\u2039</button>' +
+    '<div class="weekpicker-mid"><label>Week <input type="number" inputmode="numeric" min="1" max="' + TERM_WEEKS + '" data-bind="week" value="' + S.week + '"> of ' + TERM_WEEKS + '</label>' +
+    '<span>' + (weekRangeLabel(rnd.weekStart) || "") + '</span></div>' +
+    '<button class="step" data-action="nextWeek" ' + (S.week >= TERM_WEEKS ? "disabled" : "") + '>\u203a</button>' +
     "</div>";
 }
 
 function renderOfferTab() {
   const rnd = activeRound();
-  const isCurrent = S.activeWeek === S.weekNo;
   const hours = (rnd.offered.size * SLOT_MIN) / 60;
-  const startingWeekBlock = showStartingWeekControl
-    ? '<div class="panel"><p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px">This only matters once — it\u2019s what the Hours tab measures your pace against, and the only week you can End or mark Not Teaching. It moves on its own after that; you shouldn\u2019t normally need to touch it again.</p>' +
-      '<label class="dateline"><span>Official current week</span><span><input type="number" inputmode="numeric" min="1" max="' + TERM_WEEKS + '" data-bind="weekNo" value="' + S.weekNo + '"> of ' + TERM_WEEKS + '</span></label></div>'
-    : '<button class="back" style="padding:0 0 14px" data-action="toggleStartingWeek">Not starting at week 1? Set your starting week</button>';
   return '<div class="pad">' +
     renderWeekPicker() +
-    startingWeekBlock +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
     '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + ' — check this matches the week you mean; correct it if a reading week or anything else has thrown it off.</p>' +
     '<p class="lede">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
     '<div class="btnrow"><button class="btn" data-action="clearOffer">Clear</button>' +
-    (isCurrent ? '<button class="btn" data-action="skipWeek">Not teaching this week</button>' : "") +
+    '<button class="btn" data-action="skipWeek">Not teaching this week</button>' +
     '</div>' +
     buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null }) +
     '<div class="meter"><span>Offered this week</span><b>' + hours + 'h</b></div>' +
@@ -1151,7 +1159,7 @@ function renderRepliesTab() {
         const avail = (r && r.avail) || new Set();
         gridBlock = '<div style="padding:4px 0 14px">' + buildGridHTML("reply", { selected: avail, offered: rnd.offered, studentId: s.id }) + "</div>";
       }
-      return "<div>" +
+      return '<div class="srow-group">' +
         '<div class="srow"><div class="sname" data-action="toggleStudentOpen" data-id="' + s.id + '" style="cursor:pointer">' +
         "<strong>" + s.name + "</strong><span>" + statusText + "</span></div>" +
         '<div class="chips">' +
@@ -1216,7 +1224,7 @@ function renderPreConfirmPlanTab() {
       '<button class="btn" data-action="copyChosen">Copy as text</button>' +
       '<button class="btn" data-action="imageChosen">Make an image</button></div>' +
       (S.fallbackText ? '<textarea class="fallback" readonly rows="' + (S.fallbackText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.fallbackText) + "</textarea>" : "") +
-      (S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + S.activeWeek + '.png">Save image</a></div>' : "") +
+      (S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + S.week + '.png">Save image</a></div>' : "") +
       "</div>";
     confirmBtn = '<div class="btnrow"><button class="btn sig" data-action="confirmSchedule">Confirm and log hours</button></div>';
   }
@@ -1227,7 +1235,6 @@ function renderPreConfirmPlanTab() {
 function renderLivePlanTab() {
   const rnd = activeRound();
   const plan = rnd.plan;
-  const isCurrent = S.activeWeek === S.weekNo;
   const live = plan.lessons.filter(l => l.status === "planned");
   const cancelled = plan.lessons.filter(l => l.status !== "planned");
   const freed = plan.lessons.filter(l => l.status === "cancelled_early");
@@ -1263,15 +1270,13 @@ function renderLivePlanTab() {
 
   const fallback = S.fallbackText ? '<textarea class="fallback" readonly rows="' + (S.fallbackText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.fallbackText) + "</textarea>" : "";
   const imgBlock = S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + plan.weekNo + '.png">Save image</a></div>' : "";
-  const endRow = isCurrent
-    ? '<div class="btnrow"><button class="btn sig" data-action="endWeek">End week and log hours</button></div>'
-    : '<p style="font-size:12.5px;color:var(--ink-soft);margin:10px 0 0">You\u2019re planning ahead — ending the week and logging hours becomes available once this is the current week.</p>';
+  const endRow = '<div class="btnrow"><button class="btn sig" data-action="endWeek">End week and log hours</button></div>';
 
   return '<div class="pad">' + renderWeekPicker() + intro + dayPanels + emptyMsg + cancelledPanel + actionRow + fallback + imgBlock + endRow + "</div>";
 }
 
 function renderHoursTab() {
-  const weeksLeft = TERM_WEEKS - S.weekNo + 1;
+  const weeksLeft = Math.max(1, TERM_WEEKS - S.weeksCompleted);
   const totalTaught = S.students.reduce((s, x) => s + taughtFor(x.id), 0);
   const totalAllocated = S.students.reduce((s, x) => s + x.allocated, 0);
 
@@ -1339,7 +1344,6 @@ document.getElementById("app").addEventListener("click", (e) => {
     S.tab = el.dataset.tab; render();
   }
   else if (action === "clearOffer") clearOffer();
-  else if (action === "toggleStartingWeek") { showStartingWeekControl = !showStartingWeekControl; render(); }
   else if (action === "skipWeek") skipWeek();
   else if (action === "prevWeek") prevWeek();
   else if (action === "nextWeek") nextWeek();
@@ -1362,8 +1366,8 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "adjustLength") adjustLength(id, Number(el.dataset.delta));
   else if (action === "runSolver") runSolver();
   else if (action === "chooseOption") { activeRound().chosen = Number(el.dataset.idx); render(); }
-  else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.activeWeek, rnd.weekStart); }
-  else if (action === "imageChosen") { const rnd = activeRound(); doImage(rnd.result.options[rnd.chosen].assign, S.activeWeek, rnd.weekStart, S.activeWeek); }
+  else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart); }
+  else if (action === "imageChosen") { const rnd = activeRound(); doImage(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, S.week); }
   else if (action === "confirmSchedule") confirmSchedule();
   else if (action === "cancelEarly") setLessonStatus(id, "cancelled_early");
   else if (action === "cancelLate") setLessonStatus(id, "cancelled_late");
@@ -1386,12 +1390,12 @@ document.getElementById("app").addEventListener("change", (e) => {
   if (!el) return;
   const bind = el.dataset.bind;
   if (bind === "weekStart") { activeRound().weekStart = el.value; S.imgUrl = ""; S.fallbackText = ""; render(); }
-  else if (bind === "weekNo") {
+  else if (bind === "week") {
     let n = parseInt(el.value, 10);
-    if (!isFinite(n)) n = S.weekNo;
-    S.weekNo = Math.max(1, Math.min(TERM_WEEKS, n));
-    ensureRound(S.weekNo);
-    S.activeWeek = S.weekNo;
+    if (!isFinite(n)) n = S.week;
+    S.week = Math.max(1, Math.min(TERM_WEEKS, n));
+    ensureRound(S.week);
+    S.imgUrl = ""; S.fallbackText = "";
     render();
   }
   else if (bind === "draftDate") { S.draft.date = el.value; }

@@ -305,6 +305,8 @@
   .chip.sel{background:var(--sig);border-color:var(--sig);color:#fff;font-weight:560}
   .chip.sel.grey{background:var(--ink-soft);border-color:var(--ink-soft)}
   .chip.sel.warn{background:var(--warn);border-color:var(--warn)}
+  .chip:disabled{cursor:default;opacity:.58}
+  .chip.sel:disabled{opacity:.78}
 
   .lenrow{display:flex;align-items:center;justify-content:space-between;
           padding:0 0 11px;
@@ -781,7 +783,12 @@ function serializeState() {
     rounds[k] = {
       weekStart: rr.weekStart,
       offered: [...rr.offered],
-      replies: Object.fromEntries(Object.entries(rr.replies).map(([id, rep]) => [id, { status: rep.status, avail: [...rep.avail], lesson: rep.lesson || 2 }])),
+      replies: Object.fromEntries(Object.entries(rr.replies).map(([id, rep]) => [id, {
+        status: rep.status,
+        avail: [...rep.avail],
+        lesson: rep.lesson || 2,
+        source: rep.source || null,
+      }])),
       plan: rr.plan,
       result: rr.result,
       chosen: rr.chosen,
@@ -815,7 +822,12 @@ function applySavedState(saved) {
     S.rounds[k] = {
       weekStart: rr.weekStart,
       offered: new Set(rr.offered || []),
-      replies: Object.fromEntries(Object.entries(rr.replies || {}).map(([id, rep]) => [id, { status: rep.status, avail: new Set(rep.avail || []), lesson: rep.lesson || 2 }])),
+      replies: Object.fromEntries(Object.entries(rr.replies || {}).map(([id, rep]) => [id, {
+        status: rep.status,
+        avail: new Set(rep.avail || []),
+        lesson: rep.lesson || 2,
+        source: rep.source || null,
+      }])),
       plan: rr.plan || null,
       result: rr.result || null,
       chosen: rr.chosen || 0,
@@ -908,10 +920,10 @@ function sampleReplies() {
     const rand = mulberry(hashStr(s.id + "w" + S.week));
     const need = s.allocated / termWeeks();
     const wants = rand() < Math.min(0.95, need + 0.25);
-    if (!wants) { next[s.id] = { status: "skip", avail: new Set(), lesson: 2 }; return; }
+    if (!wants) { next[s.id] = { status: "skip", avail: new Set(), lesson: 2, source: "student" }; return; }
     const avail = new Set();
     rnd.offered.forEach(k => { if (rand() < 0.45) avail.add(k); });
-    next[s.id] = { status: avail.size ? "in" : "none", avail, lesson: 2 };
+    next[s.id] = { status: avail.size ? "in" : "none", avail, lesson: 2, source: "student" };
   });
   rnd.replies = next; rnd.result = null;
   flash("Sample replies loaded");
@@ -921,7 +933,7 @@ function sampleReplies() {
 function adjustLength(id, delta) {
   const rnd = activeRound();
   const s = S.students.find(x => x.id === id);
-  if (!s || !rnd.replies[id]) return;
+  if (!s || !rnd.replies[id] || rnd.replies[id].source !== "admin") return;
   const cap = Math.max(1, Math.round((s.allocated - taughtFor(id)) * 2));
   const cur = lessonFor(rnd, id);
   const next = Math.min(4, Math.max(1, cur + delta));
@@ -1301,7 +1313,8 @@ function mountPaintGrid(el) {
     if (role === "offer") {
       val ? rnd.offered.add(k) : rnd.offered.delete(k);
     } else {
-      if (!rnd.replies[studentId]) rnd.replies[studentId] = { status: "in", avail: new Set(), lesson: 2 };
+      if (!rnd.replies[studentId]) rnd.replies[studentId] = { status: "in", avail: new Set(), lesson: 2, source: "admin" };
+      rnd.replies[studentId].source = "admin";
       val ? rnd.replies[studentId].avail.add(k) : rnd.replies[studentId].avail.delete(k);
       rnd.replies[studentId].status = "in";
     }
@@ -1542,30 +1555,32 @@ function renderRepliesTab() {
     body = '<div class="panel">' + S.students.map(s => {
       const r = rnd.replies[s.id];
       const st = r ? r.status : "waiting";
-      const statusText = st === "in" ? (r.avail.size + " slots free") : st === "skip" ? "Not this week" : st === "none" ? "Nothing works" : "Waiting";
+      const isStudentReply = !!r && r.source !== "admin";
+      const ownerText = !r ? "" : isStudentReply ? " · submitted by student" : " · entered by you";
+      const statusText = (st === "in" ? (r.avail.size + " slots free") : st === "skip" ? "Not this week" : st === "none" ? "Nothing works" : "Waiting") + ownerText;
       const curLesson = lessonFor(rnd, s.id);
       let lenrow = "";
       if (st === "in") {
         const dec = curLesson <= 1;
         const inc = curLesson >= 4 || (curLesson + 1) * 0.5 > s.allocated - taughtFor(s.id);
         lenrow = '<div class="lenrow"><span>Lesson length</span><div class="stepper">' +
-          '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="-1" ' + (dec ? "disabled" : "") + ">–</button>" +
+          '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="-1" ' + (dec || isStudentReply ? "disabled" : "") + ">–</button>" +
           "<b>" + (curLesson * SLOT_MIN) + " min</b>" +
-          '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="1" ' + (inc ? "disabled" : "") + ">+</button>" +
+          '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="1" ' + (inc || isStudentReply ? "disabled" : "") + ">+</button>" +
           "</div></div>";
       }
       let gridBlock = "";
-      if (S.openStudent === s.id) {
+      if (!isStudentReply && S.openStudent === s.id) {
         const avail = (r && r.avail) || new Set();
         gridBlock = '<div style="padding:4px 0 14px">' + buildGridHTML("reply", { selected: avail, offered: rnd.offered, studentId: s.id }) + "</div>";
       }
       return '<div class="srow-group">' +
-        '<div class="srow"><div class="sname" data-action="toggleStudentOpen" data-id="' + s.id + '" style="cursor:pointer">' +
+        '<div class="srow"><div class="sname"' + (!isStudentReply ? ' data-action="toggleStudentOpen" data-id="' + s.id + '" style="cursor:pointer"' : '') + '>' +
         "<strong>" + s.name + "</strong><span>" + statusText + "</span></div>" +
         '<div class="chips">' +
-        '<button class="chip' + (st === "in" ? " sel" : "") + '" data-action="setStatus" data-id="' + s.id + '" data-status="in">In</button>' +
-        '<button class="chip' + (st === "skip" ? " sel grey" : "") + '" data-action="setStatus" data-id="' + s.id + '" data-status="skip">Skip</button>' +
-        '<button class="chip' + (st === "none" ? " sel warn" : "") + '" data-action="setStatus" data-id="' + s.id + '" data-status="none">None</button>' +
+        '<button class="chip' + (st === "in" ? " sel" : "") + '" data-action="setStatus" data-id="' + s.id + '" data-status="in" ' + (isStudentReply ? "disabled" : "") + '>In</button>' +
+        '<button class="chip' + (st === "skip" ? " sel grey" : "") + '" data-action="setStatus" data-id="' + s.id + '" data-status="skip" ' + (isStudentReply ? "disabled" : "") + '>Skip</button>' +
+        '<button class="chip' + (st === "none" ? " sel warn" : "") + '" data-action="setStatus" data-id="' + s.id + '" data-status="none" ' + (isStudentReply ? "disabled" : "") + '>None</button>' +
         "</div></div>" + lenrow + gridBlock + "</div>";
     }).join("") + "</div>";
   }
@@ -1774,14 +1789,37 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "removeStudent") removeStudent(id);
   else if (action === "saveTermDates") saveTermDates();
   else if (action === "sampleReplies") sampleReplies();
-  else if (action === "toggleStudentOpen") { S.openStudent = S.openStudent === id ? null : id; render(); }
+  else if (action === "toggleStudentOpen") {
+    const r = activeRound().replies[id];
+    if (r && r.source !== "admin") return;
+    S.openStudent = S.openStudent === id ? null : id;
+    render();
+  }
   else if (action === "setStatus") {
     const rnd = activeRound();
     const status = el.dataset.status;
-    const prevLesson = lessonFor(rnd, id);
-    rnd.replies[id] = { status, avail: (rnd.replies[id] && rnd.replies[id].avail) || new Set(), lesson: prevLesson };
+    const existing = rnd.replies[id];
+
+    // Student-submitted replies are read-only in admin.
+    if (existing && existing.source !== "admin") return;
+
+    // Tapping the currently active status again clears the admin-entered reply.
+    if (existing && existing.status === status) {
+      delete rnd.replies[id];
+      if (S.openStudent === id) S.openStudent = null;
+    } else {
+      const prevLesson = lessonFor(rnd, id);
+      rnd.replies[id] = {
+        status,
+        avail: (existing && existing.avail) || new Set(),
+        lesson: prevLesson,
+        source: "admin",
+      };
+      if (status === "in") S.openStudent = id;
+      else if (S.openStudent === id) S.openStudent = null;
+    }
+
     rnd.result = null;
-    if (status === "in") S.openStudent = id;
     render();
   }
   else if (action === "adjustLength") adjustLength(id, Number(el.dataset.delta));

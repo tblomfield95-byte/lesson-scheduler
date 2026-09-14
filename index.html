@@ -24,7 +24,7 @@
   .namebtn.replied{background:#F3E1E1;border-color:var(--sig)}
   .replytag{display:block;font-size:12px;color:var(--sig);font-weight:600;margin-top:3px}
   .back{font:inherit;font-size:13px;color:var(--sig);background:none;border:none;padding:0 0 16px;cursor:pointer}
-  .choice{display:block;width:100%;text-align:left;font:inherit;font-size:15px;padding:14px 16px;
+  .choice{display:block;width:100%;text-align:center;font:inherit;font-size:15px;padding:14px 16px;
           margin-bottom:8px;border-radius:10px;border:1px solid var(--rule);background:var(--panel);
           color:var(--ink);cursor:pointer}
   .choice.sel{border-color:var(--sig);background:var(--sig);color:#fff;font-weight:560}
@@ -41,13 +41,19 @@
   .cell.on{background:var(--sig)}
   .cell.muted{background:repeating-linear-gradient(45deg,#F6F4F0,#F6F4F0 4px,#FFF 4px,#FFF 8px);cursor:default}
   .btn{font:inherit;font-size:14px;padding:12px 18px;border-radius:9px;border:1px solid var(--sig);
-       background:var(--sig);color:#fff;font-weight:560;cursor:pointer;width:100%}
+       background:var(--sig);color:#fff;font-weight:560;cursor:pointer;width:100%;text-align:center}
   .btn:disabled{opacity:.4;cursor:default}
   .btn-secondary{border-color:var(--rule);background:var(--panel);color:var(--ink)}
   .btn-secondary:disabled{opacity:.4}
   .empty{font-size:14px;color:var(--ink-soft);line-height:1.55}
   .done{font-size:15px;line-height:1.6}
   .count{font-size:13px;color:var(--ink-soft);margin:6px 0 14px}
+  .lenrow{display:flex;align-items:center;justify-content:space-between;padding:0 0 16px;font-size:14px;color:var(--ink-soft)}
+  .stepper{display:flex;align-items:center;gap:10px}
+  .stepper b{font-size:14px;font-weight:600;color:var(--ink);min-width:58px;text-align:center}
+  .step{font:inherit;font-size:16px;line-height:1;width:30px;height:30px;border-radius:15px;
+        border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+  .step:disabled{opacity:.32;cursor:default}
   .button-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
   .button-group .btn{flex:1}
   .confirmation-box{background:var(--sig-soft);border:1px solid var(--sig);border-radius:10px;padding:16px;margin-bottom:16px;text-align:center}
@@ -87,7 +93,7 @@ function weekRangeLabel(iso) {
     : mon.getUTCDate() + " " + monMonth + " \u2013 " + fri.getUTCDate() + " " + friMonth + " " + fri.getUTCFullYear();
 }
 
-let R = { loading: true, error: null, weekNo: null, weekStart: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), submitted: false, submittedStatus: null, submitting: false, days: ["Mon", "Tue", "Wed", "Thu", "Fri"], startHour: 9, slots: 20 };
+let R = { loading: true, error: null, weekNo: null, weekStart: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), lesson: 2, submitted: false, submittedStatus: null, submitting: false, days: ["Mon", "Tue", "Wed", "Thu", "Fri"], startHour: 9, slots: 20 };
 
 async function boot() {
   if (!SLUG || !WEEK) {
@@ -124,12 +130,17 @@ function pick(id) {
   R.stage = "ask";
   const s = R.students.find(x => x.id === id);
   R.avail = new Set((s && s.avail) || []);
+  R.lesson = (s && s.lesson) || 2;
   render();
 }
 function editAgain() { R.submitted = false; R.stage = "ask"; render(); }
 function goGrid() { R.stage = "grid"; render(); }
 function back() { R.picked = null; R.stage = null; R.avail = new Set(); render(); }
 function done() { R.picked = null; R.stage = null; R.avail = new Set(); R.submitted = false; render(); }
+function adjustLesson(delta) {
+  R.lesson = Math.min(4, Math.max(1, R.lesson + delta));
+  render();
+}
 
 async function clearResponse() {
   R.submitting = true; render();
@@ -163,7 +174,7 @@ async function submitStatus(status) {
     await fetch("/api/reply", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ slug: SLUG, week: WEEK, studentId: R.picked, status, avail: status === "in" ? [...R.avail] : [] }),
+      body: JSON.stringify({ slug: SLUG, week: WEEK, studentId: R.picked, status, avail: status === "in" ? [...R.avail] : [], lesson: R.lesson }),
     });
     R.submitted = true;
     R.submittedStatus = status;
@@ -171,7 +182,7 @@ async function submitStatus(status) {
     // this same session shows what was just submitted — not whatever was
     // true when the page first loaded.
     const s = R.students.find(x => x.id === R.picked);
-    if (s) { s.status = status; s.avail = status === "in" ? [...R.avail] : []; }
+    if (s) { s.status = status; s.avail = status === "in" ? [...R.avail] : []; s.lesson = R.lesson; }
     R.submitting = false;
   } catch (e) {
     R.submitting = false;
@@ -330,6 +341,11 @@ function render() {
   // stage === "grid" — show what's on offer, decide once you've actually seen it
   let body = '<div class="pad"><button class="back" onclick="back()">← Not ' + name.split(" ")[0] + "?</button>" +
     "<h1>" + name + "</h1><p class=\"sub\">" + weekLabel + '</p>' +
+    '<div class="lenrow"><span>Lesson length</span><div class="stepper">' +
+    '<button class="step" onclick="adjustLesson(-1)" ' + (R.lesson <= 1 ? "disabled" : "") + '>\u2013</button>' +
+    "<b>" + (R.lesson * SLOT_MIN) + " min</b>" +
+    '<button class="step" onclick="adjustLesson(1)" ' + (R.lesson >= 4 ? "disabled" : "") + '>+</button>' +
+    "</div></div>" +
     '<p class="lede">Drag across the times you could do:</p>' +
     buildGridHTML(R.avail, R.offered) +
     '<p class="count" id="slotCount">' + R.avail.size + " slot" + (R.avail.size === 1 ? "" : "s") + " selected</p>" +

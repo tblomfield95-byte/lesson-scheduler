@@ -43,9 +43,12 @@
   .btn{font:inherit;font-size:14px;padding:12px 18px;border-radius:9px;border:1px solid var(--sig);
        background:var(--sig);color:#fff;font-weight:560;cursor:pointer;width:100%}
   .btn:disabled{opacity:.4;cursor:default}
+  .btn-secondary{border-color:var(--rule);background:var(--panel);color:var(--ink)}
   .empty{font-size:14px;color:var(--ink-soft);line-height:1.55}
   .done{font-size:15px;line-height:1.6}
   .count{font-size:13px;color:var(--ink-soft);margin:6px 0 14px}
+  .button-group{display:flex;gap:8px;flex-wrap:wrap}
+  .button-group .btn{flex:1;min-width:120px}
 </style>
 </head>
 <body>
@@ -83,7 +86,7 @@ function weekRangeLabel(iso) {
     : mon.getUTCDate() + " " + monMonth + " \u2013 " + fri.getUTCDate() + " " + friMonth + " " + fri.getUTCFullYear();
 }
 
-let R = { loading: true, error: null, weekNo: null, weekStart: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), submitted: false, submittedStatus: null, submitting: false, teacherName: null, instrument: null };
+let R = { loading: true, error: null, weekNo: null, weekStart: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), submitted: false, submittedStatus: null, submitting: false };
 
 async function boot() {
   if (!SLUG || !WEEK) {
@@ -120,6 +123,33 @@ function pick(id) {
 function editAgain() { R.submitted = false; R.stage = "ask"; render(); }
 function goGrid() { R.stage = "grid"; render(); }
 function back() { R.picked = null; R.stage = null; R.avail = new Set(); render(); }
+
+async function clearResponse() {
+  R.submitting = true; render();
+  try {
+    await fetch("/api/reply", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ slug: SLUG, week: WEEK, studentId: R.picked, status: "clear", avail: [] }),
+    });
+    // Clear the in-memory record
+    const s = R.students.find(x => x.id === R.picked);
+    if (s) { s.status = null; s.avail = []; }
+    R.submitted = false;
+    R.submittedStatus = null;
+    R.picked = null;
+    R.stage = null;
+    R.avail = new Set();
+    R.submitting = false;
+    flash("Response cleared");
+  } catch (e) {
+    R.submitting = false;
+    render();
+    alert("Couldn't clear that — check your connection and try again.");
+    return;
+  }
+  render();
+}
 
 async function submitStatus(status) {
   R.submitting = true; render();
@@ -227,6 +257,12 @@ function updateAfterPaint() {
   if (btn) btn.disabled = R.avail.size === 0;
 }
 
+let flashTimer = null;
+function flash(msg) {
+  // Simple fallback if no toast element (for use during render)
+  console.log(msg);
+}
+
 function render() {
   const app = document.getElementById("app");
   const heading = (R.instrument ? R.instrument + " Lessons" : "Lessons") + (R.teacherName ? " — " + R.teacherName : "");
@@ -246,7 +282,10 @@ function render() {
       : R.submittedStatus === "none" ? "Thanks for letting us know — your teacher will sort something out."
       : "Got your times for " + weekLabel.toLowerCase() + ".";
     app.innerHTML = '<div class="pad"><h1>Thanks' + (first ? ", " + first : "") + '!</h1><p class="done">' + msg + '</p>' +
-      '<button class="back" style="margin-top:16px" onclick="editAgain()">\u2190 Change your answer</button></div>';
+      '<div class="button-group" style="margin-top:16px">' +
+      '<button class="back" style="flex:1;font-size:14px;padding:12px 18px" onclick="editAgain()">\u2190 Change your answer</button>' +
+      '<button class="btn btn-secondary" onclick="clearResponse()" ' + (R.submitting ? "disabled" : "") + '>Clear response</button>' +
+      '</div></div>';
     return;
   }
 
@@ -283,7 +322,9 @@ function render() {
     buildGridHTML(R.avail, R.offered) +
     '<p class="count" id="slotCount">' + R.avail.size + " slot" + (R.avail.size === 1 ? "" : "s") + " selected</p>" +
     '<button class="choice' + (prevStatus === "none" ? " sel" : "") + '" onclick="submitStatus(\'none\')" ' + (R.submitting ? "disabled" : "") + '>None of these times work</button>' +
-    '<button class="btn" id="submitBtn" onclick="submitStatus(\'in\')" ' + (R.avail.size === 0 || R.submitting ? "disabled" : "") + '>' + (R.submitting ? "Saving…" : "Submit") + "</button></div>";
+    '<div class="button-group">' +
+    '<button class="btn" id="submitBtn" onclick="submitStatus(\'in\')" ' + (R.avail.size === 0 || R.submitting ? "disabled" : "") + ' style="flex:2">' + (R.submitting ? "Saving…" : "Submit") + '</button>' +
+    '</div></div>';
 
   app.innerHTML = body;
   mountGrid();

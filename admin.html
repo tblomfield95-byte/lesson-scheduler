@@ -54,6 +54,7 @@
   .btn.confirm-pending{background:var(--warn);color:#fff;border-color:var(--warn);font-weight:560;
                         animation:confirmPulse 0.35s ease}
   @keyframes confirmPulse{0%{transform:scale(1)}35%{transform:scale(1.07)}65%{transform:scale(0.97)}100%{transform:scale(1)}}
+  .btn.notteaching-active{background:var(--sig-soft);border-color:var(--sig);color:var(--sig);font-weight:560}
   .btn:disabled{opacity:.4;cursor:default}
   .btn:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
 
@@ -84,6 +85,9 @@
   .cell.heat{background:var(--sig)}
   .heatnum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
            font-size:10px;color:#fff;font-weight:600;pointer-events:none}
+  .grid-locked{border:1px solid var(--rule);border-radius:10px;
+               background:repeating-linear-gradient(45deg,#F6F4F0,#F6F4F0 8px,#FBFAF8 8px,#FBFAF8 16px);
+               padding:36px 16px;text-align:center;color:var(--ink-soft);font-size:13.5px;line-height:1.5}
 
   .meter{display:flex;justify-content:space-between;align-items:baseline;margin:12px 0 0;
          font-size:13px;color:var(--ink-soft)}
@@ -200,7 +204,6 @@ const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 const START_HOUR = 9;
 const SLOT_MIN = 30;
 const SLOTS = 20; // 09:00 -> 19:00
-const TERM_WEEKS = 32; // 35 calendar weeks across the three terms, minus one reading week per term
 
 const slotTime = (i) => {
   const total = START_HOUR * 60 + i * SLOT_MIN;
@@ -213,17 +216,28 @@ const key = (d, i) => d + "-" + i;
 
 const todayISO = () => { const n = new Date(); return new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())).toISOString().slice(0, 10); };
 
-// The real term boundaries, 2026-27 — used only to detect when advancing a
-// week would walk off the end of a term, so it can jump straight to the
-// next term's start instead of wandering into the holidays. Reading weeks
-// aren't listed here deliberately: they don't need special handling, since
-// marking one "Not teaching this week" advances the date by the same
-// ordinary 7 days as any other week off.
-const TERM_RANGES = [
+// A sensible starting point for a brand-new account before onboarding (or
+// the Term Dates screen) sets the real ones. Editable per-teacher from
+// here on — nothing below treats term dates as fixed any more.
+const DEFAULT_TERM_RANGES = [
   { start: "2026-09-14", end: "2026-12-04" },
   { start: "2027-01-04", end: "2027-03-19" },
   { start: "2027-04-12", end: "2027-07-02" },
 ];
+
+// The teaching-week total is derived from S.termRanges (raw calendar weeks
+// across every term), not a fixed number — reading weeks reduce it the
+// same way any "not teaching" week does, by being marked, not by a
+// separate deduction baked into a constant.
+function termWeeks() {
+  let total = 0;
+  (S.termRanges || []).forEach(t => {
+    if (!t.start || !t.end) return;
+    const days = (new Date(t.end + "T00:00:00") - new Date(t.start + "T00:00:00")) / 86400000;
+    if (days >= 0) total += Math.ceil((days + 1) / 7);
+  });
+  return Math.max(1, total);
+}
 
 // Parses a plain "YYYY-MM-DD" into its UTC calendar components. Building
 // dates via new Date(iso + "T00:00:00") and reading them back with
@@ -239,10 +253,10 @@ function isoParts(iso) {
 function nextWeekStart(iso) {
   const { y, m, d } = isoParts(iso);
   const naiveISO = new Date(Date.UTC(y, m - 1, d + 7)).toISOString().slice(0, 10);
-  const term = TERM_RANGES.find(t => iso >= t.start && iso <= t.end);
+  const term = (S.termRanges || []).find(t => iso >= t.start && iso <= t.end);
   if (!term) return naiveISO; // outside any known term — just roll forward
   if (naiveISO > term.end) {
-    const next = TERM_RANGES[TERM_RANGES.indexOf(term) + 1];
+    const next = S.termRanges[S.termRanges.indexOf(term) + 1];
     return next ? next.start : naiveISO; // jump the gap, or fall back at year end
   }
   return naiveISO;
@@ -432,11 +446,8 @@ function solve(participants, offered) {
 }
 
 /* ================================================================== */
-/*  State — one round per week (offered/replies/plan/result/chosen).   */
-/*  There is deliberately only ONE week number now: S.week. It's what  */
-/*  the picker shows, what "End week" and "Not teaching" both act on,  */
-/*  and what you type into directly if you're starting mid-term — no   */
-/*  separate hidden "official" counter to keep in sync with it.        */
+/*  State — one round per week (offered/replies/plan/result/chosen,    */
+/*  and now notTeaching). There is only ONE week number, S.week.       */
 /* ================================================================== */
 
 // Who's logged in — fetched once from /api/me, never synced back as part
@@ -451,30 +462,29 @@ async function loadMe() {
 }
 
 function blankRound(weekStart) {
-  return { weekStart, offered: new Set(), replies: {}, plan: null, result: null, chosen: 0 };
+  return { weekStart, offered: new Set(), replies: {}, plan: null, result: null, chosen: 0, notTeaching: false };
 }
 
 let S = {
   tab: "week",
-  week: 1,                // the one and only week number — no separate "current" counter
-  weeksCompleted: 0,       // tally of finished rounds, purely for Hours-tab pacing — never gates anything
-  rounds: { "1": blankRound(TERM_RANGES[0].start) },
+  week: 1,
+  weeksCompleted: 0,
+  termRanges: DEFAULT_TERM_RANGES.map(r => ({ ...r })),
+  rounds: { "1": blankRound(DEFAULT_TERM_RANGES[0].start) },
   students: [],
   openStudent: null,
-  log: [],               // [{id, studentId, date, hours, manual, lateCancel}] — unaffected by rounds
+  log: [],
   openHours: null,
   draft: { date: todayISO(), hours: 1 },
   fallbackText: "",
   imgUrl: "",
 };
 
-// Ensures a round exists for the given week, creating a blank one (with a
-// sensibly walked-forward date) the first time that week is visited.
 function ensureRound(weekNo) {
   const k = String(weekNo);
   if (S.rounds[k]) return S.rounds[k];
   let fromWeek = 1;
-  let fromStart = TERM_RANGES[0].start;
+  let fromStart = S.termRanges[0].start;
   for (let w = weekNo - 1; w >= 1; w--) {
     if (S.rounds[String(w)]) { fromWeek = w; fromStart = S.rounds[String(w)].weekStart; break; }
   }
@@ -503,12 +513,14 @@ function serializeState() {
       plan: rr.plan,
       result: rr.result,
       chosen: rr.chosen,
+      notTeaching: !!rr.notTeaching,
     };
   });
   return JSON.stringify({
     tab: S.tab,
     week: S.week,
     weeksCompleted: S.weeksCompleted,
+    termRanges: S.termRanges,
     rounds,
     students: S.students,
     log: S.log,
@@ -521,6 +533,7 @@ function applySavedState(saved) {
   S.tab = saved.tab || S.tab;
   S.week = saved.week || S.week;
   S.weeksCompleted = saved.weeksCompleted || 0;
+  S.termRanges = (saved.termRanges && saved.termRanges.length) ? saved.termRanges : S.termRanges;
   S.students = saved.students || S.students;
   S.log = saved.log || [];
   S.draft = saved.draft || S.draft;
@@ -533,6 +546,7 @@ function applySavedState(saved) {
       plan: rr.plan || null,
       result: rr.result || null,
       chosen: rr.chosen || 0,
+      notTeaching: !!rr.notTeaching,
     };
   });
   ensureRound(S.week);
@@ -595,14 +609,19 @@ function flash(msg) {
 /*  Actions                                                            */
 /* ================================================================== */
 
-function clearOffer() { const rnd = activeRound(); rnd.offered = new Set(); rnd.result = null; render(); }
+function clearOffer() {
+  const rnd = activeRound();
+  if (rnd.notTeaching) { rnd.notTeaching = false; S.weeksCompleted = Math.max(0, S.weeksCompleted - 1); }
+  rnd.offered = new Set(); rnd.result = null;
+  render();
+}
 
 function sampleReplies() {
   const rnd = activeRound();
   const next = {};
   S.students.forEach(s => {
     const rand = mulberry(hashStr(s.id + "w" + S.week));
-    const need = s.allocated / TERM_WEEKS;
+    const need = s.allocated / termWeeks();
     const wants = rand() < Math.min(0.95, need + 0.25);
     if (!wants) { next[s.id] = { status: "skip", avail: new Set(), lesson: 2 }; return; }
     const avail = new Set();
@@ -669,7 +688,7 @@ async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo) {
   x.fillStyle = "#832222"; x.fillRect(0, 0, W, 12);
   x.fillStyle = "#1B2430"; x.font = "640 46px " + FONT; x.fillText(heading, 64, 108);
   x.fillStyle = "#5A6675"; x.font = "400 28px " + FONT;
-  x.fillText((ME.name ? ME.name + " · " : "") + "Week " + weekNoLabel + " of " + TERM_WEEKS, 64, 152);
+  x.fillText((ME.name ? ME.name + " · " : "") + "Week " + weekNoLabel + " of " + termWeeks(), 64, 152);
 
   let y = 240;
   days.forEach(d => {
@@ -742,10 +761,6 @@ function rescheduleWeek() {
   render();
 }
 
-// End and Skip both act on whichever week the picker is currently showing
-// — there's no separate "official current week" restricting this any more.
-// Advancing S.week afterward is just a convenience (move on to the next
-// one); nothing stops you working somewhere else immediately after.
 function endWeek() {
   const rnd = activeRound();
   if (!rnd.plan) return;
@@ -760,25 +775,30 @@ function endWeek() {
     };
   });
   S.log.push(...entries);
-  delete S.rounds[String(S.week)]; // this round's job is done
+  delete S.rounds[String(S.week)];
   S.weeksCompleted++;
-  S.week = Math.min(TERM_WEEKS, S.week + 1);
+  S.week = Math.min(termWeeks(), S.week + 1);
   ensureRound(S.week);
   S.imgUrl = ""; S.fallbackText = ""; S.tab = "hours";
   flash(entries.length + " lessons logged");
   render();
 }
 
+// A toggle now, not a one-shot jump — tapping it marks the CURRENT week
+// (locking its grid) rather than immediately moving on. Tap it again, or
+// hit Clear, to undo. weeksCompleted moves with it either way, since it's
+// just a tally, not a gate.
 function skipWeek() {
   const rnd = activeRound();
   if (rnd.plan) { flash("Finish or clear this week's schedule first"); return; }
-  const skipped = S.week;
-  delete S.rounds[String(S.week)];
-  S.weeksCompleted++;
-  S.week = Math.min(TERM_WEEKS, S.week + 1);
-  ensureRound(S.week);
-  S.imgUrl = ""; S.fallbackText = "";
-  flash("Week " + skipped + " marked as not teaching");
+  if (rnd.notTeaching) {
+    rnd.notTeaching = false;
+    S.weeksCompleted = Math.max(0, S.weeksCompleted - 1);
+  } else {
+    rnd.notTeaching = true;
+    S.weeksCompleted++;
+    flash("Week " + S.week + " marked as not teaching");
+  }
   render();
 }
 
@@ -789,7 +809,7 @@ function prevWeek() {
   render();
 }
 function nextWeek() {
-  S.week = Math.min(TERM_WEEKS, S.week + 1);
+  S.week = Math.min(termWeeks(), S.week + 1);
   ensureRound(S.week);
   S.imgUrl = ""; S.fallbackText = "";
   render();
@@ -825,7 +845,7 @@ async function saveProfile() {
   }
 }
 
-// Transient — the "add a student" row on the Profile page, cleared once added.
+// Transient — the "add a student" row on the Students page, cleared once added.
 let newStudentDraft = { name: "", allocated: "" };
 function addStudent() {
   const name = (newStudentDraft.name || "").trim();
@@ -873,7 +893,7 @@ function saveEditEntry(id) {
 
 function resetYear() {
   S.log = []; S.week = 1; S.weeksCompleted = 0;
-  S.rounds = { "1": blankRound(TERM_RANGES[0].start) };
+  S.rounds = { "1": blankRound(S.termRanges[0].start) };
   S.openHours = null;
   flash("Year reset");
   render();
@@ -893,6 +913,31 @@ function handleResetClick() {
     render();
     resetConfirmTimer = setTimeout(() => { confirmingReset = false; render(); }, 3000);
   }
+}
+
+/* ================================================================== */
+/*  Term Dates — transient draft, snapshotted from S.termRanges each   */
+/*  time the section is opened, applied only on explicit save.        */
+/* ================================================================== */
+
+let termDraft = { count: 1, ranges: [] };
+function openTermDatesDraft() {
+  termDraft = { count: S.termRanges.length, ranges: S.termRanges.map(r => ({ ...r })) };
+}
+function setTermCount(n) {
+  n = Math.max(1, Math.min(6, n || 1));
+  const d = termDraft;
+  while (d.ranges.length < n) d.ranges.push({ start: "", end: "" });
+  d.ranges.length = n;
+  d.count = n;
+  render();
+}
+function saveTermDates() {
+  const bad = termDraft.ranges.some(r => !r.start || !r.end || r.start > r.end);
+  if (bad) { flash("Fill in a valid start and end date for every term"); return; }
+  S.termRanges = termDraft.ranges.map(r => ({ start: r.start, end: r.end }));
+  flash("Term dates updated");
+  render();
 }
 
 /* ================================================================== */
@@ -1007,13 +1052,18 @@ function mountAllGrids() {
 
 // Transient — sidebar and section are pure navigation, never synced.
 let sidebarOpen = false;
-let currentSection = "scheduler"; // "scheduler" | "profile"
+let currentSection = "scheduler"; // "scheduler" | "profile" | "students" | "termdates" | "settings"
 let sidebarCloseTimer = null;
 
 function render() {
   const app = document.getElementById("app");
-  app.innerHTML = renderHeader() +
-    (currentSection === "profile" ? renderProfileSection() : renderTabContent());
+  const sections = {
+    profile: renderProfileSection,
+    students: renderStudentsSection,
+    termdates: renderTermDatesSection,
+    settings: renderSettingsSection,
+  };
+  app.innerHTML = renderHeader() + (sections[currentSection] ? sections[currentSection]() : renderTabContent());
   mountAllGrids();
   scheduleSave();
 }
@@ -1021,12 +1071,14 @@ function render() {
 function renderHeader() {
   const tabs = [["week", "Offer"], ["replies", "Replies"], ["plan", "Schedule"], ["hours", "Hours"]];
   const title = (ME.instrument ? ME.instrument + " Lessons" : "Lesson Scheduler") + (ME.name ? " - " + ME.name : "");
+  const sectionTitles = { profile: "Profile", students: "Students", termdates: "Term Dates", settings: "Settings" };
+  const inScheduler = currentSection === "scheduler";
   let header = '<div class="bar"><div class="bartop">' +
     '<span class="hbrow"><button class="hamburger" data-action="toggleSidebar" aria-label="Menu">\u2630</button>' +
-    '<h1 class="title">' + (currentSection === "profile" ? "Profile" : title) + '</h1></span>' +
-    (currentSection === "scheduler" ? '<div class="wk">' + S.weeksCompleted + " of " + TERM_WEEKS + ' weeks done</div>' : '<span></span>') +
+    '<h1 class="title">' + (inScheduler ? title : sectionTitles[currentSection]) + '</h1></span>' +
+    (inScheduler ? '<div class="wk">' + S.weeksCompleted + " of " + termWeeks() + ' weeks done</div>' : '<span></span>') +
     '</div>';
-  if (currentSection === "scheduler") {
+  if (inScheduler) {
     header += '<div class="tabs">' +
       tabs.map(([k, label]) => '<button class="tab' + (S.tab === k ? " sel" : "") + '" data-action="tab" data-tab="' + k + '">' + label + "</button>").join("") +
       "</div>";
@@ -1035,7 +1087,7 @@ function renderHeader() {
 }
 
 function renderSidebarItems() {
-  const items = [["scheduler", "Scheduler"], ["profile", "Profile"]];
+  const items = [["scheduler", "Scheduler"], ["profile", "Profile"], ["students", "Students"], ["termdates", "Term Dates"], ["settings", "Settings"]];
   return '<div class="sidebar-head">Menu</div>' +
     items.map(([k, label]) => '<button class="sidebar-item' + (currentSection === k ? " sel" : "") + '" data-section="' + k + '">' + label + "</button>").join("");
 }
@@ -1064,9 +1116,22 @@ function syncSidebarDOM() {
 
 function toggleSidebar() { sidebarOpen = !sidebarOpen; syncSidebarDOM(); }
 function closeSidebar() { sidebarOpen = false; syncSidebarDOM(); }
-function goSection(section) { currentSection = section; sidebarOpen = false; syncSidebarDOM(); render(); }
+function goSection(section) {
+  currentSection = section;
+  if (section === "termdates") openTermDatesDraft();
+  sidebarOpen = false; syncSidebarDOM(); render();
+}
 
 function renderProfileSection() {
+  return '<div class="pad">' +
+    '<p class="lede">This is what was collected when you first set up your account.</p>' +
+    '<div class="field"><label>Your name</label><input type="text" data-bind="profileName" value="' + escapeHTML(ME.name || "") + '"></div>' +
+    '<div class="field"><label>Instrument</label><input type="text" data-bind="profileInstrument" value="' + escapeHTML(ME.instrument || "") + '"></div>' +
+    '<div class="btnrow"><button class="btn sig" data-action="saveProfile">Save changes</button></div>' +
+    "</div>";
+}
+
+function renderStudentsSection() {
   const studentRows = S.students.map(s =>
     '<div class="entry">' +
     '<input type="text" data-bind="studentName" data-id="' + s.id + '" value="' + escapeHTML(s.name) + '" style="flex:2;margin-right:6px">' +
@@ -1074,21 +1139,32 @@ function renderProfileSection() {
     '<button class="x" data-action="removeStudent" data-id="' + s.id + '">×</button>' +
     "</div>"
   ).join("");
-
   return '<div class="pad">' +
-    '<p class="lede">This is what was collected when you first set up your account.</p>' +
-    '<div class="field"><label>Your name</label><input type="text" data-bind="profileName" value="' + escapeHTML(ME.name || "") + '"></div>' +
-    '<div class="field"><label>Instrument</label><input type="text" data-bind="profileInstrument" value="' + escapeHTML(ME.instrument || "") + '"></div>' +
-    '<div class="btnrow"><button class="btn sig" data-action="saveProfile">Save changes</button></div>' +
-    '<div class="panel"><h3>Your student link</h3>' +
-    '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 10px">Every week has its own link, since students need to know which week they\u2019re answering for. Get the right one from <b>Offer \u2192 Send to students</b> \u2014 it always copies the link for whichever week you\u2019re currently planning.</p></div>' +
-    '<div class="panel"><h3>Students</h3>' +
-    '<p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px">Removing someone here stops them appearing in future weeks — hours already logged for them stay on record.</p>' +
-    studentRows +
+    '<p class="lede">Removing someone here stops them appearing in future weeks — hours already logged for them stay on record.</p>' +
+    '<div class="panel">' + studentRows +
     '<div class="addrow"><input type="text" data-bind="newStudentName" value="' + escapeHTML(newStudentDraft.name) + '" placeholder="New student\u2019s name" style="flex:2">' +
     '<input type="number" step="0.5" min="0" data-bind="newStudentAllocated" value="' + newStudentDraft.allocated + '" placeholder="Hours" style="width:64px">' +
     '<button class="btn" data-action="addStudent">Add</button></div>' +
-    "</div>" +
+    "</div></div>";
+}
+
+function renderTermDatesSection() {
+  const d = termDraft;
+  const rows = d.ranges.map((r, i) =>
+    '<div class="field"><label>Term ' + (i + 1) + ' start</label><input type="date" data-bind="termStart" data-idx="' + i + '" value="' + (r.start || "") + '"></div>' +
+    '<div class="field"><label>Term ' + (i + 1) + ' end</label><input type="date" data-bind="termEnd" data-idx="' + i + '" value="' + (r.end || "") + '"></div>'
+  ).join("");
+  return '<div class="pad">' +
+    '<p class="lede">Used to work out real calendar dates for each week, and to jump straight to the next term\u2019s start rather than into the holidays. Reading weeks aren\u2019t entered here — mark those as "Not teaching" on the Offer tab as they come round.</p>' +
+    '<div class="field"><label>Number of terms</label><input type="number" min="1" max="6" data-bind="termCount" value="' + d.count + '"></div>' +
+    rows +
+    '<div class="btnrow"><button class="btn sig" data-action="saveTermDates">Save changes</button></div>' +
+    "</div>";
+}
+
+function renderSettingsSection() {
+  return '<div class="pad">' +
+    '<p class="lede">Not built yet — I want to check exactly what you mean by \u201cweek start date\u201d before doing this one, since it changes how the grid and solver both work underneath. \u201cInclude weekends\u201d is clear and is next once that\u2019s settled.</p>' +
     "</div>";
 }
 
@@ -1102,38 +1178,42 @@ function renderTabContent() {
 
 // The one and only week control. Type directly into the number to jump
 // anywhere — including the very first time, to set where you're actually
-// starting — or nudge with the arrows. Whatever week this shows is what
-// Offer/Replies/Schedule all act on, with no separate "official" week
-// hiding underneath it.
+// starting — or nudge with the arrows.
 function renderWeekPicker() {
   const rnd = activeRound();
   return '<div class="weekpicker">' +
     '<button class="step" data-action="prevWeek" ' + (S.week <= 1 ? "disabled" : "") + '>\u2039</button>' +
-    '<div class="weekpicker-mid"><label>Week <input type="number" inputmode="numeric" min="1" max="' + TERM_WEEKS + '" data-bind="week" value="' + S.week + '"> of ' + TERM_WEEKS + '</label>' +
+    '<div class="weekpicker-mid"><label>Week <input type="number" inputmode="numeric" min="1" max="' + termWeeks() + '" data-bind="week" value="' + S.week + '"> of ' + termWeeks() + '</label>' +
     '<span>' + (weekRangeLabel(rnd.weekStart) || "") + '</span></div>' +
-    '<button class="step" data-action="nextWeek" ' + (S.week >= TERM_WEEKS ? "disabled" : "") + '>\u203a</button>' +
+    '<button class="step" data-action="nextWeek" ' + (S.week >= termWeeks() ? "disabled" : "") + '>\u203a</button>' +
     "</div>";
 }
 
 function renderOfferTab() {
   const rnd = activeRound();
   const hours = (rnd.offered.size * SLOT_MIN) / 60;
+  const gridBlock = rnd.notTeaching
+    ? '<div class="grid-locked">Marked as not teaching this week.<br>Tap \u201cNot teaching this week\u201d again, or \u201cClear\u201d, to paint times.</div>'
+    : buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null });
   return '<div class="pad">' +
     renderWeekPicker() +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
     '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + ' — check this matches the week you mean; correct it if a reading week or anything else has thrown it off.</p>' +
     '<p class="lede">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
     '<div class="btnrow"><button class="btn" data-action="clearOffer">Clear</button>' +
-    '<button class="btn" data-action="skipWeek">Not teaching this week</button>' +
+    '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
     '</div>' +
-    buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null }) +
+    gridBlock +
     '<div class="meter"><span>Offered this week</span><b>' + hours + 'h</b></div>' +
-    '<div class="btnrow" style="margin-top:16px"><button class="btn primary" data-action="goReplies" ' + (rnd.offered.size ? "" : "disabled") + '>Send to students</button></div>' +
+    '<div class="btnrow" style="margin-top:16px"><button class="btn primary" data-action="goReplies" ' + (rnd.offered.size && !rnd.notTeaching ? "" : "disabled") + '>Send to students</button></div>' +
     "</div>";
 }
 
 function renderRepliesTab() {
   const rnd = activeRound();
+  if (rnd.notTeaching) {
+    return '<div class="pad">' + renderWeekPicker() + '<p class="empty">This week is marked as not teaching — nothing to collect. Undo it on the Offer tab if that\u2019s changed.</p></div>';
+  }
   const heat = getHeat(rnd);
   let body;
   if (!rnd.offered.size) {
@@ -1276,7 +1356,7 @@ function renderLivePlanTab() {
 }
 
 function renderHoursTab() {
-  const weeksLeft = Math.max(1, TERM_WEEKS - S.weeksCompleted);
+  const weeksLeft = Math.max(1, termWeeks() - S.weeksCompleted);
   const totalTaught = S.students.reduce((s, x) => s + taughtFor(x.id), 0);
   const totalAllocated = S.students.reduce((s, x) => s + x.allocated, 0);
 
@@ -1352,6 +1432,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "saveProfile") saveProfile();
   else if (action === "addStudent") addStudent();
   else if (action === "removeStudent") removeStudent(id);
+  else if (action === "saveTermDates") saveTermDates();
   else if (action === "sampleReplies") sampleReplies();
   else if (action === "toggleStudentOpen") { S.openStudent = S.openStudent === id ? null : id; render(); }
   else if (action === "setStatus") {
@@ -1393,7 +1474,7 @@ document.getElementById("app").addEventListener("change", (e) => {
   else if (bind === "week") {
     let n = parseInt(el.value, 10);
     if (!isFinite(n)) n = S.week;
-    S.week = Math.max(1, Math.min(TERM_WEEKS, n));
+    S.week = Math.max(1, Math.min(termWeeks(), n));
     ensureRound(S.week);
     S.imgUrl = ""; S.fallbackText = "";
     render();
@@ -1414,6 +1495,9 @@ document.getElementById("app").addEventListener("change", (e) => {
   }
   else if (bind === "newStudentName") { newStudentDraft.name = el.value; }
   else if (bind === "newStudentAllocated") { newStudentDraft.allocated = el.value; }
+  else if (bind === "termCount") { setTermCount(parseInt(el.value, 10)); }
+  else if (bind === "termStart") { termDraft.ranges[Number(el.dataset.idx)].start = el.value; }
+  else if (bind === "termEnd") { termDraft.ranges[Number(el.dataset.idx)].end = el.value; }
 });
 
 /* ================================================================== */

@@ -21,9 +21,13 @@
   .hamburger{font-size:19px;line-height:1;background:none;border:none;color:var(--ink);
              cursor:pointer;padding:2px 2px 2px 0;flex:none}
   .hamburger:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
-  .sidebar-backdrop{position:fixed;inset:0;background:rgba(27,36,48,.45);z-index:60}
+  .sidebar-backdrop{position:fixed;inset:0;background:rgba(27,36,48,0);z-index:60;
+                     opacity:0;pointer-events:none;transition:opacity .22s ease, background-color .22s ease}
+  .sidebar-backdrop.open{opacity:1;background:rgba(27,36,48,.45);pointer-events:auto}
   .sidebar-panel{position:fixed;top:0;left:0;bottom:0;width:230px;max-width:80vw;background:var(--panel);
-                 z-index:61;box-shadow:2px 0 16px rgba(0,0,0,.18);padding:18px 0;overflow-y:auto}
+                 z-index:61;box-shadow:2px 0 16px rgba(0,0,0,.18);padding:18px 0;overflow-y:auto;
+                 transform:translateX(-100%);transition:transform .28s cubic-bezier(.32,.72,0,1)}
+  .sidebar-panel.open{transform:translateX(0)}
   .sidebar-head{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);
                 padding:2px 18px 14px}
   .sidebar-item{display:block;width:100%;text-align:left;font:inherit;font-size:15px;padding:12px 18px;
@@ -171,6 +175,8 @@
 </head>
 <body>
 <div id="app"></div>
+<div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
+<div id="sidebarPanel" class="sidebar-panel"></div>
 <div id="toast" class="toast" hidden></div>
 
 <script>
@@ -747,6 +753,22 @@ async function copyProfileLink() {
   }
 }
 
+// Transient — the "add a student" row on the Profile page, cleared once added.
+let newStudentDraft = { name: "", allocated: "" };
+function addStudent() {
+  const name = (newStudentDraft.name || "").trim();
+  if (!name) { flash("Enter a student name"); return; }
+  const allocated = Number(newStudentDraft.allocated) || 0;
+  S.students.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2, 6), name, course: "", allocated, lesson: 2 });
+  newStudentDraft = { name: "", allocated: "" };
+  flash("Student added");
+  render();
+}
+function removeStudent(id) {
+  S.students = S.students.filter(s => s.id !== id);
+  render();
+}
+
 function addEntry(studentId) {
   if (!S.draft.date || !S.draft.hours) return;
   S.log.push({ id: "m" + Date.now(), studentId, date: S.draft.date, hours: Number(S.draft.hours), manual: true });
@@ -913,10 +935,11 @@ function mountAllGrids() {
 // Transient — sidebar and section are pure navigation, never synced.
 let sidebarOpen = false;
 let currentSection = "scheduler"; // "scheduler" | "profile"
+let sidebarCloseTimer = null;
 
 function render() {
   const app = document.getElementById("app");
-  app.innerHTML = renderHeader() + renderSidebar() +
+  app.innerHTML = renderHeader() +
     (currentSection === "profile" ? renderProfileSection() : renderTabContent());
   mountAllGrids();
   scheduleSave();
@@ -938,17 +961,48 @@ function renderHeader() {
   return header + "</div>";
 }
 
-function renderSidebar() {
-  if (!sidebarOpen) return "";
+function renderSidebarItems() {
   const items = [["scheduler", "Scheduler"], ["profile", "Profile"]];
-  return '<div class="sidebar-backdrop" data-action="closeSidebar"></div>' +
-    '<div class="sidebar-panel"><div class="sidebar-head">Menu</div>' +
-    items.map(([k, label]) => '<button class="sidebar-item' + (currentSection === k ? " sel" : "") + '" data-action="goSection" data-section="' + k + '">' + label + "</button>").join("") +
-    "</div>";
+  return '<div class="sidebar-head">Menu</div>' +
+    items.map(([k, label]) => '<button class="sidebar-item' + (currentSection === k ? " sel" : "") + '" data-section="' + k + '">' + label + "</button>").join("");
 }
+
+// The panel and backdrop live outside #app's innerHTML churn deliberately —
+// a freshly-created element has no "before" state, so a CSS transition on
+// it never plays. Keeping them as stable elements and just toggling a
+// class is what makes the slide and the dim actually animate.
+function syncSidebarDOM() {
+  const backdrop = document.getElementById("sidebarBackdrop");
+  const panel = document.getElementById("sidebarPanel");
+  if (!backdrop || !panel) return;
+  panel.innerHTML = renderSidebarItems();
+  clearTimeout(sidebarCloseTimer);
+  if (sidebarOpen) {
+    backdrop.hidden = false;
+    void backdrop.offsetHeight; // force a layout pass so "open" transitions rather than snapping straight there
+    backdrop.classList.add("open");
+    panel.classList.add("open");
+  } else {
+    backdrop.classList.remove("open");
+    panel.classList.remove("open");
+    sidebarCloseTimer = setTimeout(() => { backdrop.hidden = true; }, 280);
+  }
+}
+
+function toggleSidebar() { sidebarOpen = !sidebarOpen; syncSidebarDOM(); }
+function closeSidebar() { sidebarOpen = false; syncSidebarDOM(); }
+function goSection(section) { currentSection = section; sidebarOpen = false; syncSidebarDOM(); render(); }
 
 function renderProfileSection() {
   const link = window.location.origin + "/s/" + (ME.slug || "");
+  const studentRows = S.students.map(s =>
+    '<div class="entry">' +
+    '<input type="text" data-bind="studentName" data-id="' + s.id + '" value="' + escapeHTML(s.name) + '" style="flex:2;margin-right:6px">' +
+    '<input type="number" step="0.5" min="0" data-bind="studentHours" data-id="' + s.id + '" value="' + s.allocated + '" style="width:64px;margin-right:6px">' +
+    '<button class="x" data-action="removeStudent" data-id="' + s.id + '">×</button>' +
+    "</div>"
+  ).join("");
+
   return '<div class="pad">' +
     '<p class="lede">This is what was collected when you first set up your account.</p>' +
     '<div class="field"><label>Your name</label><input type="text" data-bind="profileName" value="' + escapeHTML(ME.name || "") + '"></div>' +
@@ -957,6 +1011,13 @@ function renderProfileSection() {
     '<div class="panel"><h3>Your student link</h3>' +
     '<p style="font-size:13px;color:var(--ink-soft);word-break:break-all;margin:0 0 10px">' + link + '</p>' +
     '<button class="btn" data-action="copyProfileLink">Copy link</button></div>' +
+    '<div class="panel"><h3>Students</h3>' +
+    '<p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px">Removing someone here stops them appearing in future weeks — hours already logged for them stay on record.</p>' +
+    studentRows +
+    '<div class="addrow"><input type="text" data-bind="newStudentName" value="' + escapeHTML(newStudentDraft.name) + '" placeholder="New student\u2019s name" style="flex:2">' +
+    '<input type="number" step="0.5" min="0" data-bind="newStudentAllocated" value="' + newStudentDraft.allocated + '" placeholder="Hours" style="width:64px">' +
+    '<button class="btn" data-action="addStudent">Add</button></div>' +
+    "</div>" +
     "</div>";
 }
 
@@ -1193,11 +1254,11 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "clearOffer") clearOffer();
   else if (action === "skipWeek") skipWeek();
   else if (action === "goReplies") goReplies();
-  else if (action === "toggleSidebar") { sidebarOpen = !sidebarOpen; render(); }
-  else if (action === "closeSidebar") { sidebarOpen = false; render(); }
-  else if (action === "goSection") { currentSection = el.dataset.section; sidebarOpen = false; render(); }
+  else if (action === "toggleSidebar") toggleSidebar();
   else if (action === "saveProfile") saveProfile();
   else if (action === "copyProfileLink") copyProfileLink();
+  else if (action === "addStudent") addStudent();
+  else if (action === "removeStudent") removeStudent(id);
   else if (action === "sampleReplies") sampleReplies();
   else if (action === "toggleStudentOpen") { S.openStudent = S.openStudent === id ? null : id; render(); }
   else if (action === "setStatus") {
@@ -1246,11 +1307,28 @@ document.getElementById("app").addEventListener("change", (e) => {
   else if (bind === "editHours") { editDraft.hours = el.value; }
   else if (bind === "profileName") { ME.name = el.value; }
   else if (bind === "profileInstrument") { ME.instrument = el.value; }
+  else if (bind === "studentName") {
+    const s = S.students.find(x => x.id === el.dataset.id);
+    if (s) s.name = el.value;
+  }
+  else if (bind === "studentHours") {
+    const s = S.students.find(x => x.id === el.dataset.id);
+    if (s) s.allocated = Number(el.value) || 0;
+  }
+  else if (bind === "newStudentName") { newStudentDraft.name = el.value; }
+  else if (bind === "newStudentAllocated") { newStudentDraft.allocated = el.value; }
 });
 
 /* ================================================================== */
 /*  Boot                                                               */
 /* ================================================================== */
+
+document.getElementById("sidebarBackdrop").addEventListener("click", closeSidebar);
+document.getElementById("sidebarPanel").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-section]");
+  if (btn) goSection(btn.dataset.section);
+});
+syncSidebarDOM();
 
 render();
 Promise.all([loadState(), loadMe()]).then(render);

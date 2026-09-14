@@ -118,6 +118,21 @@ async function handleMe(request, env) {
   return json(t || {});
 }
 
+// Editing name/instrument from the Profile screen deliberately never
+// touches the slug — that's baked into every student link already handed
+// out, and silently changing it would break links a teacher has shared.
+async function handleProfile(request, env) {
+  const teacherId = await requireSession(request, env);
+  if (!teacherId) return json({ error: "not logged in" }, 401);
+  let body;
+  try { body = JSON.parse(await request.text()); } catch (e) { return json({ error: "invalid json" }, 400); }
+  const name = (body.name || "").trim();
+  const instrument = (body.instrument || "").trim();
+  if (!name || !instrument) return json({ error: "Enter both your name and instrument" }, 400);
+  await env.DB.prepare("UPDATE teachers SET name = ?, instrument = ? WHERE id = ?").bind(name, instrument, teacherId).run();
+  return json({ ok: true });
+}
+
 async function handleOnboarding(request, env) {
   const teacherId = await requireSession(request, env);
   if (!teacherId) return json({ error: "not logged in" }, 401);
@@ -233,6 +248,7 @@ export default {
     if (path === "/api/login" && request.method === "POST") return handleLoginRequest(request, env, url);
     if (path === "/api/verify" && request.method === "GET") return handleVerify(url, env);
     if (path === "/api/me" && request.method === "GET") return handleMe(request, env);
+    if (path === "/api/profile" && request.method === "POST") return handleProfile(request, env);
     if (path === "/api/onboarding" && request.method === "POST") return handleOnboarding(request, env);
 
     if (path === "/api/state") {

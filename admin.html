@@ -174,7 +174,9 @@
     margin-bottom:6px;
   }
   .term-date-grid input[type="date"]{
-    display:block;
+    display:flex;
+    align-items:center;
+    justify-content:center;
     width:100%;
     max-width:100%;
     min-width:0;
@@ -999,7 +1001,7 @@ function sampleReplies() {
 function adjustLength(id, delta) {
   const rnd = activeRound();
   const s = S.students.find(x => x.id === id);
-  if (!s || !rnd.replies[id] || rnd.replies[id].source !== "admin") return;
+  if (!s || !rnd.replies[id]) return;
   const cap = Math.max(1, Math.round((s.allocated - taughtFor(id)) * 2));
   const cur = lessonFor(rnd, id);
   const next = Math.min(4, Math.max(1, cur + delta));
@@ -1680,9 +1682,9 @@ function renderRepliesTab() {
         const dec = curLesson <= 1;
         const inc = curLesson >= 4 || (curLesson + 1) * 0.5 > s.allocated - taughtFor(s.id);
         lenrow = '<div class="lenrow"><span>Lesson length</span><div class="stepper">' +
-          '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="-1" ' + (dec || isStudentReply ? "disabled" : "") + ">–</button>" +
+          '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="-1" ' + (dec ? "disabled" : "") + ">–</button>" +
           "<b>" + (curLesson * SLOT_MIN) + " min</b>" +
-          '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="1" ' + (inc || isStudentReply ? "disabled" : "") + ">+</button>" +
+          '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="1" ' + (inc ? "disabled" : "") + ">+</button>" +
           "</div></div>";
       }
       let gridBlock = "";

@@ -289,6 +289,25 @@
   .option-reason .prefgood{color:var(--sig);font-weight:560}
   .option-reason .prefavoid{color:var(--warn);font-weight:560}
   .more-options{margin-top:4px}
+  .more-options-expander{
+    display:grid;
+    grid-template-rows:0fr;
+    opacity:0;
+    transition:
+      grid-template-rows .48s cubic-bezier(.22,.72,.16,1),
+      opacity .32s ease;
+  }
+  .more-options-expander.open{
+    grid-template-rows:1fr;
+    opacity:1;
+  }
+  .more-options-expander-inner{
+    min-height:0;
+    overflow:hidden;
+  }
+  @media (prefers-reduced-motion: reduce){
+    .more-options-expander{transition:none}
+  }
 
   .srow-group{border-bottom:1px solid var(--rule)}
   .srow-group:last-child{border-bottom:none}
@@ -1033,8 +1052,23 @@ function preferenceLabel(v) {
 
 function toggleMoreOptions() {
   const rnd = activeRound();
+  const expander = document.getElementById("moreOptionsExpander");
+  const button = document.querySelector('[data-action="toggleMoreOptions"]');
+
   rnd.optionsExpanded = !rnd.optionsExpanded;
-  render();
+
+  if (expander) {
+    requestAnimationFrame(() => {
+      expander.classList.toggle("open", rnd.optionsExpanded);
+    });
+  }
+
+  if (button) {
+    button.textContent = rnd.optionsExpanded
+      ? "Show fewer options"
+      : "Show more options (" + Math.max(0, (rnd.result?.options?.length || 0) - 3) + ")";
+    button.setAttribute("aria-expanded", rnd.optionsExpanded ? "true" : "false");
+  }
 }
 
 function buildShareText(assign, weekNoLabel, weekStartISO, startHour) {
@@ -1729,9 +1763,8 @@ function renderPreConfirmPlanTab() {
     intro = '<p class="lede">Can’t fit everyone.' + (r.unplaced.length ? " Left out: " + r.unplaced.join(", ") + "." : "") + "</p>";
   }
 
-  const visibleOptions = rnd.optionsExpanded ? r.options : r.options.slice(0, 3);
   const days = roundDays(rnd);
-  const optionsHTML = visibleOptions.map((opt, idx) => {
+  const renderOption = (opt) => {
     const actualIdx = r.options.indexOf(opt);
     const dayNums = [...new Set(opt.assign.map(a => a.d))].sort();
     const daysLabel = dayNums.map(d => days[d]).join(" + ");
@@ -1750,11 +1783,18 @@ function renderPreConfirmPlanTab() {
     return '<div class="opt' + (actualIdx === rnd.chosen ? " sel" : "") + '" data-action="chooseOption" data-idx="' + actualIdx + '">' +
       '<div class="opthead"><b>' + daysLabel + "</b><span>" + gapsLabel + "</span></div>" + lines +
       '<div class="option-reason">' + prefText + ' · ' + opt.days + ' teaching day' + (opt.days === 1 ? "" : "s") + '</div></div>';
-  }).join("");
+  };
+
+  const optionsHTML = r.options.slice(0, 3).map(renderOption).join("");
+  const extraOptionsHTML = r.options.slice(3).map(renderOption).join("");
 
   const moreOptionsHTML = r.options.length > 3
-    ? '<div class="btnrow more-options"><button class="btn" data-action="toggleMoreOptions">' +
-      (rnd.optionsExpanded ? "Show fewer options" : "Show more options (" + (r.options.length - 3) + ")") +
+    ? '<div id="moreOptionsExpander" class="more-options-expander' + (rnd.optionsExpanded ? " open" : "") + '">' +
+        '<div class="more-options-expander-inner">' + extraOptionsHTML + '</div>' +
+      '</div>' +
+      '<div class="btnrow more-options"><button class="btn" data-action="toggleMoreOptions" aria-expanded="' +
+        (rnd.optionsExpanded ? "true" : "false") + '">' +
+        (rnd.optionsExpanded ? "Show fewer options" : "Show more options (" + (r.options.length - 3) + ")") +
       "</button></div>"
     : "";
 

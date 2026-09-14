@@ -32,12 +32,15 @@
   <h1>Lesson Scheduler</h1>
   <p class="sub">Enter your email and we'll give you a link to log in — no password needed.</p>
   <div id="err"></div>
-  <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
-  <button class="btn" id="go">Send my link</button>
+  <form id="loginForm">
+    <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required>
+    <button class="btn" id="go" type="submit">Send my link</button>
+  </form>
   <div id="result"></div>
 </div>
 <script>
-document.getElementById("go").addEventListener("click", async () => {
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
   const email = document.getElementById("email").value.trim();
   const errEl = document.getElementById("err");
   const resultEl = document.getElementById("result");

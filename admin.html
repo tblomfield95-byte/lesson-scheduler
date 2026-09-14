@@ -343,6 +343,31 @@
   .fill.behind{background:var(--warn)}
   .hnote{font-size:12px;color:var(--ink-soft)}
   .hnote.warn{color:var(--warn)}
+  .hours-sort{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin:0 0 12px;
+    padding:10px 12px;
+    border:1px solid var(--rule);
+    border-radius:10px;
+    background:var(--panel);
+  }
+  .hours-sort label{
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+  .hours-sort select{
+    min-width:150px;
+    font:inherit;
+    font-size:13.5px;
+    padding:8px 10px;
+    border-radius:8px;
+    border:1px solid var(--rule);
+    background:var(--paper);
+    color:var(--ink);
+  }
 
   .dateline{display:flex;align-items:center;justify-content:space-between;gap:12px;
             font-size:13px;color:var(--ink-soft)}
@@ -749,6 +774,7 @@ let S = {
   openStudent: null,
   log: [],
   openHours: null,
+  hoursSort: "first",
   draft: { date: todayISO(), hours: 1 },
   fallbackText: "",
   imgUrl: "",
@@ -804,6 +830,7 @@ function serializeState() {
     rounds,
     students: S.students,
     log: S.log,
+    hoursSort: S.hoursSort,
     draft: S.draft,
   });
 }
@@ -816,6 +843,7 @@ function applySavedState(saved) {
   S.termRanges = (saved.termRanges && saved.termRanges.length) ? saved.termRanges : S.termRanges;
   S.students = saved.students || S.students;
   S.log = saved.log || [];
+  S.hoursSort = saved.hoursSort || "first";
   S.draft = saved.draft || S.draft;
   S.rounds = {};
   Object.entries(saved.rounds || {}).forEach(([k, rr]) => {
@@ -1713,7 +1741,33 @@ function renderHoursTab() {
   const totalTaught = S.students.reduce((s, x) => s + taughtFor(x.id), 0);
   const totalAllocated = S.students.reduce((s, x) => s + x.allocated, 0);
 
-  const rows = S.students.map(s => {
+  const firstName = (name) => (name || "").trim().split(/\s+/)[0] || "";
+  const surname = (name) => {
+    const parts = (name || "").trim().split(/\s+/);
+    return parts.length > 1 ? parts[parts.length - 1] : parts[0] || "";
+  };
+
+  const sortedStudents = S.students.slice().sort((a, b) => {
+    const sort = S.hoursSort || "first";
+    if (sort === "surname") {
+      return surname(a.name).localeCompare(surname(b.name), "en", { sensitivity: "base" }) ||
+        firstName(a.name).localeCompare(firstName(b.name), "en", { sensitivity: "base" });
+    }
+    if (sort === "allocated") {
+      return (Number(b.allocated) || 0) - (Number(a.allocated) || 0) ||
+        firstName(a.name).localeCompare(firstName(b.name), "en", { sensitivity: "base" });
+    }
+    if (sort === "remaining") {
+      const aRemaining = (Number(a.allocated) || 0) - taughtFor(a.id);
+      const bRemaining = (Number(b.allocated) || 0) - taughtFor(b.id);
+      return bRemaining - aRemaining ||
+        firstName(a.name).localeCompare(firstName(b.name), "en", { sensitivity: "base" });
+    }
+    return firstName(a.name).localeCompare(firstName(b.name), "en", { sensitivity: "base" }) ||
+      surname(a.name).localeCompare(surname(b.name), "en", { sensitivity: "base" });
+  });
+
+  const rows = sortedStudents.map(s => {
     const taught = taughtFor(s.id);
     const remaining = s.allocated - taught;
     const perWeek = remaining / weeksLeft;
@@ -1757,7 +1811,14 @@ function renderHoursTab() {
   }).join("");
 
   return '<div class="pad"><p class="lede">' + totalTaught + "h taught of " + totalAllocated + "h allocated, with " + weeksLeft +
-    ' weeks left. Tap a name to see or add individual lessons.</p><div class="panel">' + rows + "</div>" +
+    ' weeks left. Tap a name to see or add individual lessons.</p>' +
+    '<div class="hours-sort"><label for="hoursSort">Sort by</label><select id="hoursSort" data-bind="hoursSort">' +
+      '<option value="first" ' + ((S.hoursSort || "first") === "first" ? "selected" : "") + '>First name</option>' +
+      '<option value="surname" ' + (S.hoursSort === "surname" ? "selected" : "") + '>Surname</option>' +
+      '<option value="allocated" ' + (S.hoursSort === "allocated" ? "selected" : "") + '>Hours Allocated</option>' +
+      '<option value="remaining" ' + (S.hoursSort === "remaining" ? "selected" : "") + '>Hours Remaining</option>' +
+    '</select></div>' +
+    '<div class="panel">' + rows + "</div>" +
     '<div class="btnrow"><button class="btn' + (confirmingReset ? " confirm-pending" : "") + '" data-action="resetYearConfirm">' +
     (confirmingReset ? "Tap again to confirm" : "Reset year") + '</button></div></div>';
 }
@@ -1857,6 +1918,7 @@ document.getElementById("app").addEventListener("change", (e) => {
     S.imgUrl = ""; S.fallbackText = "";
     render();
   }
+  else if (bind === "hoursSort") { S.hoursSort = el.value; render(); }
   else if (bind === "draftDate") { S.draft.date = el.value; }
   else if (bind === "draftHours") { S.draft.hours = el.value; }
   else if (bind === "editDate") { editDraft.date = el.value; }

@@ -219,6 +219,9 @@ async function handleRound(url, env) {
     weekNo,
     weekStart: rnd ? rnd.weekStart : null,
     offered: (rnd && rnd.offered) || [],
+    includeWeekends: rnd ? !!rnd.includeWeekends : false,
+    dayStartHour: rnd && rnd.dayStartHour != null ? rnd.dayStartHour : 9,
+    dayEndHour: rnd && rnd.dayEndHour != null ? rnd.dayEndHour : 19,
     teacherName: teacher.name,
     instrument: teacher.instrument,
     students: ((state && state.students) || []).map((s) => {

@@ -3,32 +3,36 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Your availability</title>
+<title>Cadence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   html,body{margin:0;padding:0}
   body{
-    --ink:#1B2430; --ink-soft:#5A6675; --paper:#FBFAF8; --panel:#FFFFFF;
-    --rule:#DDD8CE; --sig:#832222; --sig-soft:#F0DEDE; --warn:#B45309;
-    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --ink:#211C17; --ink-soft:#6B6157; --paper:#F2EFE7; --panel:#FFFFFF;
+    --rule:#DCD5C6; --sig:#6E1423; --sig-soft:#EDDEDD; --warn:#96591A;
+    --serif: "Source Serif 4", Georgia, serif;
+    font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
     background:var(--paper); color:var(--ink); min-height:100vh;
   }
   *{box-sizing:border-box}
   .pad{padding:20px 16px 60px}
-  h1{font-size:17px;font-weight:640;margin:0 0 4px}
+  h1{font-family:var(--serif);font-size:19px;font-weight:600;margin:0 0 4px}
   .sub{font-size:13px;color:var(--ink-soft);margin:0 0 20px}
   .lede{font-size:14px;line-height:1.5;color:var(--ink-soft);margin:0 0 16px}
   .namebtn{display:block;width:100%;text-align:center;font:inherit;font-size:15px;padding:14px 16px;
-           margin-bottom:8px;border-radius:10px;border:1px solid var(--rule);background:var(--panel);
+           margin-bottom:8px;border-radius:8px;border:1px solid var(--rule);background:var(--panel);
            color:var(--ink);cursor:pointer}
   .namebtn:active{background:var(--paper)}
   .namebtn.replied{background:#F3E1E1;border-color:var(--sig)}
   .replytag{display:block;font-size:12px;color:var(--sig);font-weight:600;margin-top:3px}
   .back{font:inherit;font-size:13px;color:var(--sig);background:none;border:none;padding:0 0 16px;cursor:pointer}
   .choice{display:block;width:100%;text-align:center;font:inherit;font-size:15px;padding:14px 16px;
-          margin-bottom:8px;border-radius:10px;border:1px solid var(--rule);background:var(--panel);
+          margin-bottom:8px;border-radius:8px;border:1px solid var(--rule);background:var(--panel);
           color:var(--ink);cursor:pointer}
   .choice.sel{border-color:var(--sig);background:var(--sig);color:#fff;font-weight:560}
-  .grid-wrap{border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--panel);
+  .grid-wrap{border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--panel);
              touch-action:none;user-select:none;-webkit-user-select:none;margin:14px 0}
   .grid-head{display:flex;border-bottom:1px solid var(--rule);background:var(--paper)}
   .dayhead{flex:1;text-align:center;padding:8px 0;font-size:12px;font-weight:600;color:var(--ink-soft)}
@@ -39,8 +43,8 @@
   .cell{flex:1;border-right:1px solid #EFECE6;border-bottom:1px solid #EFECE6;cursor:pointer}
   .cell:last-child{border-right:none}
   .cell.on{background:var(--sig)}
-  .cell.muted{background:repeating-linear-gradient(45deg,#F6F4F0,#F6F4F0 4px,#FFF 4px,#FFF 8px);cursor:default}
-  .btn{font:inherit;font-size:14px;padding:12px 18px;border-radius:9px;border:1px solid var(--sig);
+  .cell.muted{background:repeating-linear-gradient(45deg,#EAE4D6,#EAE4D6 4px,#FFF 4px,#FFF 8px);cursor:default}
+  .btn{font:inherit;font-size:14px;padding:12px 18px;border-radius:7px;border:1px solid var(--sig);
        background:var(--sig);color:#fff;font-weight:560;cursor:pointer;width:100%;text-align:center}
   .btn:disabled{opacity:.4;cursor:default}
   .btn-secondary{border-color:var(--rule);background:var(--panel);color:var(--ink)}
@@ -56,7 +60,7 @@
   .step:disabled{opacity:.32;cursor:default}
   .button-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
   .button-group .btn{flex:1}
-  .confirmation-box{background:var(--sig-soft);border:1px solid var(--sig);border-radius:10px;padding:16px;margin-bottom:16px;text-align:center}
+  .confirmation-box{background:var(--sig-soft);border:1px solid var(--sig);border-radius:8px;padding:16px;margin-bottom:16px;text-align:center}
   .confirmation-box .tick{font-size:32px;line-height:1;margin:0 0 8px}
   .confirmation-box .msg{font-size:13px;color:var(--ink);line-height:1.5}
 </style>

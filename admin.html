@@ -3,13 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Lesson Scheduler</title>
+<title>Cadence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   html,body{margin:0;padding:0}
   body{
-    --ink:#1B2430; --ink-soft:#5A6675; --paper:#FBFAF8; --panel:#FFFFFF;
-    --rule:#DDD8CE; --sig:#832222; --sig-soft:#F0DEDE; --warn:#B45309; --warn-soft:#F7E8D2;
-    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --ink:#211C17; --ink-soft:#6B6157; --paper:#F2EFE7; --panel:#FFFFFF;
+    --rule:#DCD5C6; --sig:#6E1423; --sig-soft:#EDDEDD; --warn:#96591A; --warn-soft:#F0E2C8;
+    --serif: "Source Serif 4", Georgia, serif;
+    font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
     font-feature-settings:"tnum" 1;
     background:var(--paper); color:var(--ink);
     min-height:100vh; padding-bottom:80px;
@@ -48,14 +52,14 @@
                  z-index:61;box-shadow:2px 0 16px rgba(0,0,0,.18);padding:18px 0;overflow-y:auto;
                  transform:translateX(-100%);transition:transform .58s cubic-bezier(.22,.72,.16,1)}
   .sidebar-panel.open{transform:translateX(0)}
-  .sidebar-head{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);
-                padding:2px 18px 14px}
+  .sidebar-brand{font-family:var(--serif);font-size:19px;font-weight:600;color:var(--sig);
+                 padding:2px 18px 16px;margin-bottom:8px;border-bottom:1px solid var(--rule)}
   .sidebar-item{display:block;width:100%;text-align:left;font:inherit;font-size:15px;padding:12px 18px;
                 border:none;background:none;color:var(--ink);cursor:pointer}
   .sidebar-item.sel{background:var(--sig-soft);color:var(--sig);font-weight:600}
   .field{margin-bottom:16px}
   .field label{display:block;font-size:13px;color:var(--ink-soft);margin:0 0 5px}
-  .field input{width:100%;font:inherit;font-size:15px;padding:11px 13px;border-radius:9px;
+  .field input{width:100%;font:inherit;font-size:15px;padding:11px 13px;border-radius:7px;
                border:1px solid var(--rule);background:var(--panel);color:var(--ink)}
 
   /* Students page — roomier editing controls to match the rest of the app */
@@ -78,7 +82,7 @@
     font:inherit;
     font-size:15px;
     padding:10px 12px;
-    border-radius:9px;
+    border-radius:7px;
     border:1px solid var(--rule);
     background:var(--panel);
     color:var(--ink);
@@ -121,7 +125,7 @@
     padding:13px 14px;
     margin-bottom:12px;
     border:1px solid var(--rule);
-    border-radius:10px;
+    border-radius:8px;
     background:var(--panel);
   }
   .term-count-card label{font-size:14px;font-weight:580;color:var(--ink)}
@@ -146,19 +150,8 @@
     padding:14px;
     margin-bottom:12px;
   }
-  .term-card-head{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    margin-bottom:11px;
-  }
-  .term-card-head h3{margin:0;font-size:14.5px;font-weight:620}
-  .term-card-head span{
-    font-size:11px;
-    color:var(--ink-soft);
-    text-transform:uppercase;
-    letter-spacing:.04em;
-  }
+  .term-card-head{margin-bottom:11px}
+  .term-card-head h3{margin:0;font-family:var(--serif);font-size:16px;font-weight:600}
   .term-date-grid{
     display:grid;
     grid-template-columns:repeat(2,minmax(0,1fr));
@@ -189,7 +182,7 @@
     line-height:1;
     padding:10px 6px;
     text-align:center;
-    border-radius:9px;
+    border-radius:7px;
     border:1px solid var(--rule);
     background:var(--paper);
     color:var(--ink);
@@ -202,7 +195,7 @@
     .term-date-grid{gap:10px}
     .term-date-grid input[type="date"]{font-size:13px;padding-left:4px;padding-right:4px}
   }
-  .title{font-size:15.5px;font-weight:640;letter-spacing:-0.01em;margin:0;line-height:1}
+  .title{font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:0;margin:0;line-height:1.15}
   .wk{font-size:13px;color:var(--ink-soft);white-space:nowrap}
   .tabs{display:flex;gap:2px;padding:0 12px 10px;overflow-x:auto}
   .tab{flex:1;min-width:74px;border:none;background:none;padding:7px 6px;font:inherit;font-size:13px;
@@ -224,7 +217,7 @@
   .btn:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
 
   .weekpicker{display:flex;align-items:center;justify-content:space-between;gap:10px;
-              padding:10px 12px;margin-bottom:14px;border:1px solid var(--rule);border-radius:10px;background:var(--panel)}
+              padding:10px 12px;margin-bottom:14px;border:1px solid var(--rule);border-radius:8px;background:var(--panel)}
   .weekpicker-mid{text-align:center;flex:1;min-width:0}
   .weekpicker-mid label{display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;font-weight:600}
   .weekpicker-mid input{font:inherit;font-size:14px;font-weight:600;width:36px;text-align:center;
@@ -234,7 +227,7 @@
   .weekpicker-mid input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   .weekpicker-mid span{display:block;font-size:12px;color:var(--ink-soft);margin-top:2px}
 
-  .grid-wrap{border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--panel);
+  .grid-wrap{border:1px solid var(--rule);border-radius:7px;overflow:hidden;background:var(--panel);
              touch-action:none;user-select:none;-webkit-user-select:none}
   .grid-head{display:flex;border-bottom:1px solid var(--rule);background:var(--paper)}
   .dayhead{flex:1;text-align:center;padding:8px 0;font-size:12px;font-weight:600;color:var(--ink-soft)}
@@ -246,12 +239,12 @@
         position:relative;cursor:pointer}
   .cell:last-child{border-right:none}
   .cell.on{background:var(--sig)}
-  .cell.muted{background:repeating-linear-gradient(45deg,#F6F4F0,#F6F4F0 4px,#FFF 4px,#FFF 8px);cursor:default}
+  .cell.muted{background:repeating-linear-gradient(45deg,#EAE4D6,#EAE4D6 4px,#FFF 4px,#FFF 8px);cursor:default}
   .cell.heat{background:var(--sig)}
   .heatnum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
            font-size:10px;color:#fff;font-weight:600;pointer-events:none}
-  .grid-locked{border:1px solid var(--rule);border-radius:10px;
-               background:repeating-linear-gradient(45deg,#F6F4F0,#F6F4F0 8px,#FBFAF8 8px,#FBFAF8 16px);
+  .grid-locked{border:1px solid var(--rule);border-radius:8px;
+               background:repeating-linear-gradient(45deg,#E7E1D2,#E7E1D2 8px,#F2EFE7 8px,#F2EFE7 16px);
                padding:36px 16px;text-align:center;color:var(--ink-soft);font-size:13.5px;line-height:1.5}
 
   .meter{display:flex;justify-content:space-between;align-items:baseline;margin:12px 0 0;
@@ -262,7 +255,7 @@
     margin:0 0 14px;
     padding:12px;
     border:1px solid var(--rule);
-    border-radius:10px;
+    border-radius:8px;
     background:var(--panel);
   }
   .dayprefs-head{
@@ -322,9 +315,9 @@
   .step:disabled{opacity:.32;cursor:default}
   .step:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
 
-  .panel{border:1px solid var(--rule);border-radius:10px;background:var(--panel);padding:14px;margin-bottom:12px}
-  .panel h3{margin:0 0 10px;font-size:14px;font-weight:620}
-  .opt{border:1px solid var(--rule);border-radius:9px;padding:12px;margin-bottom:8px;cursor:pointer;background:var(--panel)}
+  .panel{border:1px solid var(--rule);border-radius:8px;background:var(--panel);padding:14px;margin-bottom:12px}
+  .panel h3{margin:0 0 10px;font-family:var(--serif);font-size:15px;font-weight:600}
+  .opt{border:1px solid var(--rule);border-radius:7px;padding:12px;margin-bottom:8px;cursor:pointer;background:var(--panel)}
   .opt.sel{border-color:var(--sig);box-shadow:inset 0 0 0 1px var(--sig)}
   .opthead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
   .opthead b{font-size:14px}
@@ -355,7 +348,7 @@
     margin:0 0 12px;
     padding:10px 12px;
     border:1px solid var(--rule);
-    border-radius:10px;
+    border-radius:8px;
     background:var(--panel);
   }
   .hours-sort label{
@@ -384,7 +377,7 @@
             padding:10px;border-radius:8px;border:1px solid var(--rule);
             background:var(--paper);color:var(--ink);resize:vertical}
   .imgwrap{margin-top:12px}
-  .imgwrap img{width:100%;border:1px solid var(--rule);border-radius:9px;display:block;margin-bottom:10px}
+  .imgwrap img{width:100%;border:1px solid var(--rule);border-radius:7px;display:block;margin-bottom:10px}
 
   .ledger{margin-top:10px;padding:10px 12px;background:var(--paper);
           border:1px solid var(--rule);border-radius:8px}
@@ -393,7 +386,7 @@
   .entry.faint{color:var(--ink-soft);border-bottom:none;padding-bottom:10px}
   .entryright{display:flex;align-items:center;gap:8px}
   .tag{font-style:normal;font-size:11px;color:var(--ink-soft);margin-left:8px;
-       border:1px solid var(--rule);border-radius:10px;padding:1px 6px}
+       border:1px solid var(--rule);border-radius:8px;padding:1px 6px}
   .x{font:inherit;font-size:17px;line-height:1;width:24px;height:24px;border-radius:12px;
      border:1px solid var(--rule);background:var(--panel);color:var(--ink-soft);cursor:pointer}
   .x:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
@@ -416,7 +409,7 @@
   .struck{text-decoration:line-through;color:var(--ink-soft)}
 
   .toast{position:fixed;left:16px;right:16px;bottom:18px;background:var(--ink);color:var(--paper);
-         padding:12px 14px;border-radius:9px;font-size:13.5px;z-index:50;opacity:0}
+         padding:12px 14px;border-radius:7px;font-size:13.5px;z-index:50;opacity:0}
   .toast.show{animation:toastFade 2.6s ease-in-out both}
   @keyframes toastFade{0%{opacity:0}12%{opacity:1}82%{opacity:1}100%{opacity:0}}
   .empty{font-size:13.5px;color:var(--ink-soft);line-height:1.55;padding:20px 0}
@@ -1073,25 +1066,25 @@ async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startH
   const FONT = 'ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif';
 
   const heading = ME.instrument ? ME.instrument + " lessons" : "Lessons";
-  x.fillStyle = "#FBFAF8"; x.fillRect(0, 0, W, H);
-  x.fillStyle = "#832222"; x.fillRect(0, 0, W, 12);
-  x.fillStyle = "#1B2430"; x.font = "640 46px " + FONT; x.fillText(heading, 64, 108);
-  x.fillStyle = "#5A6675"; x.font = "400 28px " + FONT;
+  x.fillStyle = "#F2EFE7"; x.fillRect(0, 0, W, H);
+  x.fillStyle = "#6E1423"; x.fillRect(0, 0, W, 12);
+  x.fillStyle = "#211C17"; x.font = "640 46px " + FONT; x.fillText(heading, 64, 108);
+  x.fillStyle = "#6B6157"; x.font = "400 28px " + FONT;
   x.fillText((ME.name ? ME.name + " · " : "") + "Week " + weekNoLabel + " of " + termWeeks(), 64, 152);
 
   let y = 240;
   days.forEach(d => {
-    x.fillStyle = "#832222"; x.font = "620 32px " + FONT;
+    x.fillStyle = "#6E1423"; x.font = "620 32px " + FONT;
     x.fillText(dayDateLong(weekStartISO, +d), 64, y); y += 46;
-    x.strokeStyle = "#DDD8CE"; x.lineWidth = 2;
+    x.strokeStyle = "#DCD5C6"; x.lineWidth = 2;
     x.beginPath(); x.moveTo(64, y - 16); x.lineTo(W - 64, y - 16); x.stroke();
 
     by[d].forEach(a => {
-      x.fillStyle = "#1B2430"; x.font = "500 32px " + FONT;
+      x.fillStyle = "#211C17"; x.font = "500 32px " + FONT;
       x.fillText(slotTimeFor(startHour, a.start) + "–" + slotTimeFor(startHour, a.start + a.lesson), 64, y + 32);
       x.font = "600 32px " + FONT;
       x.fillText(a.name.split(" ")[0], 360, y + 32);
-      x.fillStyle = "#5A6675"; x.font = "400 26px " + FONT; x.textAlign = "right";
+      x.fillStyle = "#6B6157"; x.font = "400 26px " + FONT; x.textAlign = "right";
       x.fillText(((a.lesson * SLOT_MIN) / 60) + "h", W - 64, y + 32);
       x.textAlign = "left";
       y += 78;
@@ -1099,7 +1092,7 @@ async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startH
     y += 50;
   });
 
-  x.fillStyle = "#5A6675"; x.font = "400 25px " + FONT;
+  x.fillStyle = "#6B6157"; x.font = "400 25px " + FONT;
   x.fillText("Let me know as soon as possible if anything changes.", 64, H - 52);
 
   const blob = await new Promise(res => c.toBlob(res, "image/png"));
@@ -1493,7 +1486,7 @@ function render() {
 
 function renderHeader() {
   const tabs = [["week", "Offer"], ["replies", "Replies"], ["plan", "Schedule"], ["hours", "Hours"]];
-  const title = (ME.instrument ? ME.instrument + " Lessons" : "Lesson Scheduler") + (ME.name ? " - " + ME.name : "");
+  const title = (ME.instrument ? ME.instrument + " Lessons" : "Cadence") + (ME.name ? " - " + ME.name : "");
   const sectionTitles = { profile: "Profile", students: "Students", termdates: "Term Dates", settings: "Settings" };
   const inScheduler = currentSection === "scheduler";
   let header = '<div class="bar"><div class="bartop">' +
@@ -1511,7 +1504,7 @@ function renderHeader() {
 
 function renderSidebarItems() {
   const items = [["scheduler", "Scheduler"], ["profile", "Profile"], ["students", "Students"], ["termdates", "Term Dates"], ["settings", "Settings"]];
-  return '<div class="sidebar-head">Menu</div>' +
+  return '<div class="sidebar-brand">Cadence</div>' +
     items.map(([k, label]) => '<button class="sidebar-item' + (currentSection === k ? " sel" : "") + '" data-section="' + k + '">' + label + "</button>").join("");
 }
 
@@ -1578,7 +1571,7 @@ function renderTermDatesSection() {
   const d = termDraft;
   const rows = d.ranges.map((r, i) =>
     '<div class="term-card">' +
-      '<div class="term-card-head"><h3>Term ' + (i + 1) + '</h3><span>Teaching dates</span></div>' +
+      '<div class="term-card-head"><h3>Term ' + (i + 1) + '</h3></div>' +
       '<div class="term-date-grid">' +
         '<div class="field"><label>Start date</label><input type="date" data-bind="termStart" data-idx="' + i + '" value="' + (r.start || "") + '"></div>' +
         '<div class="field"><label>End date</label><input type="date" data-bind="termEnd" data-idx="' + i + '" value="' + (r.end || "") + '"></div>' +

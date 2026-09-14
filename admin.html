@@ -1497,7 +1497,7 @@ function renderHeader() {
   const sectionTitles = { profile: "Profile", students: "Students", termdates: "Term Dates", settings: "Settings" };
   const inScheduler = currentSection === "scheduler";
   let header = '<div class="bar"><div class="bartop">' +
-    '<span class="hbrow"><button class="hamburger" data-action="toggleSidebar" aria-label="Menu"><svg width="24" height="18" viewBox="0 0 22 16.5" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="3" rx="1.5" fill="currentColor"/><rect y="7.5" width="24" height="3" rx="1.5" fill="currentColor"/><rect y="15" width="24" height="3" rx="1.5" fill="currentColor"/></svg></button>' +
+    '<span class="hbrow"><button class="hamburger" data-action="toggleSidebar" aria-label="Menu"><svg width="24" height="18" viewBox="0 0 24 18" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="3" rx="1.5" fill="currentColor"/><rect y="7.5" width="24" height="3" rx="1.5" fill="currentColor"/><rect y="15" width="24" height="3" rx="1.5" fill="currentColor"/></svg></button>' +
     '<h1 class="title">' + (inScheduler ? title : sectionTitles[currentSection]) + '</h1></span>' +
     (inScheduler ? '<div class="wk">' + S.weeksCompleted + " of " + termWeeks() + ' weeks done</div>' : '<span></span>') +
     '</div>';

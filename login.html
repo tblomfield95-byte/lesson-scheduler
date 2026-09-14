@@ -3,33 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Log in — Lesson Scheduler</title>
+<title>Log in — Cadence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   html,body{margin:0;padding:0}
   body{
-    --ink:#1B2430; --ink-soft:#5A6675; --paper:#FBFAF8; --panel:#FFFFFF;
-    --rule:#DDD8CE; --sig:#832222;
-    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --ink:#211C17; --ink-soft:#6B6157; --paper:#F2EFE7; --panel:#FFFFFF;
+    --rule:#DCD5C6; --sig:#6E1423;
+    --serif: "Source Serif 4", Georgia, serif;
+    font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
     background:var(--paper); color:var(--ink); min-height:100vh;
   }
   *{box-sizing:border-box}
   .pad{padding:28px 20px;max-width:420px;margin:0 auto}
-  h1{font-size:19px;font-weight:640;margin:0 0 6px}
+  h1{font-family:var(--serif);font-size:24px;font-weight:600;margin:0 0 6px}
   .sub{font-size:14px;color:var(--ink-soft);line-height:1.5;margin:0 0 22px}
-  input{width:100%;font:inherit;font-size:15px;padding:12px 14px;border-radius:9px;
+  input{width:100%;font:inherit;font-size:15px;padding:12px 14px;border-radius:7px;
         border:1px solid var(--rule);background:var(--panel);color:var(--ink);margin-bottom:12px}
-  .btn{width:100%;font:inherit;font-size:15px;padding:13px;border-radius:9px;border:1px solid var(--sig);
-       background:var(--sig);color:#fff;font-weight:560;cursor:pointer}
+  .btn{width:100%;font:inherit;font-size:15px;padding:13px;border-radius:7px;border:1px solid var(--sig);
+       background:var(--sig);color:#fff;font-weight:600;cursor:pointer}
   .btn:disabled{opacity:.5;cursor:default}
-  .linkbox{margin-top:20px;padding:14px;border-radius:9px;border:1px solid var(--rule);background:var(--panel);
+  .linkbox{margin-top:20px;padding:14px;border-radius:7px;border:1px solid var(--rule);background:var(--panel);
            font-size:14px;line-height:1.5}
   .linkbox a{color:var(--sig);font-weight:600;word-break:break-all}
-  .err{color:#B45309;font-size:13px;margin:-6px 0 12px}
+  .err{color:#96591A;font-size:13px;margin:-6px 0 12px}
 </style>
 </head>
 <body>
 <div class="pad">
-  <h1>Lesson Scheduler</h1>
+  <h1>Cadence</h1>
   <p class="sub">Enter your email and we'll give you a link to log in — no password needed.</p>
   <div id="err"></div>
   <form id="loginForm">

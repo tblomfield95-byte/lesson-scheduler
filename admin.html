@@ -110,6 +110,9 @@
             font-size:13px;color:var(--ink-soft)}
   .dateline input{font:inherit;font-size:13.5px;padding:7px 9px;border-radius:7px;
                   border:1px solid var(--rule);background:var(--paper);color:var(--ink)}
+  .dateline input[type="number"]{width:40px;text-align:center;-moz-appearance:textfield}
+  .dateline input[type="number"]::-webkit-outer-spin-button,
+  .dateline input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   .fallback{width:100%;margin-top:12px;font:inherit;font-size:13px;line-height:1.5;
             padding:10px;border-radius:8px;border:1px solid var(--rule);
             background:var(--paper);color:var(--ink);resize:vertical}
@@ -868,7 +871,7 @@ function renderTabContent() {
 function renderOfferTab() {
   const hours = (S.offered.size * SLOT_MIN) / 60;
   return '<div class="pad">' +
-    '<label class="dateline" style="margin-bottom:8px">Current week <input type="number" inputmode="numeric" min="1" max="' + TERM_WEEKS + '" data-bind="weekNo" value="' + S.weekNo + '" style="width:56px"> of ' + TERM_WEEKS + '</label>' +
+    '<label class="dateline" style="margin-bottom:8px">Current week <span><input type="number" inputmode="numeric" min="1" max="' + TERM_WEEKS + '" data-bind="weekNo" value="' + S.weekNo + '"> of ' + TERM_WEEKS + '</span></label>' +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + S.weekStart + '"></label>' +
     '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(S.weekStart) || "") + ' — check this matches the week you mean; correct it if a reading week or anything else has thrown it off.</p>' +
     '<p class="lede">Drag to paint the times you could teach this week. Students only ever see these.</p>' +

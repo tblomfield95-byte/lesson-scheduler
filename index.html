@@ -72,14 +72,15 @@ const WEEK = SLUG_WEEK.week;
 
 function weekRangeLabel(iso) {
   if (!iso) return "";
-  const mon = new Date(iso + "T00:00:00");
-  const fri = new Date(mon.getTime()); fri.setDate(fri.getDate() + 4);
-  const sameMonth = mon.getMonth() === fri.getMonth() && mon.getFullYear() === fri.getFullYear();
-  const monMonth = mon.toLocaleDateString("en-GB", { month: "short" });
-  const friMonth = fri.toLocaleDateString("en-GB", { month: "short" });
+  const [y, m, d] = iso.split("-").map(Number);
+  const mon = new Date(Date.UTC(y, m - 1, d));
+  const fri = new Date(Date.UTC(y, m - 1, d + 4));
+  const sameMonth = mon.getUTCMonth() === fri.getUTCMonth() && mon.getUTCFullYear() === fri.getUTCFullYear();
+  const monMonth = mon.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
+  const friMonth = fri.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
   return sameMonth
-    ? mon.getDate() + "\u2013" + fri.getDate() + " " + friMonth + " " + fri.getFullYear()
-    : mon.getDate() + " " + monMonth + " \u2013 " + fri.getDate() + " " + friMonth + " " + fri.getFullYear();
+    ? mon.getUTCDate() + "\u2013" + fri.getUTCDate() + " " + friMonth + " " + fri.getUTCFullYear()
+    : mon.getUTCDate() + " " + monMonth + " \u2013 " + fri.getUTCDate() + " " + friMonth + " " + fri.getUTCFullYear();
 }
 
 let R = { loading: true, error: null, weekNo: null, weekStart: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), submitted: false, submittedStatus: null, submitting: false, teacherName: null, instrument: null };

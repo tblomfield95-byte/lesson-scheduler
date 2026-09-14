@@ -18,7 +18,28 @@
   }
   *{box-sizing:border-box}
   .pad{padding:28px 20px;max-width:420px;margin:0 auto}
-  h1{font-family:var(--serif);font-size:24px;font-weight:600;margin:0 0 6px}
+  h1{
+    font-family:var(--serif);
+    font-size:24px;
+    font-weight:600;
+    margin:0 0 6px;
+    color:var(--sig);
+  }
+  #brandWordmark{
+    opacity:0;
+    position:relative;
+    z-index:2;
+    will-change:transform,opacity;
+  }
+  .login-content{
+    opacity:0;
+    transform:translateY(8px);
+    transition:opacity .52s ease, transform .52s cubic-bezier(.22,.72,.16,1);
+  }
+  .login-content.revealed{
+    opacity:1;
+    transform:translateY(0);
+  }
   .sub{font-size:14px;color:var(--ink-soft);line-height:1.5;margin:0 0 22px}
   input{width:100%;font:inherit;font-size:15px;padding:12px 14px;border-radius:7px;
         border:1px solid var(--rule);background:var(--panel);color:var(--ink);margin-bottom:12px}
@@ -29,20 +50,81 @@
            font-size:14px;line-height:1.5}
   .linkbox a{color:var(--sig);font-weight:600;word-break:break-all}
   .err{color:#96591A;font-size:13px;margin:-6px 0 12px}
+
+  @media (prefers-reduced-motion: reduce){
+    #brandWordmark{opacity:1!important;transform:none!important;transition:none!important}
+    .login-content{opacity:1!important;transform:none!important;transition:none!important}
+  }
 </style>
 </head>
 <body>
 <div class="pad">
-  <h1>Cadence</h1>
-  <p class="sub">Enter your email and we'll give you a link to log in — no password needed.</p>
-  <div id="err"></div>
-  <form id="loginForm">
-    <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required>
-    <button class="btn" id="go" type="submit">Send my link</button>
-  </form>
-  <div id="result"></div>
+  <h1 id="brandWordmark">Cadence</h1>
+  <div id="loginContent" class="login-content">
+    <p class="sub">Enter your email and we'll give you a link to log in — no password needed.</p>
+    <div id="err"></div>
+    <form id="loginForm">
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required>
+      <button class="btn" id="go" type="submit">Send my link</button>
+    </form>
+    <div id="result"></div>
+  </div>
 </div>
 <script>
+async function playCadenceIntro() {
+  const brand = document.getElementById("brandWordmark");
+  const content = document.getElementById("loginContent");
+  if (!brand || !content) return;
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    brand.style.opacity = "1";
+    content.classList.add("revealed");
+    return;
+  }
+
+  try {
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  } catch (e) {}
+
+  // Measure the wordmark exactly where it will finally live, then use a
+  // transform to place that same element in the centre of the viewport.
+  // This keeps the animation responsive without any hard-coded coordinates.
+  const rect = brand.getBoundingClientRect();
+  const finalX = rect.left + rect.width / 2;
+  const finalY = rect.top + rect.height / 2;
+  const dx = window.innerWidth / 2 - finalX;
+  const dy = window.innerHeight / 2 - finalY;
+  const scale = Math.min(2.45, Math.max(2.05, window.innerWidth / 180));
+
+  brand.style.transformOrigin = "center center";
+  brand.style.transform = "translate(" + dx + "px," + dy + "px) scale(" + scale + ")";
+  brand.style.opacity = "1";
+
+  // Let the centred Cadence mark register before it retreats.
+  await new Promise(resolve => setTimeout(resolve, 650));
+
+  brand.style.transition = "transform .9s cubic-bezier(.22,.72,.16,1)";
+  brand.style.transform = "translate(0,0) scale(1)";
+
+  await new Promise(resolve => {
+    let finished = false;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      brand.removeEventListener("transitionend", done);
+      resolve();
+    };
+    brand.addEventListener("transitionend", done, { once:true });
+    setTimeout(done, 980);
+  });
+
+  // A tiny beat after the wordmark has landed, then reveal the login UI.
+  await new Promise(resolve => setTimeout(resolve, 130));
+  content.classList.add("revealed");
+}
+
+playCadenceIntro();
+
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = document.getElementById("email").value.trim();

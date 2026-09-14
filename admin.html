@@ -254,6 +254,45 @@
          font-size:13px;color:var(--ink-soft)}
   .meter b{font-size:22px;color:var(--ink);font-weight:640;letter-spacing:-0.02em}
 
+  .dayprefs{
+    margin:0 0 14px;
+    padding:12px;
+    border:1px solid var(--rule);
+    border-radius:10px;
+    background:var(--panel);
+  }
+  .dayprefs-head{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    align-items:baseline;
+    margin-bottom:10px;
+  }
+  .dayprefs-head b{font-size:13.5px;font-weight:620}
+  .dayprefs-head span{font-size:11.5px;color:var(--ink-soft)}
+  .dayprefs-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+  .daypref{
+    min-width:0;
+    font:inherit;
+    padding:8px 4px;
+    border-radius:8px;
+    border:1px solid var(--rule);
+    background:var(--paper);
+    color:var(--ink-soft);
+    cursor:pointer;
+    text-align:center;
+  }
+  .daypref strong{display:block;font-size:12px;color:var(--ink);font-weight:620;margin-bottom:2px}
+  .daypref span{display:block;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .daypref.preferred{background:var(--sig-soft);border-color:var(--sig);color:var(--sig)}
+  .daypref.preferred strong{color:var(--sig)}
+  .daypref.avoid{background:var(--warn-soft);border-color:#E7CDBE;color:var(--warn)}
+  .daypref.avoid strong{color:var(--warn)}
+  .option-reason{font-size:11.5px;color:var(--ink-soft);margin-top:7px}
+  .option-reason .prefgood{color:var(--sig);font-weight:560}
+  .option-reason .prefavoid{color:var(--warn);font-weight:560}
+  .more-options{margin-top:4px}
+
   .srow-group{border-bottom:1px solid var(--rule)}
   .srow-group:last-child{border-bottom:none}
   .srow{display:flex;align-items:center;gap:10px;padding:11px 0}
@@ -485,19 +524,20 @@ function buildCandidates(participants, offered) {
   });
 }
 
-function scoreSolution(assign) {
+function scoreSolution(assign, dayPreferences = {}) {
   const byDay = {};
   assign.forEach((a) => { (byDay[a.d] = byDay[a.d] || []).push(a); });
-  let gaps = 0, latest = 0;
-  Object.values(byDay).forEach((list) => {
+  let gaps = 0, latest = 0, preference = 0;
+  Object.entries(byDay).forEach(([d, list]) => {
     list.sort((x, y) => x.start - y.start);
     const first = list[0].start;
     const last = list[list.length - 1].start + list[list.length - 1].lesson;
     const busy = list.reduce((s, x) => s + x.lesson, 0);
     gaps += last - first - busy;
     latest = Math.max(latest, last);
+    preference += Number(dayPreferences[d] || 0);
   });
-  return { days: Object.keys(byDay).length, gaps, latest };
+  return { days: Object.keys(byDay).length, gaps, latest, preference };
 }
 
 function combinations(arr, k) {
@@ -520,7 +560,7 @@ function dayBlockers(withCands, offered) {
   }).filter(Boolean).sort((a, b) => a.blocked.length - b.blocked.length);
 }
 
-function solve(participants, offered) {
+function solve(participants, offered, dayPreferences = {}) {
   const withCands = buildCandidates(participants, offered);
 
   const masks = [];
@@ -559,53 +599,112 @@ function solve(participants, offered) {
     return found;
   };
 
-  const rankAndDedupe = (found) => {
-    const scored = found.map((a) => ({ assign: a, ...scoreSolution(a) }))
-      .sort((x, y) => x.gaps - y.gaps || x.latest - y.latest);
-    const seen = new Set(); const uniq = [];
+  const rankAndDedupe = (found, limit = 12) => {
+    const scored = found.map((a) => ({ assign: a, ...scoreSolution(a, dayPreferences) }))
+      .sort((x, y) =>
+        x.days - y.days ||
+        x.preference - y.preference ||
+        x.gaps - y.gaps ||
+        x.latest - y.latest
+      );
+
+    const assignmentSeen = new Set();
+    const unique = [];
     for (const s of scored) {
       const sig = s.assign.map((a) => a.id + ":" + a.d + ":" + a.start).sort().join("|");
-      if (seen.has(sig)) continue;
-      seen.add(sig); uniq.push(s);
-      if (uniq.length === 3) break;
+      if (assignmentSeen.has(sig)) continue;
+      assignmentSeen.add(sig);
+      unique.push(s);
     }
-    return uniq;
+
+    // Make the first choices genuinely different where possible: show
+    // different day combinations before alternate student orders on the same day(s).
+    const daySeen = new Set();
+    const diverse = [];
+    const remainder = [];
+    unique.forEach(s => {
+      const daySig = [...new Set(s.assign.map(a => a.d))].sort().join(",");
+      if (!daySeen.has(daySig)) {
+        daySeen.add(daySig);
+        diverse.push(s);
+      } else {
+        remainder.push(s);
+      }
+    });
+
+    return [...diverse, ...remainder].slice(0, limit);
   };
 
   const impossible = withCands.some((p) => p.cands.length === 0);
   if (!impossible) {
+    let bestDayCount = null;
+    const allBest = [];
+
     for (const mask of masks) {
+      const dayCount = bitCount(mask);
+      if (bestDayCount !== null && dayCount > bestDayCount) break;
       const found = tryMask(mask, withCands);
-      if (found.length) {
-        return { ok: true, options: rankAndDedupe(found), unplaced: [], blockers: dayBlockers(withCands, offered) };
-      }
+      if (!found.length) continue;
+      if (bestDayCount === null) bestDayCount = dayCount;
+      allBest.push(...found);
+    }
+
+    if (allBest.length) {
+      return {
+        ok: true,
+        options: rankAndDedupe(allBest, 12),
+        unplaced: [],
+        blockers: dayBlockers(withCands, offered)
+      };
     }
   }
 
-  let best = null;
-  for (const mask of masks) {
-    for (let drop = 1; drop <= withCands.length && !best; drop++) {
-      const subsets = combinations(withCands, withCands.length - drop);
-      for (const people of subsets) {
+  let bestPlacedCount = -1;
+  let bestDayCount = null;
+  let partialFound = [];
+  let bestPlacedIds = null;
+
+  for (let drop = 1; drop <= withCands.length; drop++) {
+    const keepCount = withCands.length - drop;
+    if (keepCount < bestPlacedCount) break;
+    const subsets = combinations(withCands, keepCount);
+
+    for (const people of subsets) {
+      for (const mask of masks) {
+        const dayCount = bitCount(mask);
+        if (bestPlacedCount === keepCount && bestDayCount !== null && dayCount > bestDayCount) break;
         if (people.some((p) => p.cands.filter((c) => mask & (1 << c.d)).length === 0)) continue;
+
         const found = tryMask(mask, people);
-        if (found.length) {
-          const placedIds = new Set(people.map((p) => p.id));
-          best = {
-            ok: false,
-            options: rankAndDedupe(found).slice(0, 2),
-            unplaced: withCands.filter((p) => !placedIds.has(p.id)).map((p) => p.name),
-            blockers: dayBlockers(withCands, offered),
-          };
-          break;
+        if (!found.length) continue;
+
+        if (keepCount > bestPlacedCount || bestDayCount === null || dayCount < bestDayCount) {
+          bestPlacedCount = keepCount;
+          bestDayCount = dayCount;
+          partialFound = [];
+          bestPlacedIds = new Set(people.map(p => p.id));
+        }
+
+        if (keepCount === bestPlacedCount && dayCount === bestDayCount) {
+          partialFound.push(...found);
+          if (!bestPlacedIds) bestPlacedIds = new Set(people.map(p => p.id));
         }
       }
-      if (best) break;
     }
-    if (best) break;
+
+    if (bestPlacedCount === keepCount && partialFound.length) break;
   }
 
-  return best || { ok: false, options: [], unplaced: withCands.map((p) => p.name), blockers: dayBlockers(withCands, offered) };
+  if (partialFound.length) {
+    return {
+      ok: false,
+      options: rankAndDedupe(partialFound, 12),
+      unplaced: withCands.filter((p) => !bestPlacedIds.has(p.id)).map((p) => p.name),
+      blockers: dayBlockers(withCands, offered),
+    };
+  }
+
+  return { ok: false, options: [], unplaced: withCands.map((p) => p.name), blockers: dayBlockers(withCands, offered) };
 }
 
 /* ================================================================== */
@@ -625,7 +724,17 @@ async function loadMe() {
 }
 
 function blankRound(weekStart) {
-  return { weekStart, offered: new Set(), replies: {}, plan: null, result: null, chosen: 0, notTeaching: false };
+  return {
+    weekStart,
+    offered: new Set(),
+    replies: {},
+    plan: null,
+    result: null,
+    chosen: 0,
+    notTeaching: false,
+    dayPreferences: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 },
+    optionsExpanded: false,
+  };
 }
 
 let S = {
@@ -677,6 +786,7 @@ function serializeState() {
       result: rr.result,
       chosen: rr.chosen,
       notTeaching: !!rr.notTeaching,
+      dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 },
     };
   });
   return JSON.stringify({
@@ -710,6 +820,8 @@ function applySavedState(saved) {
       result: rr.result || null,
       chosen: rr.chosen || 0,
       notTeaching: !!rr.notTeaching,
+      dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 },
+      optionsExpanded: false,
     };
   });
   ensureRound(S.week);
@@ -823,8 +935,30 @@ function runSolver() {
   if (!rnd.offered.size) { flash("Paint some blocks first"); return; }
   const participants = getParticipants(rnd);
   if (!participants.length) { flash("No students available this week"); return; }
-  rnd.result = solve(participants, rnd.offered);
-  rnd.chosen = 0; S.tab = "plan";
+  rnd.result = solve(participants, rnd.offered, rnd.dayPreferences || {});
+  rnd.chosen = 0;
+  rnd.optionsExpanded = false;
+  S.tab = "plan";
+  render();
+}
+
+function cycleDayPreference(day) {
+  const rnd = activeRound();
+  rnd.dayPreferences = rnd.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
+  const cur = Number(rnd.dayPreferences[day] || 0);
+  rnd.dayPreferences[day] = cur === 0 ? -1 : cur === -1 ? 1 : 0;
+  rnd.result = null;
+  rnd.optionsExpanded = false;
+  render();
+}
+
+function preferenceLabel(v) {
+  return v === -1 ? "Preferred" : v === 1 ? "Avoid" : "Neutral";
+}
+
+function toggleMoreOptions() {
+  const rnd = activeRound();
+  rnd.optionsExpanded = !rnd.optionsExpanded;
   render();
 }
 
@@ -925,7 +1059,7 @@ function rescheduleWeek() {
     avail: (rnd.replies[l.id] && rnd.replies[l.id].avail) || new Set(),
   }));
   if (!pool.length) { flash("Nobody left to reschedule"); return; }
-  const solved = solve(pool, rnd.offered);
+  const solved = solve(pool, rnd.offered, rnd.dayPreferences || {});
   if (!solved.options.length) { flash("No tighter arrangement available"); return; }
   const fresh = solved.options[0].assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" }));
   rnd.plan.lessons = [...rnd.plan.lessons.filter(l => l.status !== "planned"), ...fresh];
@@ -1380,6 +1514,12 @@ function renderOfferTab() {
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
     '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + ' — check this matches the week you mean; correct it if a reading week or anything else has thrown it off.</p>' +
     '<p class="lede">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
+    '<div class="dayprefs"><div class="dayprefs-head"><b>Teaching day preference</b><span>Tap to cycle Neutral → Preferred → Avoid</span></div>' +
+    '<div class="dayprefs-grid">' + DAYS.map((d, i) => {
+      const v = Number((rnd.dayPreferences && rnd.dayPreferences[i]) || 0);
+      const cls = v === -1 ? " preferred" : v === 1 ? " avoid" : "";
+      return '<button class="daypref' + cls + '" data-action="cycleDayPref" data-day="' + i + '"><strong>' + d + '</strong><span>' + preferenceLabel(v) + '</span></button>';
+    }).join("") + '</div></div>' +
     '<div class="btnrow"><button class="btn" data-action="clearOffer">Clear</button>' +
     '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
     '</div>' +
@@ -1461,15 +1601,33 @@ function renderPreConfirmPlanTab() {
     intro = '<p class="lede">Can’t fit everyone.' + (r.unplaced.length ? " Left out: " + r.unplaced.join(", ") + "." : "") + "</p>";
   }
 
-  const optionsHTML = r.options.map((opt, idx) => {
-    const daysLabel = [...new Set(opt.assign.map(a => a.d))].sort().map(d => DAYS[d]).join(" + ");
+  const visibleOptions = rnd.optionsExpanded ? r.options : r.options.slice(0, 3);
+  const optionsHTML = visibleOptions.map((opt, idx) => {
+    const actualIdx = r.options.indexOf(opt);
+    const dayNums = [...new Set(opt.assign.map(a => a.d))].sort();
+    const daysLabel = dayNums.map(d => DAYS[d]).join(" + ");
     const gapsLabel = opt.gaps === 0 ? "no gaps" : ((opt.gaps * SLOT_MIN) / 60) + "h idle";
+    const prefValues = dayNums.map(d => Number((rnd.dayPreferences && rnd.dayPreferences[d]) || 0));
+    const allPreferred = prefValues.length && prefValues.every(v => v === -1);
+    const hasAvoid = prefValues.some(v => v === 1);
+    const prefText = allPreferred
+      ? '<span class="prefgood">★ Preferred day' + (dayNums.length > 1 ? "s" : "") + '</span>'
+      : hasAvoid
+        ? '<span class="prefavoid">Includes an avoided day</span>'
+        : 'Neutral day preference';
     const lines = opt.assign.slice().sort((a, b) => a.d - b.d || a.start - b.start).map(a =>
       '<div class="line"><span>' + DAYS[a.d] + " " + slotTime(a.start) + "–" + slotTime(a.start + a.lesson) + "</span><span>" + a.name + "</span></div>"
     ).join("");
-    return '<div class="opt' + (idx === rnd.chosen ? " sel" : "") + '" data-action="chooseOption" data-idx="' + idx + '">' +
-      '<div class="opthead"><b>' + daysLabel + "</b><span>" + gapsLabel + "</span></div>" + lines + "</div>";
+    return '<div class="opt' + (actualIdx === rnd.chosen ? " sel" : "") + '" data-action="chooseOption" data-idx="' + actualIdx + '">' +
+      '<div class="opthead"><b>' + daysLabel + "</b><span>" + gapsLabel + "</span></div>" + lines +
+      '<div class="option-reason">' + prefText + ' · ' + opt.days + ' teaching day' + (opt.days === 1 ? "" : "s") + '</div></div>';
   }).join("");
+
+  const moreOptionsHTML = r.options.length > 3
+    ? '<div class="btnrow more-options"><button class="btn" data-action="toggleMoreOptions">' +
+      (rnd.optionsExpanded ? "Show fewer options" : "Show more options (" + (r.options.length - 3) + ")") +
+      "</button></div>"
+    : "";
 
   const alreadyOneDay = r.options.length > 0 && r.options[0].days <= 1;
   const blockersHTML = alreadyOneDay ? "" : '<div class="panel"><h3>If you want it down to one day</h3>' + r.blockers.map(b =>
@@ -1489,7 +1647,7 @@ function renderPreConfirmPlanTab() {
     confirmBtn = '<div class="btnrow"><button class="btn sig" data-action="confirmSchedule">Confirm and log hours</button></div>';
   }
 
-  return '<div class="pad">' + renderWeekPicker() + intro + optionsHTML + blockersHTML + sharePanel + confirmBtn + "</div>";
+  return '<div class="pad">' + renderWeekPicker() + intro + optionsHTML + moreOptionsHTML + blockersHTML + sharePanel + confirmBtn + "</div>";
 }
 
 function renderLivePlanTab() {
@@ -1608,6 +1766,8 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "prevWeek") prevWeek();
   else if (action === "nextWeek") nextWeek();
   else if (action === "goReplies") goReplies();
+  else if (action === "cycleDayPref") cycleDayPreference(Number(el.dataset.day));
+  else if (action === "toggleMoreOptions") toggleMoreOptions();
   else if (action === "toggleSidebar") toggleSidebar();
   else if (action === "saveProfile") saveProfile();
   else if (action === "addStudent") addStudent();

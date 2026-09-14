@@ -12,114 +12,222 @@
   body{
     --ink:#211C17; --ink-soft:#6B6157; --paper:#F2EFE7; --panel:#FFFFFF;
     --rule:#DCD5C6; --sig:#6E1423;
-    --serif: "Source Serif 4", Georgia, serif;
-    font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background:var(--paper); color:var(--ink); min-height:100vh;
+    --serif:"Source Serif 4", Georgia, serif;
+    font-family:"IBM Plex Sans",ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+    overflow-x:hidden;
   }
   *{box-sizing:border-box}
-  .pad{padding:28px 20px;max-width:420px;margin:0 auto}
-  h1{
+
+  .pad{
+    padding:28px 20px;
+    max-width:420px;
+    margin:0 auto;
+  }
+
+  /* Permanent wordmark position. Hidden until the intro mark lands. */
+  #brandWordmark{
     font-family:var(--serif);
     font-size:24px;
-    font-weight:600;
+    font-weight:700;
     margin:0 0 6px;
     color:var(--sig);
-  }
-  #brandWordmark{
     opacity:0;
-    position:relative;
-    z-index:2;
-    will-change:transform,opacity;
   }
+
+  /*
+    Intro wordmark lives in its own fixed overlay, so it is genuinely
+    centred from the first painted frame — no starting from the page's
+    normal heading position and no sideways "fly in".
+  */
+  #brandIntro{
+    position:fixed;
+    inset:0;
+    z-index:100;
+    display:grid;
+    place-items:center;
+    pointer-events:none;
+  }
+  #brandIntroMark{
+    font-family:var(--serif);
+    font-size:clamp(58px,15vw,86px);
+    line-height:1;
+    font-weight:700;
+    letter-spacing:-0.025em;
+    color:var(--sig);
+    white-space:nowrap;
+    transform-origin:center center;
+    will-change:transform,opacity;
+    text-rendering:optimizeLegibility;
+    -webkit-font-smoothing:antialiased;
+  }
+
   .login-content{
     opacity:0;
     transform:translateY(8px);
-    transition:opacity .52s ease, transform .52s cubic-bezier(.22,.72,.16,1);
+    transition:
+      opacity .55s ease,
+      transform .55s cubic-bezier(.22,.72,.16,1);
   }
   .login-content.revealed{
     opacity:1;
     transform:translateY(0);
   }
-  .sub{font-size:14px;color:var(--ink-soft);line-height:1.5;margin:0 0 22px}
-  input{width:100%;font:inherit;font-size:15px;padding:12px 14px;border-radius:7px;
-        border:1px solid var(--rule);background:var(--panel);color:var(--ink);margin-bottom:12px}
-  .btn{width:100%;font:inherit;font-size:15px;padding:13px;border-radius:7px;border:1px solid var(--sig);
-       background:var(--sig);color:#fff;font-weight:600;cursor:pointer}
-  .btn:disabled{opacity:.5;cursor:default}
-  .linkbox{margin-top:20px;padding:14px;border-radius:7px;border:1px solid var(--rule);background:var(--panel);
-           font-size:14px;line-height:1.5}
-  .linkbox a{color:var(--sig);font-weight:600;word-break:break-all}
-  .err{color:#96591A;font-size:13px;margin:-6px 0 12px}
 
-  @media (prefers-reduced-motion: reduce){
-    #brandWordmark{opacity:1!important;transform:none!important;transition:none!important}
-    .login-content{opacity:1!important;transform:none!important;transition:none!important}
+  .sub{
+    font-size:14px;
+    color:var(--ink-soft);
+    line-height:1.5;
+    margin:0 0 22px;
+  }
+  input{
+    width:100%;
+    font:inherit;
+    font-size:15px;
+    padding:12px 14px;
+    border-radius:7px;
+    border:1px solid var(--rule);
+    background:var(--panel);
+    color:var(--ink);
+    margin-bottom:12px;
+  }
+  .btn{
+    width:100%;
+    font:inherit;
+    font-size:15px;
+    padding:13px;
+    border-radius:7px;
+    border:1px solid var(--sig);
+    background:var(--sig);
+    color:#fff;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .btn:disabled{opacity:.5;cursor:default}
+  .linkbox{
+    margin-top:20px;
+    padding:14px;
+    border-radius:7px;
+    border:1px solid var(--rule);
+    background:var(--panel);
+    font-size:14px;
+    line-height:1.5;
+  }
+  .linkbox a{
+    color:var(--sig);
+    font-weight:600;
+    word-break:break-all;
+  }
+  .err{
+    color:#96591A;
+    font-size:13px;
+    margin:-6px 0 12px;
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    #brandIntro{display:none}
+    #brandWordmark{opacity:1}
+    .login-content{
+      opacity:1;
+      transform:none;
+      transition:none;
+    }
   }
 </style>
 </head>
 <body>
+
+<div id="brandIntro" aria-hidden="true">
+  <div id="brandIntroMark">Cadence</div>
+</div>
+
 <div class="pad">
   <h1 id="brandWordmark">Cadence</h1>
+
   <div id="loginContent" class="login-content">
     <p class="sub">Enter your email and we'll give you a link to log in — no password needed.</p>
+
     <div id="err"></div>
+
     <form id="loginForm">
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required>
       <button class="btn" id="go" type="submit">Send my link</button>
     </form>
+
     <div id="result"></div>
   </div>
 </div>
+
 <script>
 async function playCadenceIntro() {
-  const brand = document.getElementById("brandWordmark");
+  const overlay = document.getElementById("brandIntro");
+  const introMark = document.getElementById("brandIntroMark");
+  const finalMark = document.getElementById("brandWordmark");
   const content = document.getElementById("loginContent");
-  if (!brand || !content) return;
 
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    brand.style.opacity = "1";
+  if (!overlay || !introMark || !finalMark || !content) return;
+
+  if (window.matchMedia("(prefers-reduced-motion:reduce)").matches) {
+    finalMark.style.opacity = "1";
     content.classList.add("revealed");
     return;
   }
 
+  // Wait for the real display font before measuring either wordmark.
+  // That keeps the landing point exact and avoids a typeface swap mid-animation.
   try {
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
   } catch (e) {}
 
-  // Measure the wordmark exactly where it will finally live, then use a
-  // transform to place that same element in the centre of the viewport.
-  // This keeps the animation responsive without any hard-coded coordinates.
-  const rect = brand.getBoundingClientRect();
-  const finalX = rect.left + rect.width / 2;
-  const finalY = rect.top + rect.height / 2;
-  const dx = window.innerWidth / 2 - finalX;
-  const dy = window.innerHeight / 2 - finalY;
-  const scale = Math.min(2.45, Math.max(2.05, window.innerWidth / 180));
+  // Hold the large centred wordmark in place long enough to read as
+  // an intentional splash rather than the beginning of a transition.
+  await new Promise(resolve => setTimeout(resolve, 1500));
 
-  brand.style.transformOrigin = "center center";
-  brand.style.transform = "translate(" + dx + "px," + dy + "px) scale(" + scale + ")";
-  brand.style.opacity = "1";
+  const from = introMark.getBoundingClientRect();
+  const to = finalMark.getBoundingClientRect();
 
-  // Let the centred Cadence mark register before it retreats.
-  await new Promise(resolve => setTimeout(resolve, 650));
+  const fromCX = from.left + from.width / 2;
+  const fromCY = from.top + from.height / 2;
+  const toCX = to.left + to.width / 2;
+  const toCY = to.top + to.height / 2;
 
-  brand.style.transition = "transform .9s cubic-bezier(.22,.72,.16,1)";
-  brand.style.transform = "translate(0,0) scale(1)";
+  const dx = toCX - fromCX;
+  const dy = toCY - fromCY;
 
-  await new Promise(resolve => {
-    let finished = false;
-    const done = () => {
-      if (finished) return;
-      finished = true;
-      brand.removeEventListener("transitionend", done);
-      resolve();
-    };
-    brand.addEventListener("transitionend", done, { once:true });
-    setTimeout(done, 980);
-  });
+  // Scale based on the actual rendered word widths, so the intro mark
+  // lands at exactly the same apparent size as the permanent heading.
+  const scale = to.width / from.width;
 
-  // A tiny beat after the wordmark has landed, then reveal the login UI.
-  await new Promise(resolve => setTimeout(resolve, 130));
+  const animation = introMark.animate(
+    [
+      {
+        transform:"translate(0px,0px) scale(1)",
+        opacity:1
+      },
+      {
+        transform:"translate(" + dx + "px," + dy + "px) scale(" + scale + ")",
+        opacity:1
+      }
+    ],
+    {
+      duration:950,
+      easing:"cubic-bezier(.22,.72,.16,1)",
+      fill:"forwards"
+    }
+  );
+
+  try {
+    await animation.finished;
+  } catch (e) {}
+
+  // Swap the travelling mark for the real heading at the exact endpoint.
+  finalMark.style.opacity = "1";
+  overlay.style.display = "none";
+
+  // Then let the rest of the interface arrive.
+  await new Promise(resolve => setTimeout(resolve, 120));
   content.classList.add("revealed");
 }
 
@@ -127,30 +235,47 @@ playCadenceIntro();
 
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+
   const email = document.getElementById("email").value.trim();
   const errEl = document.getElementById("err");
   const resultEl = document.getElementById("result");
   const btn = document.getElementById("go");
+
   errEl.innerHTML = "";
   resultEl.innerHTML = "";
-  if (!email || !email.includes("@")) { errEl.innerHTML = '<p class="err">Enter a valid email.</p>'; return; }
-  btn.disabled = true; btn.textContent = "Sending…";
+
+  if (!email || !email.includes("@")) {
+    errEl.innerHTML = '<p class="err">Enter a valid email.</p>';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+
   try {
     const res = await fetch("/api/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email }),
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({email})
     });
+
     const data = await res.json();
-    if (!res.ok) { errEl.innerHTML = '<p class="err">' + (data.error || "Something went wrong.") + "</p>"; }
-    else {
-      resultEl.innerHTML = '<div class="linkbox">Email sending isn\u2019t set up yet, so here\u2019s your link directly \u2014 tap it to continue:<br><br><a href="' + data.link + '">' + data.link + "</a></div>";
+
+    if (!res.ok) {
+      errEl.innerHTML = '<p class="err">' + (data.error || "Something went wrong.") + "</p>";
+    } else {
+      resultEl.innerHTML =
+        '<div class="linkbox">Email sending isn\u2019t set up yet, so here\u2019s your link directly \u2014 tap it to continue:<br><br>' +
+        '<a href="' + data.link + '">' + data.link + "</a></div>";
     }
   } catch (e) {
     errEl.innerHTML = '<p class="err">Couldn\u2019t reach the server \u2014 check your connection.</p>';
   }
-  btn.disabled = false; btn.textContent = "Send my link";
+
+  btn.disabled = false;
+  btn.textContent = "Send my link";
 });
 </script>
+
 </body>
 </html>

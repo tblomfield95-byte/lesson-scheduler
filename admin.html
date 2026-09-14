@@ -796,7 +796,7 @@ S.rounds["1"] = blankRound(DEFAULT_TERM_RANGES[0].start);
 
 function ensureRound(weekNo) {
   const k = String(weekNo);
-  if (S.rounds[k]) return S.rounds[k];
+  if (S.rounds[k]) return syncRoundShape(S.rounds[k]);
   let fromWeek = 1;
   let fromStart = S.termRanges[0].start;
   for (let w = weekNo - 1; w >= 1; w--) {
@@ -805,7 +805,21 @@ function ensureRound(weekNo) {
   let cur = fromStart;
   for (let w = fromWeek; w < weekNo; w++) cur = nextWeekStart(cur);
   S.rounds[k] = blankRound(cur);
-  return S.rounds[k];
+  return syncRoundShape(S.rounds[k]);
+}
+// A round that's still completely blank — no offered blocks, not marked
+// not-teaching, no replies, no plan — keeps mirroring whatever Settings
+// currently says, every single time it's touched, including just being
+// glanced at while stepping through the picker. Only the moment it's
+// actually used does its shape freeze, at whatever was true right then.
+function syncRoundShape(rnd) {
+  const untouched = rnd.offered.size === 0 && !rnd.notTeaching && !rnd.plan && Object.keys(rnd.replies).length === 0;
+  if (untouched) {
+    rnd.includeWeekends = S.settings.includeWeekends;
+    rnd.dayStartHour = S.settings.dayStartHour;
+    rnd.dayEndHour = S.settings.dayEndHour;
+  }
+  return rnd;
 }
 function activeRound() { return ensureRound(S.week); }
 const lessonFor = (rnd, id) => (rnd.replies[id] && rnd.replies[id].lesson) || 2;
@@ -1325,12 +1339,22 @@ function toggleWeekendSetting() {
   settingsDraft.includeWeekends = !settingsDraft.includeWeekends;
   render();
 }
+function adjustSettingsHour(which, delta) {
+  const key = which === "start" ? "dayStartHour" : "dayEndHour";
+  const other = which === "start" ? settingsDraft.dayEndHour : settingsDraft.dayStartHour;
+  let next = Number(settingsDraft[key]) + delta;
+  next = Math.max(6, Math.min(22, next));
+  if (which === "start" && next >= other) return;
+  if (which === "end" && next <= other) return;
+  settingsDraft[key] = next;
+  render();
+}
 function saveSettings() {
   const start = Number(settingsDraft.dayStartHour);
   const end = Number(settingsDraft.dayEndHour);
   if (!(end > start)) { flash("End time must be after start time"); return; }
   S.settings = { includeWeekends: !!settingsDraft.includeWeekends, dayStartHour: start, dayEndHour: end };
-  flash("Settings updated — applies to weeks you paint from now on");
+  flash("Settings updated — applies to weeks that are still completely blank");
   render();
 }
 
@@ -1567,20 +1591,22 @@ function renderTermDatesSection() {
 
 function renderSettingsSection() {
   const d = settingsDraft;
-  const hourOptions = (selected) => {
-    let opts = "";
-    for (let h = 6; h <= 22; h++) {
-      opts += '<option value="' + h + '"' + (h === Number(selected) ? " selected" : "") + '>' + String(h).padStart(2, "0") + ":00</option>";
-    }
-    return opts;
-  };
+  const hourLabel = (h) => String(h).padStart(2, "0") + ":00";
   return '<div class="pad">' +
-    '<p class="lede">These shape the grid on the Offer tab. They only apply to weeks you haven\u2019t painted yet \u2014 a week that already has blocks on it keeps the shape it was created with, so nothing already there silently moves.</p>' +
+    '<p class="lede">These shape the grid on the Offer tab. They only apply to weeks that are still completely blank \u2014 the moment you paint a block or mark a week as not teaching, that week\u2019s shape locks in for good, even if you change these again later.</p>' +
     '<div class="field"><label>Weekends</label>' +
     '<button class="btn' + (d.includeWeekends ? " notteaching-active" : "") + '" style="width:100%" data-action="toggleWeekendSetting">' +
     (d.includeWeekends ? "Weekends included \u2014 tap to go back to weekdays only" : "Weekdays only \u2014 tap to include Saturday and Sunday") + '</button></div>' +
-    '<div class="field"><label>Grid starts at</label><select data-bind="settingsStartHour">' + hourOptions(d.dayStartHour) + '</select></div>' +
-    '<div class="field"><label>Grid ends at</label><select data-bind="settingsEndHour">' + hourOptions(d.dayEndHour) + '</select></div>' +
+    '<div class="field"><label>Grid starts at</label><div class="stepper">' +
+    '<button class="step" data-action="adjustSettingsHour" data-which="start" data-delta="-1" ' + (d.dayStartHour <= 6 ? "disabled" : "") + '>\u2013</button>' +
+    "<b>" + hourLabel(d.dayStartHour) + "</b>" +
+    '<button class="step" data-action="adjustSettingsHour" data-which="start" data-delta="1" ' + (d.dayStartHour >= d.dayEndHour - 1 ? "disabled" : "") + '>+</button>' +
+    "</div></div>" +
+    '<div class="field"><label>Grid ends at</label><div class="stepper">' +
+    '<button class="step" data-action="adjustSettingsHour" data-which="end" data-delta="-1" ' + (d.dayEndHour <= d.dayStartHour + 1 ? "disabled" : "") + '>\u2013</button>' +
+    "<b>" + hourLabel(d.dayEndHour) + "</b>" +
+    '<button class="step" data-action="adjustSettingsHour" data-which="end" data-delta="1" ' + (d.dayEndHour >= 22 ? "disabled" : "") + '>+</button>' +
+    "</div></div>" +
     '<div class="btnrow"><button class="btn sig" data-action="saveSettings">Save changes</button></div>' +
     "</div>";
 }
@@ -1914,6 +1940,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "removeStudent") removeStudent(id);
   else if (action === "saveTermDates") saveTermDates();
   else if (action === "toggleWeekendSetting") toggleWeekendSetting();
+  else if (action === "adjustSettingsHour") adjustSettingsHour(el.dataset.which, Number(el.dataset.delta));
   else if (action === "saveSettings") saveSettings();
   else if (action === "sampleReplies") sampleReplies();
   else if (action === "toggleStudentOpen") {
@@ -2004,8 +2031,6 @@ document.getElementById("app").addEventListener("change", (e) => {
   else if (bind === "termCount") { setTermCount(parseInt(el.value, 10)); }
   else if (bind === "termStart") { termDraft.ranges[Number(el.dataset.idx)].start = el.value; }
   else if (bind === "termEnd") { termDraft.ranges[Number(el.dataset.idx)].end = el.value; }
-  else if (bind === "settingsStartHour") { settingsDraft.dayStartHour = Number(el.value); }
-  else if (bind === "settingsEndHour") { settingsDraft.dayEndHour = Number(el.value); }
 });
 
 /* ================================================================== */

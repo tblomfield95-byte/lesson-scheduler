@@ -186,16 +186,16 @@
   </h1>
 
   <div id="loginContent" class="login-content">
-    <p class="sub">Enter your email and we'll give you a link to log in — no password needed.</p>
+    <p class="sub">Enter your email and we'll email you a link to log in — no password needed.</p>
 
-    <div id="err"></div>
+    <div id="err" role="alert"></div>
 
     <form id="loginForm">
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required>
       <button class="btn" id="go" type="submit">Send my link</button>
     </form>
 
-    <div id="result"></div>
+    <div id="result" role="status" aria-live="polite"></div>
   </div>
 </div>
 
@@ -327,11 +327,16 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     const data = await res.json();
 
     if (!res.ok) {
-      errEl.innerHTML = '<p class="err">' + (data.error || "Something went wrong.") + "</p>";
+      const message = document.createElement("p");
+      message.className = "err";
+      message.textContent = data.error || "Something went wrong. Please try again.";
+      errEl.replaceChildren(message);
     } else {
-      resultEl.innerHTML =
-        '<div class="linkbox">Email sending isn\u2019t set up yet, so here\u2019s your link directly \u2014 tap it to continue:<br><br>' +
-        '<a href="' + data.link + '">' + data.link + "</a></div>";
+      const message = document.createElement("div");
+      message.className = "linkbox";
+      message.textContent = "Check your inbox — we've sent a login link to " + email +
+        ". It expires in 15 minutes. If it doesn't arrive, check your junk folder. You can request another link after a minute.";
+      resultEl.replaceChildren(message);
     }
   } catch (e) {
     errEl.innerHTML = '<p class="err">Couldn\u2019t reach the server \u2014 check your connection.</p>';

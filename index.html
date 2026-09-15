@@ -468,6 +468,7 @@ async function playCadenceIntro() {
     { duration: 1000, easing: "cubic-bezier(.42,0,.18,1)", fill: "forwards" }
   );
   try { await animation.finished; } catch (e) {}
+  animation.cancel();
 
   // Lock the mark into a plain, resize-invariant resting position rather
   // than leaving it as a frozen top + transform combination. `top` is

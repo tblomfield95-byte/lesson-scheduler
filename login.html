@@ -10,9 +10,13 @@
 <style>
   html,body{margin:0;padding:0}
   body{
-    --ink:#211C17; --ink-soft:#6B6157; --paper:#F2EFE7; --panel:#FFFFFF;
-    --rule:#DCD5C6; --sig:#6E1423;
-    --serif:"Source Serif 4", Georgia, serif;
+    --ink:#211C17;
+    --ink-soft:#6B6157;
+    --paper:#F2EFE7;
+    --panel:#FFFFFF;
+    --rule:#DCD5C6;
+    --sig:#6E1423;
+    --serif:"Source Serif 4",Georgia,serif;
     font-family:"IBM Plex Sans",ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
     background:var(--paper);
     color:var(--ink);
@@ -27,8 +31,6 @@
     margin:0 auto;
   }
 
-  /* Permanent resting wordmark. Its metrics are deliberately identical
-     to the travelling wordmark apart from font size. */
   #brandWordmark{
     font-family:var(--serif);
     font-size:24px;
@@ -43,7 +45,6 @@
     -webkit-font-smoothing:antialiased;
   }
 
-  /* Full-screen intro layer. */
   #brandIntro{
     position:fixed;
     inset:0;
@@ -51,24 +52,19 @@
     pointer-events:none;
   }
 
-  /* The travelling mark itself is absolutely centred at rest, then FLIP
-     transformed to the exact final heading rectangle. */
   #brandIntroMark{
-    position:absolute;
-    left:50%;
-    top:50%;
-    transform:translate(-50%,-50%);
-    transform-origin:top left;
+    position:fixed;
+    margin:0;
+    padding:0;
     font-family:var(--serif);
-    font-size:clamp(58px,15vw,86px);
     line-height:1;
     font-weight:700;
     letter-spacing:-0.025em;
     color:var(--sig);
     white-space:nowrap;
-    will-change:transform;
     text-rendering:optimizeLegibility;
     -webkit-font-smoothing:antialiased;
+    will-change:left,top,font-size;
   }
 
   .login-content{
@@ -89,6 +85,7 @@
     line-height:1.5;
     margin:0 0 22px;
   }
+
   input{
     width:100%;
     font:inherit;
@@ -100,6 +97,7 @@
     color:var(--ink);
     margin-bottom:12px;
   }
+
   .btn{
     width:100%;
     font:inherit;
@@ -112,7 +110,9 @@
     font-weight:600;
     cursor:pointer;
   }
+
   .btn:disabled{opacity:.5;cursor:default}
+
   .linkbox{
     margin-top:20px;
     padding:14px;
@@ -122,11 +122,13 @@
     font-size:14px;
     line-height:1.5;
   }
+
   .linkbox a{
     color:var(--sig);
     font-weight:600;
     word-break:break-all;
   }
+
   .err{
     color:#96591A;
     font-size:13px;
@@ -170,11 +172,11 @@
 <script>
 async function playCadenceIntro() {
   const overlay = document.getElementById("brandIntro");
-  const introMark = document.getElementById("brandIntroMark");
+  const intro = document.getElementById("brandIntroMark");
   const finalMark = document.getElementById("brandWordmark");
   const content = document.getElementById("loginContent");
 
-  if (!overlay || !introMark || !finalMark || !content) return;
+  if (!overlay || !intro || !finalMark || !content) return;
 
   if (window.matchMedia("(prefers-reduced-motion:reduce)").matches) {
     finalMark.style.opacity = "1";
@@ -182,40 +184,56 @@ async function playCadenceIntro() {
     return;
   }
 
-  // Ensure both measurements use the final webfont, avoiding any typeface
-  // swap while the wordmark is moving.
   try {
-    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
   } catch (e) {}
 
-  // Let the centred mark sit as a deliberate splash screen.
-  await new Promise(resolve => setTimeout(resolve, 1600));
-
-  const from = introMark.getBoundingClientRect();
-  const to = finalMark.getBoundingClientRect();
-
   /*
-    CSS currently includes translate(-50%,-50%) to centre the mark.
-    We animate from that exact computed position to a matrix based on the
-    two measured rectangles. Using top-left geometry rather than centres
-    guarantees the travelling wordmark finishes at the exact resting point.
-  */
-  const dx = to.left - from.left;
-  const dy = to.top - from.top;
-  const scale = to.width / from.width;
+    No transform is used anywhere in the wordmark animation.
 
-  const animation = introMark.animate(
+    1. Give the travelling mark its large starting font size.
+    2. Measure its real rendered width/height.
+    3. Position it with literal pixel left/top values so it starts exactly centred.
+    4. Measure the hidden permanent heading.
+    5. Animate left, top and font-size directly to those final values.
+  */
+  const startSize = Math.min(86, Math.max(64, window.innerWidth * 0.16));
+  intro.style.fontSize = startSize + "px";
+
+  // Force layout now that the font size is known.
+  let introRect = intro.getBoundingClientRect();
+
+  const startLeft = (window.innerWidth - introRect.width) / 2;
+  const startTop = (window.innerHeight - introRect.height) / 2;
+
+  intro.style.left = startLeft + "px";
+  intro.style.top = startTop + "px";
+
+  // Read once more after applying the exact centred pixel position.
+  introRect = intro.getBoundingClientRect();
+  const finalRect = finalMark.getBoundingClientRect();
+  const finalFontSize = parseFloat(getComputedStyle(finalMark).fontSize);
+
+  // Deliberate splash hold.
+  await new Promise(resolve => setTimeout(resolve, 1700));
+
+  const animation = intro.animate(
     [
       {
-        transform:"translate(-50%,-50%) scale(1)"
+        left:introRect.left + "px",
+        top:introRect.top + "px",
+        fontSize:startSize + "px"
       },
       {
-        transform:
-          "translate(calc(-50% + " + dx + "px), calc(-50% + " + dy + "px)) scale(" + scale + ")"
+        left:finalRect.left + "px",
+        top:finalRect.top + "px",
+        fontSize:finalFontSize + "px"
       }
     ],
     {
-      duration:950,
+      duration:1000,
       easing:"cubic-bezier(.22,.72,.16,1)",
       fill:"forwards"
     }
@@ -226,19 +244,24 @@ async function playCadenceIntro() {
   } catch (e) {}
 
   /*
-    At this point the travelling mark and permanent mark occupy the same
-    rectangle. Reveal the real heading underneath first, then remove the
-    overlay on the next paint. There is therefore no visible jump.
+    Lock the travelling mark to the final pixel values before swapping.
+    This avoids a final-frame interpolation discrepancy in WebKit.
   */
+  intro.style.left = finalRect.left + "px";
+  intro.style.top = finalRect.top + "px";
+  intro.style.fontSize = finalFontSize + "px";
+
+  // Reveal the real heading underneath at the identical position/size.
   finalMark.style.opacity = "1";
 
+  // Give Safari one complete paint with both marks coincident.
   await new Promise(resolve => requestAnimationFrame(() => {
     requestAnimationFrame(resolve);
   }));
 
   overlay.style.display = "none";
 
-  // Only after the wordmark has fully settled does the login UI appear.
+  // Form arrives only after the wordmark is fully at rest.
   await new Promise(resolve => setTimeout(resolve, 140));
   content.classList.add("revealed");
 }

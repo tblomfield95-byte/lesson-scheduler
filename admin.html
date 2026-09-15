@@ -2180,3 +2180,11 @@ document.getElementById("sidebarPanel").addEventListener("click", (e) => {
 
   const btn = e.target.closest("[data-section]");
   if (btn) goSection(btn.dataset.section);
+});
+syncSidebarDOM();
+
+render();
+Promise.all([loadState(), loadMe()]).then(render);
+</script>
+</body>
+</html>

@@ -127,7 +127,7 @@ async function handleLoginRequest(request, env, url) {
 }
 
 async function handleVerify(request, url, env) {
-  const headers = {"cache-control":"no-store", "referrer-policy":"no-referrer", "content-type":"text/html; charset=utf-8",
+  const headers = {"cache-control":"no-store", "referrer-policy":"strict-origin", "content-type":"text/html; charset=utf-8",
     "content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"};
   const page = (body, status = 200) => new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Log in — Cadence.</title><body style="background:#F2EFE7;color:#211C17;font:16px Arial,sans-serif;margin:0;padding:48px 24px"><main style="max-width:420px;margin:auto"><h1 style="font-family:Georgia,serif;color:#6E1423">Cadence.</h1>' + body + '</main></body></html>',{status,headers});
   let token = url.searchParams.get("token");

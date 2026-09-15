@@ -20,7 +20,7 @@
   }
   *{box-sizing:border-box}
   body{overflow-x:hidden}
-  #app{opacity:0;transition:opacity .45s ease;transform:translateZ(0);-webkit-transform:translateZ(0);will-change:transform}
+  #app{opacity:0;transition:opacity .45s ease}
   #app.revealed{opacity:1}
   .brand-mark{flex:none;width:0.78em;height:0.78em;transform:translateY(0.035em)}
   #brandIntro{position:fixed;inset:0;z-index:100;pointer-events:none}
@@ -38,9 +38,6 @@
     padding:12px 0 14px;
     background:linear-gradient(to top, var(--paper) 55%, transparent);
     opacity:0;transition:opacity .4s ease;pointer-events:none;
-    transform:translateZ(0);
-    -webkit-transform:translateZ(0);
-    will-change:transform;
   }
   #brandFooterInner{
     display:flex;align-items:center;justify-content:center;gap:0.14em;
@@ -465,6 +462,13 @@ async function playCadenceIntro() {
   const dy = (window.innerHeight / 2) - (introRect.top + introRect.height / 2);
   const startColor = getComputedStyle(intro).color;
 
+  // Apply the starting visual state synchronously, in the same tick as the
+  // layout properties above — otherwise the browser paints the in-between
+  // state (small, sitting at the final footer position) during the delay
+  // below, which is exactly the flash-then-jump this fixes.
+  intro.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+  intro.style.color = startColor;
+
   await new Promise(r => setTimeout(r, 700));
 
   const animation = intro.animate(
@@ -479,13 +483,20 @@ async function playCadenceIntro() {
   intro.style.transform = "translate(0px, 0px) scale(1)";
   intro.style.color = finalColor;
 
-  footer.classList.add("revealed");
-
+  // Give Safari one complete paint with both marks coincident and the
+  // footer still fully transparent, so the fade below actually animates
+  // rather than jumping straight to its end state.
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  footer.classList.add("revealed");
   app.classList.add("revealed");
 
-  // Fully remove the overlay (rather than hiding it) so nothing from the
-  // animation lingers in a compositing layer for the rest of the page.
+  // Wait for the footer's own opacity fade (.4s, in CSS) to fully finish
+  // before removing the travelling mark — removing it any earlier leaves
+  // a visible gap where neither the mark nor the fully-opaque footer is
+  // showing yet.
+  await new Promise(r => setTimeout(r, 420));
+
   overlay.remove();
 }
 

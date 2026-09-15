@@ -2,6 +2,10 @@ name = "lesson-scheduler"
 main = "worker.js"
 compatibility_date = "2026-09-01"
 
+[vars]
+EMAIL_FROM = "Cadence <login@cadenceplanner.co.uk>"
+APP_ORIGIN = "https://cadenceplanner.co.uk"
+
 [assets]
 directory = "."
 binding = "ASSETS"

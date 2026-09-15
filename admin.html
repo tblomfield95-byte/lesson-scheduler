@@ -597,6 +597,7 @@ const DEFAULT_PRIORITY_ORDER = ["days", "preference", "gaps"];
 // same way any "not teaching" week does, by being marked, not by a
 // separate deduction baked into a constant.
 function termWeeks() {
+  if (S.settings && S.settings.schedulingMode === "rolling") return 999;
   let total = 0;
   (S.termRanges || []).forEach(t => {
     if (!t.start || !t.end) return;
@@ -620,6 +621,7 @@ function isoParts(iso) {
 function nextWeekStart(iso) {
   const { y, m, d } = isoParts(iso);
   const naiveISO = new Date(Date.UTC(y, m - 1, d + 7)).toISOString().slice(0, 10);
+  if (S.settings && S.settings.schedulingMode === "rolling") return naiveISO;
   const term = (S.termRanges || []).find(t => iso >= t.start && iso <= t.end);
   if (!term) return naiveISO; // outside any known term — just roll forward
   if (naiveISO > term.end) {
@@ -920,6 +922,7 @@ function blankRound(weekStart) {
     chosen: 0,
     notTeaching: false,
     sent: false,
+    note: "",
     dayPreferences: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
     optionsExpanded: false,
     includeWeekends: S.settings.includeWeekends,
@@ -933,13 +936,15 @@ let S = {
   week: 1,
   weeksCompleted: 0,
   termRanges: DEFAULT_TERM_RANGES.map(r => ({ ...r })),
-  settings: { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice() },
+  settings: { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice(), schedulingMode: "terms", cancellationWindowHours: 24 },
   rounds: {},
   students: [],
   openStudent: null,
   log: [],
   openHours: null,
   hoursSort: "first",
+  hoursExportTimeframe: "week",
+  hoursExportText: "",
   draft: { date: todayISO(), hours: 1 },
   fallbackText: "",
   imgUrl: "",
@@ -950,7 +955,7 @@ function ensureRound(weekNo) {
   const k = String(weekNo);
   if (S.rounds[k]) return syncRoundShape(S.rounds[k]);
   let fromWeek = 1;
-  let fromStart = S.termRanges[0].start;
+  let fromStart = (S.termRanges && S.termRanges[0]) ? S.termRanges[0].start : todayISO();
   for (let w = weekNo - 1; w >= 1; w--) {
     if (S.rounds[String(w)]) { fromWeek = w; fromStart = S.rounds[String(w)].weekStart; break; }
   }
@@ -1000,6 +1005,7 @@ function serializeState() {
       chosen: rr.chosen,
       notTeaching: !!rr.notTeaching,
       sent: !!rr.sent,
+      note: rr.note || "",
       dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
       includeWeekends: !!rr.includeWeekends,
       dayStartHour: rr.dayStartHour,
@@ -1025,11 +1031,18 @@ function applySavedState(saved) {
   S.tab = saved.tab || S.tab;
   S.week = saved.week || S.week;
   S.weeksCompleted = saved.weeksCompleted || 0;
-  S.termRanges = (saved.termRanges && saved.termRanges.length) ? saved.termRanges : S.termRanges;
+  S.termRanges = Array.isArray(saved.termRanges) ? saved.termRanges : S.termRanges;
   S.settings = saved.settings || S.settings;
   if (!S.settings.priorityOrder || !S.settings.priorityOrder.length) {
     S.settings.priorityOrder = DEFAULT_PRIORITY_ORDER.slice();
   }
+  if (S.settings.schedulingMode !== "rolling") {
+    // Infer rolling mode for accounts whose onboarding sent an empty
+    // termRanges array but predates the schedulingMode field itself —
+    // an explicit "no terms" signal should still be honoured.
+    S.settings.schedulingMode = S.termRanges.length === 0 ? "rolling" : "terms";
+  }
+  if (!S.settings.cancellationWindowHours) S.settings.cancellationWindowHours = 24;
   S.students = saved.students || S.students;
   S.log = saved.log || [];
   S.hoursSort = saved.hoursSort || "first";
@@ -1101,6 +1114,54 @@ const dayDateLong = (weekStartISO, d) => {
   return base.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 };
 const fmtDateShort = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+// Timeframe is always resolved relative to the currently active week
+// (S.week), not "today" — so exporting still makes sense if you're
+// looking back at an earlier week's hours.
+function computeExportRange(timeframe) {
+  const rnd = activeRound();
+  const ref = rnd.weekStart || todayISO();
+  const { y, m, d } = isoParts(ref);
+  if (timeframe === "month") {
+    const start = new Date(Date.UTC(y, m - 1, 1)).toISOString().slice(0, 10);
+    const end = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+    const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+    return { start, end, label };
+  }
+  if (timeframe === "term") {
+    const term = (S.termRanges || []).find(t => ref >= t.start && ref <= t.end);
+    if (term) return { start: term.start, end: term.end, label: "term (" + fmtDateShort(term.start) + "\u2013" + fmtDateShort(term.end) + ")" };
+    return { start: "0000-01-01", end: "9999-12-31", label: "all logged hours" };
+  }
+  if (timeframe === "year") {
+    return { start: y + "-01-01", end: y + "-12-31", label: String(y) };
+  }
+  // week
+  const end = new Date(Date.UTC(y, m - 1, d + 6)).toISOString().slice(0, 10);
+  return { start: ref, end, label: "week beginning " + fmtDateShort(ref) };
+}
+
+function buildHoursExportText(timeframe) {
+  const range = computeExportRange(timeframe);
+  const lines = [(ME.instrument ? ME.instrument + " hours" : "Hours") + " \u2014 " + range.label];
+  let total = 0;
+  S.students.forEach(s => {
+    const h = S.log
+      .filter(e => e.studentId === s.id && e.date >= range.start && e.date <= range.end)
+      .reduce((sum, e) => sum + e.hours, 0);
+    if (h > 0) { lines.push(s.name + ": " + h + "h"); total += h; }
+  });
+  if (lines.length === 1) lines.push("Nothing logged in this period.");
+  else { lines.push(""); lines.push("Total: " + total + "h"); }
+  return lines.join("\n");
+}
+
+async function exportHours() {
+  const text = buildHoursExportText(S.hoursExportTimeframe || "week");
+  try { await navigator.clipboard.writeText(text); S.hoursExportText = ""; flash("Copied hours summary"); }
+  catch (e) { S.hoursExportText = text; }
+  render();
+}
 
 /* ================================================================== */
 /*  Toast                                                              */
@@ -1213,10 +1274,11 @@ function toggleMoreOptions() {
   }
 }
 
-function buildShareText(assign, weekNoLabel, weekStartISO, startHour) {
+function buildShareText(assign, weekNoLabel, weekStartISO, startHour, note) {
   const by = groupByDay(assign);
   const heading = (ME.instrument ? ME.instrument + " lessons" : "Lessons") + " — week " + weekNoLabel;
   let out = heading;
+  if (note) out += "\n" + note;
   Object.keys(by).sort().forEach(d => {
     out += "\n\n" + dayDateLong(weekStartISO, +d) + "\n";
     by[d].forEach(a => { out += slotTimeFor(startHour, a.start) + "–" + slotTimeFor(startHour, a.start + a.lesson) + "  " + a.name.split(" ")[0] + "\n"; });
@@ -1224,18 +1286,19 @@ function buildShareText(assign, weekNoLabel, weekStartISO, startHour) {
   return out.trim();
 }
 
-async function doCopy(assign, weekNoLabel, weekStartISO, startHour) {
-  const t = buildShareText(assign, weekNoLabel, weekStartISO, startHour);
+async function doCopy(assign, weekNoLabel, weekStartISO, startHour, note) {
+  const t = buildShareText(assign, weekNoLabel, weekStartISO, startHour, note);
   try { await navigator.clipboard.writeText(t); S.fallbackText = ""; flash("Copied — paste into WhatsApp"); }
   catch (e) { S.fallbackText = t; }
   render();
 }
 
-async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startHour) {
+async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startHour, note) {
   const by = groupByDay(assign);
   const days = Object.keys(by).sort();
   const rows = assign.length;
-  const W = 1000, H = 210 + days.length * 96 + rows * 78 + 110;
+  const noteLines = note ? 1 : 0;
+  const W = 1000, H = 210 + days.length * 96 + rows * 78 + 110 + noteLines * 44;
   const c = document.createElement("canvas");
   c.width = W; c.height = H;
   const x = c.getContext("2d");
@@ -1246,9 +1309,14 @@ async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startH
   x.fillStyle = "#6E1423"; x.fillRect(0, 0, W, 12);
   x.fillStyle = "#211C17"; x.font = "640 46px " + FONT; x.fillText(heading, 64, 108);
   x.fillStyle = "#6B6157"; x.font = "400 28px " + FONT;
-  x.fillText((ME.name ? ME.name + " · " : "") + "Week " + weekNoLabel + " of " + termWeeks(), 64, 152);
+  const weekLine = S.settings.schedulingMode === "rolling" ? "Week " + weekNoLabel : "Week " + weekNoLabel + " of " + termWeeks();
+  x.fillText((ME.name ? ME.name + " · " : "") + weekLine, 64, 152);
+  if (note) {
+    x.fillStyle = "#6E1423"; x.font = "600 26px " + FONT;
+    x.fillText(note, 64, 192);
+  }
 
-  let y = 240;
+  let y = 240 + noteLines * 44;
   days.forEach(d => {
     x.fillStyle = "#6E1423"; x.font = "620 32px " + FONT;
     x.fillText(dayDateLong(weekStartISO, +d), 64, y); y += 46;
@@ -1512,7 +1580,7 @@ function saveEditEntry(id) {
 
 function resetYear() {
   S.log = []; S.week = 1; S.weeksCompleted = 0;
-  S.rounds = { "1": blankRound(S.termRanges[0].start) };
+  S.rounds = { "1": blankRound((S.termRanges && S.termRanges[0]) ? S.termRanges[0].start : todayISO()) };
   S.openHours = null;
   flash("Year reset");
   render();
@@ -1563,6 +1631,13 @@ function saveTermDates() {
   flash("Term dates updated");
   render();
 }
+function switchToTermsFromTermDates() {
+  S.settings = { ...S.settings, schedulingMode: "terms" };
+  if (!S.termRanges || !S.termRanges.length) S.termRanges = DEFAULT_TERM_RANGES.map(r => ({ ...r }));
+  openTermDatesDraft();
+  flash("Switched to term dates");
+  render();
+}
 
 /* ================================================================== */
 /*  Settings — same snapshot-on-open, save-on-demand pattern as Term   */
@@ -1570,7 +1645,7 @@ function saveTermDates() {
 /*  offered blocks keeps whatever shape it was created with.           */
 /* ================================================================== */
 
-let settingsDraft = { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice() };
+let settingsDraft = { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice(), schedulingMode: "terms", cancellationWindowHours: 24 };
 // Transient — which of the two Settings sub-tabs is showing.
 let settingsTab = "general";
 function openSettingsDraft() {
@@ -1578,6 +1653,16 @@ function openSettingsDraft() {
 }
 function toggleWeekendSetting() {
   settingsDraft.includeWeekends = !settingsDraft.includeWeekends;
+  render();
+}
+function setSchedulingMode(mode) {
+  settingsDraft.schedulingMode = mode;
+  render();
+}
+function adjustCancellationWindow(delta) {
+  let next = Number(settingsDraft.cancellationWindowHours || 24) + delta;
+  next = Math.max(6, Math.min(72, next));
+  settingsDraft.cancellationWindowHours = next;
   render();
 }
 function adjustSettingsHour(which, delta) {
@@ -1594,12 +1679,18 @@ function saveSettings() {
   const start = Number(settingsDraft.dayStartHour);
   const end = Number(settingsDraft.dayEndHour);
   if (!(end > start)) { flash("End time must be after start time"); return; }
+  const switchingToTerms = settingsDraft.schedulingMode === "terms" && S.settings.schedulingMode === "rolling";
   S.settings = {
     includeWeekends: !!settingsDraft.includeWeekends,
     dayStartHour: start,
     dayEndHour: end,
     priorityOrder: (settingsDraft.priorityOrder || DEFAULT_PRIORITY_ORDER).slice(),
+    schedulingMode: settingsDraft.schedulingMode === "rolling" ? "rolling" : "terms",
+    cancellationWindowHours: Number(settingsDraft.cancellationWindowHours) || 24,
   };
+  if (switchingToTerms && (!S.termRanges || !S.termRanges.length)) {
+    S.termRanges = DEFAULT_TERM_RANGES.map(r => ({ ...r }));
+  }
   flash("Settings updated");
   render();
 }
@@ -1829,7 +1920,7 @@ function renderHeader() {
   let header = '<div class="bar"><div class="bartop">' +
     '<span class="hbrow"><button class="hamburger" data-action="toggleSidebar" aria-label="Menu"><svg width="24" height="18" viewBox="0 0 24 18" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="3" rx="1.5" fill="currentColor"/><rect y="7.5" width="24" height="3" rx="1.5" fill="currentColor"/><rect y="15" width="24" height="3" rx="1.5" fill="currentColor"/></svg></button>' +
     '<h1 class="title">' + (inScheduler ? title : sectionTitles[currentSection]) + '</h1></span>' +
-    (inScheduler ? '<div class="wk">' + S.weeksCompleted + " of " + termWeeks() + ' weeks done</div>' : '<span></span>') +
+    (inScheduler ? '<div class="wk">' + (S.settings.schedulingMode === "rolling" ? S.weeksCompleted + " weeks taught" : S.weeksCompleted + " of " + termWeeks() + " weeks done") + '</div>' : '<span></span>') +
     '</div>';
   if (inScheduler) {
     header += '<div class="tabs">' +
@@ -1925,6 +2016,12 @@ function renderStudentsSection() {
 }
 
 function renderTermDatesSection() {
+  if (S.settings.schedulingMode === "rolling") {
+    return '<div class="pad">' +
+      '<p class="lede">You\u2019re using rolling weeks \u2014 there are no term dates to set. Weeks just keep counting up, and any break is marked as \u201cNot teaching this week\u201d from the Offer tab when it comes round.</p>' +
+      '<div class="btnrow"><button class="btn sig" data-action="switchToTermsFromTermDates">Use term dates instead</button></div>' +
+      "</div>";
+  }
   const d = termDraft;
   const rows = d.ranges.map((r, i) =>
     '<div class="term-card">' +
@@ -1968,7 +2065,21 @@ function renderPrioritiesTab() {
 function renderGeneralSettingsTab() {
   const d = settingsDraft;
   const hourLabel = (h) => String(h).padStart(2, "0") + ":00";
-  return '<p class="lede">These shape the grid on the Offer tab, but only for weeks that are still completely blank. The moment you paint a block or mark a week as not teaching, that week\u2019s shape locks in for good, even if you change these again later.</p>' +
+  const rolling = d.schedulingMode === "rolling";
+  return '<div class="field"><label>Scheduling</label>' +
+    '<div class="btnrow" style="margin-bottom:0">' +
+    '<button class="btn' + (!rolling ? " notteaching-active" : "") + '" style="flex:1" data-action="setSchedulingMode" data-mode="terms">Term dates</button>' +
+    '<button class="btn' + (rolling ? " notteaching-active" : "") + '" style="flex:1" data-action="setSchedulingMode" data-mode="rolling">Rolling weeks</button>' +
+    '</div>' +
+    '<p class="lede" style="margin:8px 0 0">' + (rolling
+      ? "Weeks just keep counting up with no end date and no holiday jumps \u2014 use \u201cNot teaching this week\u201d for any breaks."
+      : "Term dates set the teaching weeks and let the scheduler jump over holidays automatically.") + '</p></div>' +
+    '<div class="field"><label>Cancellation notice window</label><div class="stepper">' +
+    '<button class="step" data-action="adjustCancellationWindow" data-delta="-6" ' + (Number(d.cancellationWindowHours) <= 6 ? "disabled" : "") + '>\u2013</button>' +
+    "<b>" + Number(d.cancellationWindowHours || 24) + "h</b>" +
+    '<button class="step" data-action="adjustCancellationWindow" data-delta="6" ' + (Number(d.cancellationWindowHours) >= 72 ? "disabled" : "") + '>+</button>' +
+    "</div></div>" +
+    '<p class="lede">These shape the grid on the Offer tab, but only for weeks that are still completely blank. The moment you paint a block or mark a week as not teaching, that week\u2019s shape locks in for good, even if you change these again later.</p>' +
     '<div class="field"><label>Weekends</label>' +
     '<button class="btn' + (d.includeWeekends ? " notteaching-active" : "") + '" style="width:100%" data-action="toggleWeekendSetting">' +
     (d.includeWeekends ? "Weekends included. Tap to go back to weekdays only" : "Weekdays only. Tap to include Saturday and Sunday") + '</button></div>' +
@@ -2008,11 +2119,12 @@ function renderTabContent() {
 // starting — or nudge with the arrows.
 function renderWeekPicker() {
   const rnd = activeRound();
+  const rolling = S.settings.schedulingMode === "rolling";
   return '<div class="weekpicker">' +
     '<button class="step" data-action="prevWeek" ' + (S.week <= 1 ? "disabled" : "") + '>\u2039</button>' +
-    '<div class="weekpicker-mid"><label>Week <input type="number" inputmode="numeric" min="1" max="' + termWeeks() + '" data-bind="week" value="' + S.week + '"> of ' + termWeeks() + '</label>' +
+    '<div class="weekpicker-mid"><label>Week <input type="number" inputmode="numeric" min="1" ' + (rolling ? "" : 'max="' + termWeeks() + '"') + ' data-bind="week" value="' + S.week + '">' + (rolling ? "" : " of " + termWeeks()) + '</label>' +
     '<span>' + (weekRangeLabel(rnd.weekStart) || "") + '</span></div>' +
-    '<button class="step" data-action="nextWeek" ' + (S.week >= termWeeks() ? "disabled" : "") + '>\u203a</button>' +
+    '<button class="step" data-action="nextWeek" ' + (!rolling && S.week >= termWeeks() ? "disabled" : "") + '>\u203a</button>' +
     "</div>";
 }
 
@@ -2044,6 +2156,7 @@ function renderOfferTab() {
     '<div class="btnrow"><button class="btn" data-action="clearOffer">Clear</button>' +
     '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
     '</div>' +
+    '<div class="field"><label>Note for this week\u2019s message (optional)</label><input type="text" data-bind="weekNote" value="' + escapeHTML(rnd.note || "") + '" placeholder="e.g. half term next week"></div>' +
     gridBlock +
     '<div class="meter"><span>Offered this week</span><b>' + hours + 'h</b></div>' +
     sendRow +
@@ -2194,7 +2307,7 @@ function renderLivePlanTab() {
   const dayPanels = Object.keys(by).sort().map(d => {
     const lessons = by[d].map(l =>
       '<div class="live"><div class="livetop"><b>' + l.name.split(" ")[0] + "</b><span>" + slotTimeFor(rnd.dayStartHour, l.start) + "–" + slotTimeFor(rnd.dayStartHour, l.start + l.lesson) + "</span></div>" +
-      '<div class="cancels"><button class="mini" data-action="cancelEarly" data-id="' + l.key + '">Cancelled, 24h+ notice</button>' +
+      '<div class="cancels"><button class="mini" data-action="cancelEarly" data-id="' + l.key + '">Cancelled, ' + (S.settings.cancellationWindowHours || 24) + 'h+ notice</button>' +
       '<button class="mini warnb" data-action="cancelLate" data-id="' + l.key + '">Cancelled late</button></div></div>'
     ).join("");
     return '<div class="panel"><h3>' + dayDateLong(plan.weekStart, +d) + "</h3>" + lessons + "</div>";
@@ -2226,6 +2339,7 @@ function renderLivePlanTab() {
 }
 
 function renderHoursTab() {
+  const rolling = S.settings.schedulingMode === "rolling";
   const weeksLeft = Math.max(1, termWeeks() - S.weeksCompleted);
   const totalTaught = S.students.reduce((s, x) => s + taughtFor(x.id), 0);
   const totalAllocated = S.students.reduce((s, x) => s + x.allocated, 0);
@@ -2260,7 +2374,7 @@ function renderHoursTab() {
     const taught = taughtFor(s.id);
     const remaining = s.allocated - taught;
     const perWeek = remaining / weeksLeft;
-    const behind = perWeek > 1.05;
+    const behind = !rolling && perWeek > 1.05;
     const pct = Math.min(100, (taught / s.allocated) * 100);
     const lessonsLeft = Math.max(1, Math.round(remaining));
     const entries = S.log.filter(e => e.studentId === s.id).sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -2299,8 +2413,25 @@ function renderHoursTab() {
       '<div class="hnote' + (behind ? " warn" : "") + '">' + note + "</div>" + ledger + "</div>";
   }).join("");
 
-  return '<div class="pad"><p class="lede">' + totalTaught + "h taught of " + totalAllocated + "h allocated, with " + weeksLeft +
-    ' weeks left. Tap a name to see or add individual lessons.</p>' +
+  const exportOptions = [
+    ["week", "This week"],
+    ["month", "This month"],
+    ["term", "This term"],
+    ["year", "This year"],
+  ].filter(([val]) => val !== "term" || !rolling);
+  const exportPanel = '<div class="hours-sort" style="flex-direction:column;align-items:stretch;gap:10px">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px">' +
+    '<label for="hoursExportSelect">Export hours for</label>' +
+    '<select id="hoursExportSelect" data-bind="hoursExportTimeframe">' +
+    exportOptions.map(([val, label]) => '<option value="' + val + '" ' + ((S.hoursExportTimeframe || "week") === val ? "selected" : "") + '>' + label + '</option>').join("") +
+    '</select></div>' +
+    '<button class="btn sig" data-action="exportHours">Copy summary</button>' +
+    (S.hoursExportText ? '<textarea class="fallback" readonly rows="' + (S.hoursExportText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.hoursExportText) + "</textarea>" : "") +
+    "</div>";
+
+  return '<div class="pad"><p class="lede">' + totalTaught + "h taught of " + totalAllocated + "h allocated" +
+    (rolling ? "" : ", with " + weeksLeft + " weeks left") + '. Tap a name to see or add individual lessons.</p>' +
+    exportPanel +
     '<div class="hours-sort"><label for="hoursSort">Sort by</label><select id="hoursSort" data-bind="hoursSort">' +
       '<option value="first" ' + ((S.hoursSort || "first") === "first" ? "selected" : "") + '>First name</option>' +
       '<option value="surname" ' + (S.hoursSort === "surname" ? "selected" : "") + '>Surname</option>' +
@@ -2343,7 +2474,10 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "addStudent") addStudent();
   else if (action === "removeStudent") removeStudent(id);
   else if (action === "saveTermDates") saveTermDates();
+  else if (action === "switchToTermsFromTermDates") switchToTermsFromTermDates();
   else if (action === "toggleWeekendSetting") toggleWeekendSetting();
+  else if (action === "setSchedulingMode") setSchedulingMode(el.dataset.mode);
+  else if (action === "adjustCancellationWindow") adjustCancellationWindow(Number(el.dataset.delta));
   else if (action === "adjustSettingsHour") adjustSettingsHour(el.dataset.which, Number(el.dataset.delta));
   else if (action === "saveSettings") saveSettings();
   else if (action === "settingsTab") { settingsTab = el.dataset.tab; render(); }
@@ -2384,16 +2518,16 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "adjustLength") adjustLength(id, Number(el.dataset.delta));
   else if (action === "runSolver") runSolver();
   else if (action === "chooseOption") { activeRound().chosen = Number(el.dataset.idx); render(); }
-  else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, rnd.dayStartHour); }
-  else if (action === "imageChosen") { const rnd = activeRound(); doImage(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, S.week, rnd.dayStartHour); }
+  else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, rnd.dayStartHour, rnd.note); }
+  else if (action === "imageChosen") { const rnd = activeRound(); doImage(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, S.week, rnd.dayStartHour, rnd.note); }
   else if (action === "confirmSchedule") confirmSchedule();
   else if (action === "undoConfirmSchedule") undoConfirmSchedule();
   else if (action === "cancelEarly") setLessonStatus(id, "cancelled_early");
   else if (action === "cancelLate") setLessonStatus(id, "cancelled_late");
   else if (action === "uncancel") setLessonStatus(id, "planned");
   else if (action === "closeGaps") rescheduleWeek();
-  else if (action === "copyLive") { const rnd = activeRound(); doCopy(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.dayStartHour); }
-  else if (action === "imageLive") { const rnd = activeRound(); doImage(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.plan.weekNo, rnd.dayStartHour); }
+  else if (action === "copyLive") { const rnd = activeRound(); doCopy(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.dayStartHour, rnd.note); }
+  else if (action === "imageLive") { const rnd = activeRound(); doImage(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.plan.weekNo, rnd.dayStartHour, rnd.note); }
   else if (action === "endWeek") endWeek();
   else if (action === "toggleHoursOpen") { S.openHours = S.openHours === id ? null : id; render(); }
   else if (action === "removeEntry") removeEntry(id);
@@ -2402,6 +2536,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "cancelEditEntry") cancelEditEntry();
   else if (action === "addEntry") addEntry(id);
   else if (action === "resetYearConfirm") handleResetClick();
+  else if (action === "exportHours") exportHours();
 });
 
 document.getElementById("app").addEventListener("change", (e) => {
@@ -2418,6 +2553,8 @@ document.getElementById("app").addEventListener("change", (e) => {
     render();
   }
   else if (bind === "hoursSort") { S.hoursSort = el.value; render(); }
+  else if (bind === "hoursExportTimeframe") { S.hoursExportTimeframe = el.value; S.hoursExportText = ""; render(); }
+  else if (bind === "weekNote") { activeRound().note = el.value; render(); }
   else if (bind === "draftDate") { S.draft.date = el.value; }
   else if (bind === "draftHours") { S.draft.hours = el.value; }
   else if (bind === "editDate") { editDraft.date = el.value; }

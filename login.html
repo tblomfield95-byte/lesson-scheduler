@@ -232,35 +232,41 @@ async function playCadenceIntro() {
     entire remaining lifetime (the actual cause of the footer/fixed-bar
     drift bug seen on other pages using this same intro).
   */
+  /*
+    Render the mark natively at its large starting size — crisp glyph
+    rasterisation — and reach the small final size purely by scaling
+    DOWN via transform. Downscaling stays sharp under GPU compositing;
+    scaling text UP from a small native render looks pixelated, which is
+    why the mark is never laid out at its small final size at all.
+
+    Only transform is ever animated frame-to-frame — a compositor-only
+    property — since animating left/top/font-size directly forces a
+    layout recalculation on every frame of a fixed-position element,
+    which is what degraded Safari's fixed-position tracking for the
+    rest of a page's life on the pages that keep this mark on screen
+    permanently after landing.
+  */
+  const startSize = Math.min(86, Math.max(64, window.innerWidth * 0.16));
+  intro.style.fontSize = startSize + "px";
+
+  let introRect = intro.getBoundingClientRect();
+  intro.style.left = ((window.innerWidth - introRect.width) / 2) + "px";
+  intro.style.top = (window.innerHeight * 0.42 - introRect.height / 2) + "px";
+  introRect = intro.getBoundingClientRect();
+
   const finalRect = finalMark.getBoundingClientRect();
   const finalFontSize = parseFloat(getComputedStyle(finalMark).fontSize);
-  intro.style.fontSize = finalFontSize + "px";
-  intro.style.left = finalRect.left + "px";
-  intro.style.top = finalRect.top + "px";
-
-  const introRect = intro.getBoundingClientRect();
-  const startSize = Math.min(86, Math.max(64, window.innerWidth * 0.16));
-  const scale = startSize / finalFontSize;
-  const startCenterX = window.innerWidth / 2;
-  const startCenterY = window.innerHeight * 0.42;
-  const introCenterX = introRect.left + introRect.width / 2;
-  const introCenterY = introRect.top + introRect.height / 2;
-  const translateX = startCenterX - introCenterX;
-  const translateY = startCenterY - introCenterY;
-
-  // Apply the starting transform synchronously, in the same tick as the
-  // layout properties above — otherwise the browser paints the small,
-  // final-position state during the splash hold below, flashing there
-  // before jumping to the correct centred/large starting appearance.
-  intro.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+  const scale = finalFontSize / startSize;
+  const dx = (finalRect.left + finalRect.width / 2) - (introRect.left + introRect.width / 2);
+  const dy = (finalRect.top + finalRect.height / 2) - (introRect.top + introRect.height / 2);
 
   // Deliberate splash hold.
   await new Promise(resolve => setTimeout(resolve, 1900));
 
   const animation = intro.animate(
     [
-      { transform: `translate(${translateX}px, ${translateY}px) scale(${scale})` },
-      { transform: "translate(0px, 0px) scale(1)" }
+      { transform: "translate(0px, 0px) scale(1)" },
+      { transform: `translate(${dx}px, ${dy}px) scale(${scale})` }
     ],
     {
       duration:1350,
@@ -273,7 +279,7 @@ async function playCadenceIntro() {
     await animation.finished;
   } catch (e) {}
 
-  intro.style.transform = "translate(0px, 0px) scale(1)";
+  intro.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
 
   // Reveal the real heading underneath at the identical position/size.
   finalMark.style.opacity = "1";
@@ -285,6 +291,8 @@ async function playCadenceIntro() {
 
   // Fully remove the overlay (rather than hiding it) so nothing from the
   // animation lingers in a compositing layer for the rest of the page.
+  // Safe to remove here (unlike index.html) because the real heading has
+  // already been revealed underneath as its permanent replacement.
   overlay.remove();
 
   // Form arrives only after the wordmark is fully at rest.

@@ -3,110 +3,167 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Cadence.</title>
+<title>Log in — Cadence.</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Cadence">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   html,body{margin:0;padding:0}
   body{
-    --ink:#211C17; --ink-soft:#6B6157; --paper:#F2EFE7; --panel:#FFFFFF;
-    --rule:#DCD5C6; --sig:#6E1423; --sig-soft:#EDDEDD; --warn:#96591A;
-    --serif: "Source Serif 4", Georgia, serif;
-    font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background:var(--paper); color:var(--ink); min-height:100vh;
+    --ink:#211C17;
+    --ink-soft:#6B6157;
+    --paper:#F2EFE7;
+    --panel:#FFFFFF;
+    --rule:#DCD5C6;
+    --sig:#6E1423;
+    --serif:"Source Serif 4",Georgia,serif;
+    font-family:"IBM Plex Sans",ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+    overflow-x:hidden;
   }
   *{box-sizing:border-box}
-  #app{opacity:0;transition:opacity .45s ease}
-  #app.revealed{opacity:1}
-  .brand-mark{flex:none;width:0.78em;height:0.78em;transform:translateY(0.035em)}
-  #brandIntro{position:fixed;inset:0;z-index:100;pointer-events:none}
-  #brandIntroMark{
-    position:fixed;margin:0;padding:0;
-    display:flex;align-items:center;gap:0.14em;
-    font-family:var(--serif);line-height:1;font-weight:700;letter-spacing:-0.025em;
-    color:var(--sig);white-space:nowrap;
-    text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;
-    will-change:left,top,font-size;
+
+  .pad{
+    padding:28px 20px;
+    max-width:420px;
+    margin:0 auto;
   }
-  #brandFooter{
-    position:fixed;left:0;right:0;bottom:0;z-index:40;
-    display:flex;align-items:center;justify-content:center;
-    padding:12px 0 14px;
-    background:linear-gradient(to top, var(--paper) 55%, transparent);
-    opacity:0;transition:opacity .4s ease;pointer-events:none;
+
+  .brand-mark{
+    flex:none;
+    width:0.78em;
+    height:0.78em;
+    transform:translateY(0.035em);
   }
-  #brandFooterInner{
-    display:flex;align-items:center;justify-content:center;gap:0.14em;
-    width:max-content;
+
+  #brandWordmark{
+    display:flex;
+    align-items:center;
+    gap:0.14em;
     font-family:var(--serif);
-    font-size:12.5px;
+    font-size:36px;
     line-height:1;
     font-weight:700;
     letter-spacing:-0.025em;
-    color:var(--ink-soft);
+    margin:0 0 6px;
+    color:var(--sig);
+    opacity:0;
     white-space:nowrap;
     text-rendering:optimizeLegibility;
     -webkit-font-smoothing:antialiased;
-    visibility:hidden;
   }
-  #brandFooter.revealed{opacity:1}
+
+  #brandIntro{
+    position:fixed;
+    inset:0;
+    z-index:100;
+    pointer-events:none;
+  }
+
+  #brandIntroMark{
+    position:fixed;
+    margin:0;
+    padding:0;
+    display:flex;
+    align-items:center;
+    gap:0.14em;
+    font-family:var(--serif);
+    line-height:1;
+    font-weight:700;
+    letter-spacing:-0.025em;
+    color:var(--sig);
+    white-space:nowrap;
+    text-rendering:optimizeLegibility;
+    -webkit-font-smoothing:antialiased;
+    will-change:left,top,font-size;
+  }
+
+  .login-content{
+    opacity:0;
+    transform:translateY(8px);
+    transition:
+      opacity .55s ease,
+      transform .55s cubic-bezier(.22,.72,.16,1);
+  }
+  .login-content.revealed{
+    opacity:1;
+    transform:translateY(0);
+  }
+
+  .sub{
+    font-size:14px;
+    color:var(--ink-soft);
+    line-height:1.5;
+    margin:0 0 22px;
+  }
+
+  input{
+    width:100%;
+    font:inherit;
+    font-size:15px;
+    padding:12px 14px;
+    border-radius:7px;
+    border:1px solid var(--rule);
+    background:var(--panel);
+    color:var(--ink);
+    margin-bottom:12px;
+  }
+
+  .btn{
+    width:100%;
+    font:inherit;
+    font-size:15px;
+    padding:13px;
+    border-radius:7px;
+    border:1px solid var(--sig);
+    background:var(--sig);
+    color:#fff;
+    font-weight:600;
+    cursor:pointer;
+  }
+
+  .btn:disabled{opacity:.5;cursor:default}
+
+  .linkbox{
+    margin-top:20px;
+    padding:14px;
+    border-radius:7px;
+    border:1px solid var(--rule);
+    background:var(--panel);
+    font-size:14px;
+    line-height:1.5;
+  }
+
+  .linkbox a{
+    color:var(--sig);
+    font-weight:600;
+    word-break:break-all;
+  }
+
+  .err{
+    color:#96591A;
+    font-size:13px;
+    margin:-6px 0 12px;
+  }
+
   @media (prefers-reduced-motion:reduce){
     #brandIntro{display:none}
-    #app{opacity:1}
-    #brandFooter{opacity:1;transition:none}
-    #brandFooterInner{visibility:visible}
+    #brandWordmark{opacity:1}
+    .login-content{
+      opacity:1;
+      transform:none;
+      transition:none;
+    }
   }
-  .pad{padding:20px 16px 60px}
-  h1{font-family:var(--serif);font-size:19px;font-weight:600;margin:0 0 4px}
-  .sub{font-size:13px;color:var(--ink-soft);margin:0 0 20px}
-  .lede{font-size:14px;line-height:1.5;color:var(--ink-soft);margin:0 0 16px}
-  .namebtn{display:block;width:100%;text-align:center;font:inherit;font-size:15px;padding:14px 16px;
-           margin-bottom:8px;border-radius:8px;border:1px solid var(--rule);background:var(--panel);
-           color:var(--ink);cursor:pointer}
-  .namebtn:active{background:var(--paper)}
-  .namebtn.replied{background:#F3E1E1;border-color:var(--sig)}
-  .replytag{display:block;font-size:12px;color:var(--sig);font-weight:600;margin-top:3px}
-  .back{font:inherit;font-size:13px;color:var(--sig);background:none;border:none;padding:0 0 16px;cursor:pointer}
-  .choice{display:block;width:100%;text-align:center;font:inherit;font-size:15px;padding:14px 16px;
-          margin-bottom:8px;border-radius:8px;border:1px solid var(--rule);background:var(--panel);
-          color:var(--ink);cursor:pointer}
-  .choice.sel{border-color:var(--sig);background:var(--sig);color:#fff;font-weight:560}
-  .grid-wrap{border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--panel);
-             touch-action:auto;user-select:none;-webkit-user-select:none;margin:14px 0}
-  .grid-head{display:flex;border-bottom:1px solid var(--rule);background:var(--paper)}
-  .dayhead{flex:1;text-align:center;padding:8px 0;font-size:12px;font-weight:600;color:var(--ink-soft)}
-  .gutter{width:46px;flex:none}
-  .row{display:flex;height:25px}
-  .row .time{font-size:10.5px;color:var(--ink-soft);padding-right:6px;text-align:right;
-             line-height:25px;border-right:1px solid var(--rule)}
-  .cell{flex:1;border-right:1px solid #EFECE6;border-bottom:1px solid #EFECE6;cursor:pointer}
-  .cell:last-child{border-right:none}
-  .cell.on{background:var(--sig)}
-  .cell.muted{background:#EEEAE2;border-right-color:#DDD6C9;border-bottom-color:#DDD6C9;cursor:default}
-  .btn{font:inherit;font-size:14px;padding:12px 18px;border-radius:7px;border:1px solid var(--sig);
-       background:var(--sig);color:#fff;font-weight:560;cursor:pointer;width:100%;text-align:center}
-  .btn:disabled{opacity:.4;cursor:default}
-  .btn-secondary{border-color:var(--rule);background:var(--panel);color:var(--ink)}
-  .btn-secondary:disabled{opacity:.4}
-  .empty{font-size:14px;color:var(--ink-soft);line-height:1.55}
-  .done{font-size:15px;line-height:1.6}
-  .count{font-size:13px;color:var(--ink-soft);margin:6px 0 14px}
-  .lenrow{display:flex;align-items:center;justify-content:space-between;padding:0 0 16px;font-size:14px;color:var(--ink-soft)}
-  .stepper{display:flex;align-items:center;gap:10px}
-  .stepper b{font-size:14px;font-weight:600;color:var(--ink);min-width:58px;text-align:center}
-  .step{font:inherit;font-size:16px;line-height:1;width:30px;height:30px;border-radius:15px;
-        border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
-  .step:disabled{opacity:.32;cursor:default}
-  .button-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
-  .button-group .btn{flex:1}
-  .confirmation-box{background:var(--sig-soft);border:1px solid var(--sig);border-radius:8px;padding:16px;margin-bottom:16px;text-align:center}
-  .confirmation-box .tick{font-size:32px;line-height:1;margin:0 0 8px}
-  .confirmation-box .msg{font-size:13px;color:var(--ink);line-height:1.5}
 </style>
 </head>
 <body>
+
 <div id="brandIntro" aria-hidden="true">
   <div id="brandIntroMark">
     <svg class="brand-mark" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
@@ -118,395 +175,172 @@
   </div>
 </div>
 
-<div id="app"></div>
-
-<div id="brandFooter">
-  <div id="brandFooterInner">
+<div class="pad">
+  <h1 id="brandWordmark">
     <svg class="brand-mark" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
       <rect width="40" height="40" rx="9" fill="#6E1423"/>
       <rect x="9" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/>
       <rect x="21" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/>
     </svg>
     <span>Cadence.</span>
+  </h1>
+
+  <div id="loginContent" class="login-content">
+    <p class="sub">Enter your email and we'll give you a link to log in — no password needed.</p>
+
+    <div id="err"></div>
+
+    <form id="loginForm">
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required>
+      <button class="btn" id="go" type="submit">Send my link</button>
+    </form>
+
+    <div id="result"></div>
   </div>
 </div>
 
 <script>
-const SLOT_MIN = 30;
-const slotTime = (i) => {
-  const total = R.startHour * 60 + i * SLOT_MIN;
-  const h = Math.floor(total / 60), m = total % 60;
-  return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
-};
-const key = (d, i) => d + "-" + i;
-
-const SLUG_WEEK = (() => {
-  const m = window.location.pathname.match(/^\/s\/([^\/]+)\/(\d+)/);
-  return m ? { slug: m[1], week: m[2] } : { slug: "", week: "" };
-})();
-const SLUG = SLUG_WEEK.slug;
-const WEEK = SLUG_WEEK.week;
-
-function weekRangeLabel(iso) {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-").map(Number);
-  const mon = new Date(Date.UTC(y, m - 1, d));
-  const fri = new Date(Date.UTC(y, m - 1, d + 4));
-  const sameMonth = mon.getUTCMonth() === fri.getUTCMonth() && mon.getUTCFullYear() === fri.getUTCFullYear();
-  const monMonth = mon.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
-  const friMonth = fri.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
-  return sameMonth
-    ? mon.getUTCDate() + "\u2013" + fri.getUTCDate() + " " + friMonth + " " + fri.getUTCFullYear()
-    : mon.getUTCDate() + " " + monMonth + " \u2013 " + fri.getUTCDate() + " " + friMonth + " " + fri.getUTCFullYear();
-}
-
-let R = { loading: true, error: null, weekNo: null, weekStart: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), lesson: 2, submitted: false, submittedStatus: null, submitting: false, days: ["Mon", "Tue", "Wed", "Thu", "Fri"], startHour: 9, slots: 20 };
-
-async function boot() {
-  if (!SLUG || !WEEK) {
-    R.error = "This link is missing its studio or week code — ask your teacher for the correct link.";
-    R.loading = false; render(); return;
-  }
-  try {
-    const res = await fetch("/api/round?slug=" + encodeURIComponent(SLUG) + "&week=" + encodeURIComponent(WEEK));
-    const data = await res.json();
-    if (!data.teacherName) {
-      R.error = "Couldn't find that studio — check the link is correct.";
-      R.loading = false; render(); return;
-    }
-    R.weekNo = data.weekNo;
-    R.weekStart = data.weekStart;
-    R.offered = new Set(data.offered || []);
-    R.students = data.students || [];
-    R.teacherName = data.teacherName;
-    R.instrument = data.instrument;
-    const startHour = data.dayStartHour != null ? data.dayStartHour : 9;
-    const endHour = data.dayEndHour != null ? data.dayEndHour : 19;
-    R.days = data.includeWeekends ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri"];
-    R.startHour = startHour;
-    R.slots = (endHour - startHour) * 2;
-  } catch (e) {
-    R.error = "Couldn't reach the schedule — check your connection and reload.";
-  }
-  R.loading = false;
-  render();
-}
-
-function pick(id) {
-  R.picked = id;
-  R.stage = "ask";
-  const s = R.students.find(x => x.id === id);
-  R.avail = new Set((s && s.avail) || []);
-  R.lesson = (s && s.lesson) || 2;
-  render();
-}
-function editAgain() { R.submitted = false; R.stage = "ask"; render(); }
-function goGrid() { R.stage = "grid"; render(); }
-function back() { R.picked = null; R.stage = null; R.avail = new Set(); render(); }
-function done() { R.picked = null; R.stage = null; R.avail = new Set(); R.submitted = false; render(); }
-function adjustLesson(delta) {
-  R.lesson = Math.min(4, Math.max(1, R.lesson + delta));
-  render();
-}
-
-async function clearResponse() {
-  R.submitting = true; render();
-  try {
-    await fetch("/api/reply", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ slug: SLUG, week: WEEK, studentId: R.picked, status: "clear", avail: [] }),
-    });
-    // Clear the in-memory record
-    const s = R.students.find(x => x.id === R.picked);
-    if (s) { s.status = null; s.avail = []; }
-    R.submitted = false;
-    R.submittedStatus = null;
-    R.picked = null;
-    R.stage = null;
-    R.avail = new Set();
-    R.submitting = false;
-  } catch (e) {
-    R.submitting = false;
-    render();
-    alert("Couldn't clear that — check your connection and try again.");
-    return;
-  }
-  render();
-}
-
-async function submitStatus(status) {
-  R.submitting = true; render();
-  try {
-    await fetch("/api/reply", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ slug: SLUG, week: WEEK, studentId: R.picked, status, avail: status === "in" ? [...R.avail] : [], lesson: R.lesson }),
-    });
-    R.submitted = true;
-    R.submittedStatus = status;
-    // Keep the in-memory record in sync, so going back to edit again in
-    // this same session shows what was just submitted — not whatever was
-    // true when the page first loaded.
-    const s = R.students.find(x => x.id === R.picked);
-    if (s) { s.status = status; s.avail = status === "in" ? [...R.avail] : []; s.lesson = R.lesson; }
-    R.submitting = false;
-  } catch (e) {
-    R.submitting = false;
-    render();
-    alert("Couldn't save that — check your connection and try again.");
-    return;
-  }
-  render();
-}
-
-function buildGridHTML(selected, offered) {
-  let head = '<div class="grid-head"><div class="gutter"></div>' + R.days.map(d => '<div class="dayhead">' + d + "</div>").join("") + "</div>";
-  let rows = "";
-  for (let i = 0; i < R.slots; i++) {
-    let cells = "";
-    for (let d = 0; d < R.days.length; d++) {
-      const k = key(d, i);
-      const isOffered = offered.has(k);
-      const on = selected.has(k);
-      let cls = "cell" + (!isOffered ? " muted" : "") + (on ? " on" : "");
-      cells += '<div class="' + cls + '" data-d="' + d + '" data-i="' + i + '"></div>';
-    }
-    rows += '<div class="row"><div class="gutter time">' + (i % 2 === 0 ? slotTime(i) : "") + "</div>" + cells + "</div>";
-  }
-  return '<div class="grid-wrap" id="paintGrid">' + head + '<div class="grid-body">' + rows + "</div></div>";
-}
-
-function cellAt(el, x, y) {
-  const at = document.elementFromPoint(x, y);
-  const cell = at && at.closest ? at.closest("[data-d]") : null;
-  if (!cell || !el.contains(cell)) return null;
-  return { d: Number(cell.dataset.d), i: Number(cell.dataset.i), node: cell };
-}
-
-function mountGrid() {
-  const el = document.getElementById("paintGrid");
-  if (!el) return;
-  let painting = null, last = "";
-  const apply = (c, val) => {
-    const k = key(c.d, c.i);
-    if (!R.offered.has(k)) return;
-    val ? R.avail.add(k) : R.avail.delete(k);
-    c.node.classList.toggle("on", val);
-  };
-  const move = (x, y) => {
-    if (painting === null) return;
-    const c = cellAt(el, x, y);
-    if (!c) return;
-    const k = key(c.d, c.i);
-    if (k === last) return;
-    last = k; apply(c, painting);
-  };
-  const end = () => {
-    if (painting !== null) { painting = null; last = ""; updateAfterPaint(); }
-  };
-  el.addEventListener("touchstart", (e) => {
-    const t = e.touches[0];
-    const c = cellAt(el, t.clientX, t.clientY);
-    if (!c) return;
-    const k = key(c.d, c.i);
-
-    // A swipe beginning on a grey/unavailable cell should behave like
-    // ordinary page scrolling rather than starting a paint gesture.
-    if (!R.offered.has(k)) return;
-
-    // Only capture the touch once we know the starting cell is paintable.
-    e.preventDefault();
-    painting = !R.avail.has(k); last = k; apply(c, painting);
-  }, { passive: false });
-  el.addEventListener("touchmove", (e) => {
-    if (painting === null) return;
-    e.preventDefault();
-    const t = e.touches[0];
-    move(t.clientX, t.clientY);
-  }, { passive: false });
-  el.addEventListener("touchend", end);
-  el.addEventListener("touchcancel", end);
-  el.addEventListener("mousedown", (e) => {
-    const c = cellAt(el, e.clientX, e.clientY);
-    if (!c) return;
-    const k = key(c.d, c.i);
-    if (!R.offered.has(k)) return;
-    painting = !R.avail.has(k); last = k; apply(c, painting);
-    window.__gridMouseUp = end;
-  });
-  el.addEventListener("mousemove", (e) => { if (e.buttons === 1) move(e.clientX, e.clientY); });
-}
-window.addEventListener("mouseup", () => { if (window.__gridMouseUp) { const fn = window.__gridMouseUp; window.__gridMouseUp = null; fn(); } });
-
-function updateAfterPaint() {
-  const cnt = document.getElementById("slotCount");
-  if (cnt) cnt.textContent = R.avail.size + " slot" + (R.avail.size === 1 ? "" : "s") + " selected";
-  const btn = document.getElementById("submitBtn");
-  if (btn) btn.disabled = R.avail.size === 0;
-}
-
-let flashTimer = null;
-function flash(msg) {
-  // Simple fallback if no toast element (for use during render)
-  console.log(msg);
-}
-
-function render() {
-  const app = document.getElementById("app");
-  const heading = (R.instrument ? R.instrument + " Lessons" : "Lessons") + (R.teacherName ? " — " + R.teacherName : "");
-  const weekLabel = "Week " + R.weekNo + (R.weekStart ? " (" + weekRangeLabel(R.weekStart) + ")" : "");
-
-  if (R.loading) { app.innerHTML = '<div class="pad"><p class="lede">Loading…</p></div>'; return; }
-  if (R.error) { app.innerHTML = '<div class="pad"><h1>Lessons</h1><p class="empty">' + R.error + "</p></div>"; return; }
-  if (!R.offered.size) {
-    app.innerHTML = '<div class="pad"><h1>' + heading + '</h1><p class="empty">No lesson times have been posted for this week yet — check back once your teacher sends the link round.</p></div>';
-    return;
-  }
-
-  if (R.submitted) {
-    const name = (R.students.find(s => s.id === R.picked) || {}).name || "";
-    const first = name ? name.split(" ")[0] : "";
-    const msg = R.submittedStatus === "skip" ? "No lesson needed this week — got it."
-      : R.submittedStatus === "none" ? "Thanks for letting us know — your teacher will sort something out."
-      : "Got your times for " + weekLabel.toLowerCase() + ".";
-    app.innerHTML = '<div class="pad">' +
-      '<div class="confirmation-box">' +
-      '<div class="tick">\u2713</div>' +
-      '<div class="msg">Response recorded</div>' +
-      '</div>' +
-      '<h1>Thanks' + (first ? ", " + first : "") + '!</h1><p class="done">' + msg + '</p>' +
-      '<div class="button-group" style="flex-direction:column">' +
-      '<button class="btn" onclick="done()" style="margin-bottom:8px">Done</button>' +
-      '<button class="btn btn-secondary" onclick="editAgain()" style="margin-bottom:0">Change answer</button>' +
-      '<button class="btn btn-secondary" onclick="clearResponse()" ' + (R.submitting ? "disabled" : "") + '>Clear response</button>' +
-      '</div></div>';
-    return;
-  }
-
-  if (!R.picked) {
-    app.innerHTML = '<div class="pad"><h1>' + heading + '</h1><p class="sub">' + weekLabel + ' \u2014 tap your name to give your times.</p>' +
-      R.students.map(s => {
-        if (s.status) {
-          const label = s.status === "in" ? "Times given" : s.status === "skip" ? "Not needed this week" : "None of these worked";
-          return '<button class="namebtn replied" onclick="pick(\'' + s.id + '\')">' + s.name +
-            '<span class="replytag">\u2713 ' + label + ' \u2014 tap to edit</span></button>';
-        }
-        return '<button class="namebtn" onclick="pick(\'' + s.id + '\')">' + s.name + "</button>";
-      }).join("") +
-      "</div>";
-    return;
-  }
-
-  const name = (R.students.find(s => s.id === R.picked) || {}).name || "";
-  const prevStatus = (R.students.find(s => s.id === R.picked) || {}).status || null;
-
-  if (R.stage === "ask") {
-    app.innerHTML = '<div class="pad"><button class="back" onclick="back()">← Not ' + name.split(" ")[0] + "?</button>" +
-      "<h1>" + name + "</h1><p class=\"sub\">" + weekLabel + '</p>' +
-      '<button class="choice' + (prevStatus === "skip" ? " sel" : "") + '" onclick="submitStatus(\'skip\')">Not needed this week</button>' +
-      '<button class="choice' + (prevStatus === "in" ? " sel" : "") + '" onclick="goGrid()">Yes, show me the times</button>' +
-      "</div>";
-    return;
-  }
-
-  // stage === "grid" — show what's on offer, decide once you've actually seen it
-  let body = '<div class="pad"><button class="back" onclick="back()">← Not ' + name.split(" ")[0] + "?</button>" +
-    "<h1>" + name + "</h1><p class=\"sub\">" + weekLabel + '</p>' +
-    '<div class="lenrow"><span>Lesson length</span><div class="stepper">' +
-    '<button class="step" onclick="adjustLesson(-1)" ' + (R.lesson <= 1 ? "disabled" : "") + '>\u2013</button>' +
-    "<b>" + (R.lesson * SLOT_MIN) + " min</b>" +
-    '<button class="step" onclick="adjustLesson(1)" ' + (R.lesson >= 4 ? "disabled" : "") + '>+</button>' +
-    "</div></div>" +
-    '<p class="lede">Drag across the times you could do:</p>' +
-    buildGridHTML(R.avail, R.offered) +
-    '<p class="count" id="slotCount">' + R.avail.size + " slot" + (R.avail.size === 1 ? "" : "s") + " selected</p>" +
-    '<button class="choice' + (prevStatus === "none" ? " sel" : "") + '" onclick="submitStatus(\'none\')" ' + (R.submitting ? "disabled" : "") + '>None of these times work</button>' +
-    '<button class="btn" id="submitBtn" onclick="submitStatus(\'in\')" ' + (R.avail.size === 0 || R.submitting ? "disabled" : "") + '>' + (R.submitting ? "Saving…" : "Submit") + "</button></div>";
-
-  app.innerHTML = body;
-  mountGrid();
-}
-
-// Shorter hold than the login page's splash — this page gets revisited far
-// more often (checking or editing times through the week), so the branded
-// moment should be quick rather than a repeated few-second delay.
 async function playCadenceIntro() {
   const overlay = document.getElementById("brandIntro");
   const intro = document.getElementById("brandIntroMark");
-  const footer = document.getElementById("brandFooter");
-  const footerInner = document.getElementById("brandFooterInner");
-  const app = document.getElementById("app");
-  if (!overlay || !intro || !footer || !footerInner || !app) return;
+  const finalMark = document.getElementById("brandWordmark");
+  const content = document.getElementById("loginContent");
+
+  if (!overlay || !intro || !finalMark || !content) return;
 
   if (window.matchMedia("(prefers-reduced-motion:reduce)").matches) {
-    app.classList.add("revealed");
-    footer.classList.add("revealed");
+    finalMark.style.opacity = "1";
+    content.classList.add("revealed");
     return;
   }
 
-  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) {}
+  try {
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+  } catch (e) {}
 
-  const startSize = Math.min(72, Math.max(52, window.innerWidth * 0.14));
+  /*
+    No transform is used anywhere in the wordmark animation.
+
+    1. Give the travelling mark its large starting font size.
+    2. Measure its real rendered width/height.
+    3. Position it with literal pixel left/top values so it starts exactly centred.
+    4. Measure the hidden permanent heading.
+    5. Animate left, top and font-size directly to those final values.
+  */
+  const startSize = Math.min(86, Math.max(64, window.innerWidth * 0.16));
   intro.style.fontSize = startSize + "px";
+
+  // Force layout now that the font size is known.
   let introRect = intro.getBoundingClientRect();
-  intro.style.left = ((window.innerWidth - introRect.width) / 2) + "px";
-  intro.style.top = ((window.innerHeight - introRect.height) / 2) + "px";
+
+  const startLeft = (window.innerWidth - introRect.width) / 2;
+  const startTop = (window.innerHeight - introRect.height) / 2;
+
+  intro.style.left = startLeft + "px";
+  intro.style.top = startTop + "px";
+
+  // Read once more after applying the exact centred pixel position.
   introRect = intro.getBoundingClientRect();
+  const finalRect = finalMark.getBoundingClientRect();
+  const finalFontSize = parseFloat(getComputedStyle(finalMark).fontSize);
 
-  // Measure the actual centred logo/wordmark content, not the full-width
-  // footer bar. The outer footer begins at x=0, whereas this inner wrapper
-  // sits at the true centred resting position.
-  const finalRect = footerInner.getBoundingClientRect();
-  const finalStyle = getComputedStyle(footerInner);
-  const finalFontSize = parseFloat(finalStyle.fontSize);
-  const finalColor = finalStyle.color;
-  const finalFontWeight = finalStyle.fontWeight;
-  const finalLetterSpacing = finalStyle.letterSpacing;
-
-  await new Promise(r => setTimeout(r, 700));
+  // Deliberate splash hold.
+  await new Promise(resolve => setTimeout(resolve, 1900));
 
   const animation = intro.animate(
     [
       {
-        left: introRect.left + "px",
-        top: introRect.top + "px",
-        fontSize: startSize + "px",
-        color: getComputedStyle(intro).color
+        left:introRect.left + "px",
+        top:introRect.top + "px",
+        fontSize:startSize + "px"
       },
       {
-        left: finalRect.left + "px",
-        top: finalRect.top + "px",
-        fontSize: finalFontSize + "px",
-        color: finalColor,
-        fontWeight: finalFontWeight,
-        letterSpacing: finalLetterSpacing
-      },
+        left:finalRect.left + "px",
+        top:finalRect.top + "px",
+        fontSize:finalFontSize + "px"
+      }
     ],
-    { duration: 1000, easing: "cubic-bezier(.42,0,.18,1)", fill: "forwards" }
+    {
+      duration:1350,
+      easing:"cubic-bezier(.42,0,.18,1)",
+      fill:"forwards"
+    }
   );
-  try { await animation.finished; } catch (e) {}
 
+  try {
+    await animation.finished;
+  } catch (e) {}
+
+  /*
+    Lock the travelling mark to the final pixel values before swapping.
+    This avoids a final-frame interpolation discrepancy in WebKit.
+  */
   intro.style.left = finalRect.left + "px";
   intro.style.top = finalRect.top + "px";
   intro.style.fontSize = finalFontSize + "px";
-  intro.style.color = finalColor;
-  intro.style.fontWeight = finalFontWeight;
-  intro.style.letterSpacing = finalLetterSpacing;
 
-  // No visual handoff at all: the travelling mark itself remains on screen
-  // as the permanent footer wordmark. The duplicate footer contents stay
-  // invisible and are used only as the destination measuring target.
-  // This avoids Safari having to rasterise a second copy of the typography
-  // at exactly the moment the main interface fades in.
-  footer.classList.add("revealed");
+  // Reveal the real heading underneath at the identical position/size.
+  finalMark.style.opacity = "1";
 
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-  app.classList.add("revealed");
+  // Give Safari one complete paint with both marks coincident.
+  await new Promise(resolve => requestAnimationFrame(() => {
+    requestAnimationFrame(resolve);
+  }));
+
+  overlay.style.display = "none";
+
+  // Form arrives only after the wordmark is fully at rest.
+  await new Promise(resolve => setTimeout(resolve, 140));
+  content.classList.add("revealed");
 }
 
-boot();
 playCadenceIntro();
+
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const email = document.getElementById("email").value.trim();
+  const errEl = document.getElementById("err");
+  const resultEl = document.getElementById("result");
+  const btn = document.getElementById("go");
+
+  errEl.innerHTML = "";
+  resultEl.innerHTML = "";
+
+  if (!email || !email.includes("@")) {
+    errEl.innerHTML = '<p class="err">Enter a valid email.</p>';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+
+  try {
+    const res = await fetch("/api/login", {
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({email})
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      errEl.innerHTML = '<p class="err">' + (data.error || "Something went wrong.") + "</p>";
+    } else {
+      resultEl.innerHTML =
+        '<div class="linkbox">Email sending isn\u2019t set up yet, so here\u2019s your link directly \u2014 tap it to continue:<br><br>' +
+        '<a href="' + data.link + '">' + data.link + "</a></div>";
+    }
+  } catch (e) {
+    errEl.innerHTML = '<p class="err">Couldn\u2019t reach the server \u2014 check your connection.</p>';
+  }
+
+  btn.disabled = false;
+  btn.textContent = "Send my link";
+});
 </script>
+
 </body>
 </html>

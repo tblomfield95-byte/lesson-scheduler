@@ -147,10 +147,10 @@
              padding:4px 0;flex:none}
   .tour-track{
     display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;
-    margin:0 -18px;padding:0 18px;scrollbar-width:none;
+    scrollbar-width:none;
   }
   .tour-track::-webkit-scrollbar{display:none}
-  .tour-card{scroll-snap-align:center;flex:0 0 100%;min-width:0;padding-right:18px}
+  .tour-card{scroll-snap-align:start;scroll-snap-stop:always;flex:0 0 100%;min-width:0}
   .tour-card h2{font-family:var(--serif);font-size:17px;font-weight:600;margin:0 0 12px}
   .tour-shot{border:1px solid var(--rule);border-radius:14px;background:var(--panel);padding:16px;margin-bottom:16px}
   .shot-bar{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;color:var(--ink-soft);
@@ -190,11 +190,9 @@
     flex:none;width:18px;height:18px;border-radius:50%;background:var(--sig-soft);color:var(--sig);
     font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px;
   }
-  .tour-nav{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:2px}
-  .tour-dots{display:flex;gap:6px}
+  .tour-dots{display:flex;justify-content:center;gap:7px;margin:16px 0 18px}
   .tour-dot{width:7px;height:7px;border-radius:50%;background:var(--rule);transition:background-color .3s ease,transform .3s ease}
   .tour-dot.active{background:var(--sig);transform:scale(1.35)}
-  .tour-nav .btn{width:auto;padding:12px 22px}
 
   @media (prefers-reduced-motion:reduce){
     .stage,.stage-track,.stepline-wrap,.stepline,.stepline-num{transition:none}
@@ -388,10 +386,8 @@
 
         </div>
 
-        <div class="tour-nav">
-          <div class="tour-dots" id="tourDots"></div>
-          <button class="btn" id="tourNextBtn">Next</button>
-        </div>
+        <div class="tour-dots" id="tourDots"></div>
+        <button class="btn" id="tourNextBtn">Next</button>
       </div>
     </section>
 

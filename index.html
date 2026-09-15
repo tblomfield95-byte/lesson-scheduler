@@ -449,14 +449,26 @@ async function playCadenceIntro() {
   // footer bar. The outer footer begins at x=0, whereas this inner wrapper
   // sits at the true centred resting position.
   const finalRect = footerInner.getBoundingClientRect();
-  const finalFontSize = parseFloat(getComputedStyle(footerInner).fontSize);
+  const finalStyle = getComputedStyle(footerInner);
+  const finalFontSize = parseFloat(finalStyle.fontSize);
+  const finalColor = finalStyle.color;
 
   await new Promise(r => setTimeout(r, 700));
 
   const animation = intro.animate(
     [
-      { left: introRect.left + "px", top: introRect.top + "px", fontSize: startSize + "px" },
-      { left: finalRect.left + "px", top: finalRect.top + "px", fontSize: finalFontSize + "px" },
+      {
+        left: introRect.left + "px",
+        top: introRect.top + "px",
+        fontSize: startSize + "px",
+        color: getComputedStyle(intro).color
+      },
+      {
+        left: finalRect.left + "px",
+        top: finalRect.top + "px",
+        fontSize: finalFontSize + "px",
+        color: finalColor
+      },
     ],
     { duration: 1000, easing: "cubic-bezier(.42,0,.18,1)", fill: "forwards" }
   );
@@ -465,6 +477,7 @@ async function playCadenceIntro() {
   intro.style.left = finalRect.left + "px";
   intro.style.top = finalRect.top + "px";
   intro.style.fontSize = finalFontSize + "px";
+  intro.style.color = finalColor;
   footer.classList.add("revealed");
 
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));

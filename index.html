@@ -49,12 +49,14 @@
     white-space:nowrap;
     text-rendering:optimizeLegibility;
     -webkit-font-smoothing:antialiased;
+    visibility:hidden;
   }
   #brandFooter.revealed{opacity:1}
   @media (prefers-reduced-motion:reduce){
     #brandIntro{display:none}
     #app{opacity:1}
     #brandFooter{opacity:1;transition:none}
+    #brandFooterInner{visibility:visible}
   }
   .pad{padding:20px 16px 60px}
   h1{font-family:var(--serif);font-size:19px;font-weight:600;margin:0 0 4px}
@@ -492,13 +494,14 @@ async function playCadenceIntro() {
   intro.style.fontWeight = finalFontWeight;
   intro.style.letterSpacing = finalLetterSpacing;
 
-  // Put the real footer underneath the travelling mark while they are
-  // visually identical, then allow two complete paint frames before
-  // removing the overlay. This avoids a one-frame typography swap.
+  // No visual handoff at all: the travelling mark itself remains on screen
+  // as the permanent footer wordmark. The duplicate footer contents stay
+  // invisible and are used only as the destination measuring target.
+  // This avoids Safari having to rasterise a second copy of the typography
+  // at exactly the moment the main interface fades in.
   footer.classList.add("revealed");
 
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-  overlay.style.display = "none";
   app.classList.add("revealed");
 }
 

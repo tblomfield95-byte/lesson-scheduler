@@ -89,7 +89,7 @@
     gap:10px;
     align-items:center;
     padding:12px 0;
-    border-bottom:1px solid var(--rule);
+    box-shadow:inset 0 -1px 0 0 var(--rule);
   }
   .student-edit-row:first-child{padding-top:2px}
   .student-edit-row input,
@@ -122,6 +122,10 @@
     height:38px;
     border-radius:19px;
     font-size:20px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
   }
   .student-add-btn{
     width:38px;
@@ -1903,7 +1907,7 @@ function renderStudentsSection() {
     '<div class="student-edit-row">' +
     '<input type="text" data-bind="studentName" data-id="' + s.id + '" value="' + escapeHTML(s.name) + '" aria-label="Student name">' +
     '<div class="student-hours-wrap"><input type="number" step="0.5" min="0" data-bind="studentHours" data-id="' + s.id + '" value="' + s.allocated + '" aria-label="Allocated hours"></div>' +
-    '<button class="x student-delete" data-action="removeStudent" data-id="' + s.id + '" aria-label="Remove ' + escapeHTML(s.name) + '">×</button>' +
+    '<button class="x student-delete" data-action="removeStudent" data-id="' + s.id + '" aria-label="Remove ' + escapeHTML(s.name) + '"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>' +
     "</div>"
   ).join("");
   return '<div class="pad">' +
@@ -1911,7 +1915,7 @@ function renderStudentsSection() {
     '<div class="panel students-panel">' + studentRows +
     '<div class="student-add-row"><input type="text" data-bind="newStudentName" value="' + escapeHTML(newStudentDraft.name) + '" placeholder="New student\u2019s name">' +
     '<div class="student-hours-wrap"><input type="number" step="0.5" min="0" data-bind="newStudentAllocated" value="' + newStudentDraft.allocated + '" placeholder="Hours" aria-label="Allocated hours"></div>' +
-    '<button class="student-add-btn" data-action="addStudent" aria-label="Add student">+</button></div>' +
+    '<button class="student-add-btn" data-action="addStudent" aria-label="Add student"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 2V14M2 8H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>' +
     "</div></div>";
 }
 

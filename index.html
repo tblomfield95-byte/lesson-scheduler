@@ -486,6 +486,31 @@ async function playCadenceIntro() {
   app.classList.add("revealed");
 }
 
+// Pure CSS `position:fixed; bottom:0` is known to be unreliable on iOS
+// Safari specifically while its address bar/toolbar is collapsing during
+// a scroll gesture — the fixed element can lag behind, tracking the
+// layout viewport instead of the true visible (visual) viewport until
+// the animation finishes and a reflow catches it up. Chrome's iOS UI
+// doesn't animate the same way, so it never shows this.
+//
+// window.visualViewport reports the actual visible area in real time,
+// including during that animation, so we use it to actively correct the
+// footer's position with a transform rather than trusting bottom:0 alone.
+function pinFooterToVisualViewport() {
+  const footer = document.getElementById("brandFooter");
+  if (!footer || !window.visualViewport) return;
+  const vv = window.visualViewport;
+  const update = () => {
+    const gap = window.innerHeight - (vv.height + vv.offsetTop);
+    footer.style.transform = "translateY(" + (-gap) + "px) translateZ(0)";
+  };
+  vv.addEventListener("resize", update);
+  vv.addEventListener("scroll", update);
+  window.addEventListener("orientationchange", () => setTimeout(update, 50));
+  update();
+}
+pinFooterToVisualViewport();
+
 boot();
 playCadenceIntro();
 </script>

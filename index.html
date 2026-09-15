@@ -18,6 +18,37 @@
     background:var(--paper); color:var(--ink); min-height:100vh;
   }
   *{box-sizing:border-box}
+  #app{opacity:0;transition:opacity .45s ease}
+  #app.revealed{opacity:1}
+  .brand-mark{flex:none;width:0.78em;height:0.78em;transform:translateY(0.035em)}
+  #brandIntro{position:fixed;inset:0;z-index:100;pointer-events:none}
+  #brandIntroMark{
+    position:fixed;margin:0;padding:0;
+    display:flex;align-items:center;gap:0.14em;
+    font-family:var(--serif);line-height:1;font-weight:700;letter-spacing:-0.025em;
+    color:var(--sig);white-space:nowrap;
+    text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;
+    will-change:left,top,font-size;
+  }
+  #brandFooter{
+    position:fixed;left:0;right:0;bottom:0;z-index:40;
+    display:flex;align-items:center;justify-content:center;
+    padding:12px 0 14px;
+    background:linear-gradient(to top, var(--paper) 55%, transparent);
+    opacity:0;transition:opacity .4s ease;pointer-events:none;
+  }
+  #brandFooterInner{
+    display:flex;align-items:center;justify-content:center;gap:0.32em;
+    width:max-content;
+    font-family:var(--serif);font-size:12.5px;font-weight:600;color:var(--ink-soft);
+    white-space:nowrap;
+  }
+  #brandFooter.revealed{opacity:1}
+  @media (prefers-reduced-motion:reduce){
+    #brandIntro{display:none}
+    #app{opacity:1}
+    #brandFooter{opacity:1;transition:none}
+  }
   .pad{padding:20px 16px 60px}
   h1{font-family:var(--serif);font-size:19px;font-weight:600;margin:0 0 4px}
   .sub{font-size:13px;color:var(--ink-soft);margin:0 0 20px}
@@ -67,7 +98,29 @@
 </style>
 </head>
 <body>
+<div id="brandIntro" aria-hidden="true">
+  <div id="brandIntroMark">
+    <svg class="brand-mark" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <rect width="40" height="40" rx="9" fill="#6E1423"/>
+      <rect x="9" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/>
+      <rect x="21" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/>
+    </svg>
+    <span>Cadence.</span>
+  </div>
+</div>
+
 <div id="app"></div>
+
+<div id="brandFooter">
+  <div id="brandFooterInner">
+    <svg class="brand-mark" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <rect width="40" height="40" rx="9" fill="#6E1423"/>
+      <rect x="9" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/>
+      <rect x="21" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/>
+    </svg>
+    <span>Cadence.</span>
+  </div>
+</div>
 
 <script>
 const SLOT_MIN = 30;
@@ -366,7 +419,61 @@ function render() {
   mountGrid();
 }
 
+// Shorter hold than the login page's splash — this page gets revisited far
+// more often (checking or editing times through the week), so the branded
+// moment should be quick rather than a repeated few-second delay.
+async function playCadenceIntro() {
+  const overlay = document.getElementById("brandIntro");
+  const intro = document.getElementById("brandIntroMark");
+  const footer = document.getElementById("brandFooter");
+  const footerInner = document.getElementById("brandFooterInner");
+  const app = document.getElementById("app");
+  if (!overlay || !intro || !footer || !footerInner || !app) return;
+
+  if (window.matchMedia("(prefers-reduced-motion:reduce)").matches) {
+    app.classList.add("revealed");
+    footer.classList.add("revealed");
+    return;
+  }
+
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) {}
+
+  const startSize = Math.min(72, Math.max(52, window.innerWidth * 0.14));
+  intro.style.fontSize = startSize + "px";
+  let introRect = intro.getBoundingClientRect();
+  intro.style.left = ((window.innerWidth - introRect.width) / 2) + "px";
+  intro.style.top = ((window.innerHeight - introRect.height) / 2) + "px";
+  introRect = intro.getBoundingClientRect();
+
+  // Measure the actual centred logo/wordmark content, not the full-width
+  // footer bar. The outer footer begins at x=0, whereas this inner wrapper
+  // sits at the true centred resting position.
+  const finalRect = footerInner.getBoundingClientRect();
+  const finalFontSize = parseFloat(getComputedStyle(footerInner).fontSize);
+
+  await new Promise(r => setTimeout(r, 700));
+
+  const animation = intro.animate(
+    [
+      { left: introRect.left + "px", top: introRect.top + "px", fontSize: startSize + "px" },
+      { left: finalRect.left + "px", top: finalRect.top + "px", fontSize: finalFontSize + "px" },
+    ],
+    { duration: 1000, easing: "cubic-bezier(.42,0,.18,1)", fill: "forwards" }
+  );
+  try { await animation.finished; } catch (e) {}
+
+  intro.style.left = finalRect.left + "px";
+  intro.style.top = finalRect.top + "px";
+  intro.style.fontSize = finalFontSize + "px";
+  footer.classList.add("revealed");
+
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  overlay.style.display = "none";
+  app.classList.add("revealed");
+}
+
 boot();
+playCadenceIntro();
 </script>
 </body>
 </html>

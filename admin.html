@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Cadence.</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -53,8 +54,9 @@
                  display:flex;flex-direction:column;
                  transform:translateX(-100%);transition:transform .58s cubic-bezier(.22,.72,.16,1)}
   .sidebar-panel.open{transform:translateX(0)}
-  .sidebar-brand{font-family:var(--serif);font-size:19px;font-weight:600;color:var(--sig);
+  .sidebar-brand{display:flex;align-items:center;gap:8px;font-family:var(--serif);font-size:19px;font-weight:600;color:var(--sig);
                  padding:2px 18px 16px;margin-bottom:8px;border-bottom:1px solid var(--rule)}
+  .sidebar-brand .brand-mark{flex:none;color:var(--sig)}
   .sidebar-item{display:block;width:100%;text-align:left;font:inherit;font-size:15px;padding:12px 18px;
                 border:none;background:none;color:var(--ink);cursor:pointer}
   .sidebar-item.sel{background:var(--sig-soft);color:var(--sig);font-weight:600}
@@ -474,7 +476,6 @@
 <div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
 <div id="sidebarPanel" class="sidebar-panel"></div>
 <div id="toast" class="toast" hidden></div>
-
 <script>
 /* ================================================================== */
 /*  Constants                                                          */
@@ -1623,7 +1624,7 @@ function renderHeader() {
 
 function renderSidebarItems() {
   const items = [["scheduler", "Scheduler"], ["profile", "Profile"], ["students", "Students"], ["termdates", "Term Dates"], ["settings", "Settings"]];
-  return '<div class="sidebar-brand">Cadence.</div>' +
+  return '<div class="sidebar-brand"><svg class="brand-mark" width="17" height="23" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="3" y="3" width="4" height="18" rx="1.5" fill="currentColor"/><rect x="11" y="3" width="9" height="18" rx="2" fill="currentColor"/></svg>Cadence.</div>' +
     items.map(([k, label]) => '<button class="sidebar-item' + (currentSection === k ? " sel" : "") + '" data-section="' + k + '">' + label + "</button>").join("") +
     '<button class="sidebar-signout" data-sidebar-action="signOut">Sign out</button>';
 }

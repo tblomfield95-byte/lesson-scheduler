@@ -111,8 +111,8 @@
   <div id="brandIntroMark">
     <svg class="brand-mark" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
       <rect width="40" height="40" rx="9" fill="#6E1423"/>
-      <rect x="9" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/>
-      <rect x="21" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/>
+      <rect x="8" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/>
+      <rect x="20" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/>
     </svg>
     <span>Cadence.</span>
   </div>
@@ -124,8 +124,8 @@
   <div id="brandFooterInner">
     <svg class="brand-mark" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
       <rect width="40" height="40" rx="9" fill="#6E1423"/>
-      <rect x="9" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/>
-      <rect x="21" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/>
+      <rect x="8" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/>
+      <rect x="20" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/>
     </svg>
     <span>Cadence.</span>
   </div>
@@ -217,7 +217,6 @@ async function clearResponse() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ slug: SLUG, week: WEEK, studentId: R.picked, status: "clear", avail: [] }),
     });
-    // Clear the in-memory record
     const s = R.students.find(x => x.id === R.picked);
     if (s) { s.status = null; s.avail = []; }
     R.submitted = false;
@@ -245,9 +244,6 @@ async function submitStatus(status) {
     });
     R.submitted = true;
     R.submittedStatus = status;
-    // Keep the in-memory record in sync, so going back to edit again in
-    // this same session shows what was just submitted — not whatever was
-    // true when the page first loaded.
     const s = R.students.find(x => x.id === R.picked);
     if (s) { s.status = status; s.avail = status === "in" ? [...R.avail] : []; s.lesson = R.lesson; }
     R.submitting = false;
@@ -310,12 +306,7 @@ function mountGrid() {
     const c = cellAt(el, t.clientX, t.clientY);
     if (!c) return;
     const k = key(c.d, c.i);
-
-    // A swipe beginning on a grey/unavailable cell should behave like
-    // ordinary page scrolling rather than starting a paint gesture.
     if (!R.offered.has(k)) return;
-
-    // Only capture the touch once we know the starting cell is paintable.
     e.preventDefault();
     painting = !R.avail.has(k); last = k; apply(c, painting);
   }, { passive: false });
@@ -348,7 +339,6 @@ function updateAfterPaint() {
 
 let flashTimer = null;
 function flash(msg) {
-  // Simple fallback if no toast element (for use during render)
   console.log(msg);
 }
 
@@ -410,7 +400,6 @@ function render() {
     return;
   }
 
-  // stage === "grid" — show what's on offer, decide once you've actually seen it
   let body = '<div class="pad"><button class="back" onclick="back()">← Not ' + name.split(" ")[0] + "?</button>" +
     "<h1>" + name + "</h1><p class=\"sub\">" + weekLabel + '</p>' +
     '<div class="lenrow"><span>Lesson length</span><div class="stepper">' +
@@ -428,9 +417,6 @@ function render() {
   mountGrid();
 }
 
-// Shorter hold than the login page's splash — this page gets revisited far
-// more often (checking or editing times through the week), so the branded
-// moment should be quick rather than a repeated few-second delay.
 async function playCadenceIntro() {
   const overlay = document.getElementById("brandIntro");
   const intro = document.getElementById("brandIntroMark");
@@ -454,9 +440,6 @@ async function playCadenceIntro() {
   intro.style.top = ((window.innerHeight - introRect.height) / 2) + "px";
   introRect = intro.getBoundingClientRect();
 
-  // Measure the actual centred logo/wordmark content, not the full-width
-  // footer bar. The outer footer begins at x=0, whereas this inner wrapper
-  // sits at the true centred resting position.
   const finalRect = footerInner.getBoundingClientRect();
   const finalStyle = getComputedStyle(footerInner);
   const finalFontSize = parseFloat(finalStyle.fontSize);
@@ -494,11 +477,6 @@ async function playCadenceIntro() {
   intro.style.fontWeight = finalFontWeight;
   intro.style.letterSpacing = finalLetterSpacing;
 
-  // No visual handoff at all: the travelling mark itself remains on screen
-  // as the permanent footer wordmark. The duplicate footer contents stay
-  // invisible and are used only as the destination measuring target.
-  // This avoids Safari having to rasterise a second copy of the typography
-  // at exactly the moment the main interface fades in.
   footer.classList.add("revealed");
 
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));

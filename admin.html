@@ -159,6 +159,19 @@
     background:var(--paper);
     color:var(--ink);
   }
+  .priority-list{border:1px solid var(--rule);border-radius:8px;background:var(--panel);overflow:hidden}
+  .priority-row{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--rule);
+                background:var(--panel);touch-action:none}
+  .priority-row:last-child{border-bottom:none}
+  .priority-row.dragging{background:var(--sig-soft);box-shadow:0 6px 18px rgba(33,28,23,.14);position:relative;z-index:5}
+  .priority-rank{flex:none;width:24px;height:24px;border-radius:50%;background:var(--paper);border:1px solid var(--rule);
+                  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--ink-soft)}
+  .priority-row.dragging .priority-rank{background:var(--sig);border-color:var(--sig);color:#fff}
+  .priority-label{flex:1;min-width:0}
+  .priority-label strong{display:block;font-size:14.5px;font-weight:580}
+  .priority-label span{display:block;font-size:12px;color:var(--ink-soft);margin-top:2px}
+  .priority-handle{flex:none;font-size:19px;line-height:1;color:var(--ink-soft);padding:6px;cursor:grab}
+  .priority-row.dragging .priority-handle{cursor:grabbing}
   .term-card{
     width:100%;
     min-width:0;
@@ -549,6 +562,12 @@ const DEFAULT_TERM_RANGES = [
   { start: "2027-04-12", end: "2027-07-02" },
 ];
 
+// The order the solver weighs its scoring dimensions in, most important
+// first. A user can reorder this from Settings > Priorities; this is only
+// the default for a brand-new account or an older saved state that
+// predates the feature.
+const DEFAULT_PRIORITY_ORDER = ["days", "preference", "gaps"];
+
 // The teaching-week total is derived from S.termRanges (raw calendar weeks
 // across every term), not a fixed number — reading weeks reduce it the
 // same way any "not teaching" week does, by being marked, not by a
@@ -662,6 +681,28 @@ function scoreSolution(assign, dayPreferences = {}) {
   return { days: Object.keys(byDay).length, gaps, latest, preference };
 }
 
+// Turns the user's ranked list (Settings > Priorities) into a comparator:
+// try each dimension in the order given, falling through to the next only
+// on a tie, with "latest finish" as a final, unexposed tiebreaker so a
+// genuinely equal pair still resolves to the earlier-finishing option.
+function buildPriorityComparator(priorityOrder) {
+  const order = (priorityOrder && priorityOrder.length) ? priorityOrder : DEFAULT_PRIORITY_ORDER;
+  const diffs = {
+    days: (x, y) => x.days - y.days,
+    gaps: (x, y) => x.gaps - y.gaps,
+    preference: (x, y) => x.preference - y.preference,
+  };
+  return (x, y) => {
+    for (const key of order) {
+      const fn = diffs[key];
+      if (!fn) continue;
+      const d = fn(x, y);
+      if (d !== 0) return d;
+    }
+    return x.latest - y.latest;
+  };
+}
+
 function combinations(arr, k) {
   const out = [];
   const rec = (start, acc) => {
@@ -682,8 +723,9 @@ function dayBlockers(withCands, offered, days) {
   }).filter(Boolean).sort((a, b) => a.blocked.length - b.blocked.length);
 }
 
-function solve(participants, offered, dayPreferences = {}, days, slots) {
+function solve(participants, offered, dayPreferences = {}, days, slots, priorityOrder) {
   const withCands = buildCandidates(participants, offered, days, slots);
+  const comparator = buildPriorityComparator(priorityOrder);
 
   const masks = [];
   for (let m = 1; m < 1 << days.length; m++) masks.push(m);
@@ -723,12 +765,7 @@ function solve(participants, offered, dayPreferences = {}, days, slots) {
 
   const rankAndDedupe = (found, limit = 12) => {
     const scored = found.map((a) => ({ assign: a, ...scoreSolution(a, dayPreferences) }))
-      .sort((x, y) =>
-        x.days - y.days ||
-        x.preference - y.preference ||
-        x.gaps - y.gaps ||
-        x.latest - y.latest
-      );
+      .sort(comparator);
 
     const assignmentSeen = new Set();
     const unique = [];
@@ -764,7 +801,11 @@ function solve(participants, offered, dayPreferences = {}, days, slots) {
 
     for (const mask of masks) {
       const dayCount = bitCount(mask);
-      if (bestDayCount !== null && dayCount > bestDayCount) break;
+      // Keep going one day-count tier past the first one that works, so a
+      // priority ranked above "Fewest days" (e.g. "No gaps") has a genuine
+      // alternative to compete against rather than only ever seeing
+      // solutions from the single smallest day count.
+      if (bestDayCount !== null && dayCount > bestDayCount + 1) break;
       const found = tryMask(mask, withCands);
       if (!found.length) continue;
       if (bestDayCount === null) bestDayCount = dayCount;
@@ -868,7 +909,7 @@ let S = {
   week: 1,
   weeksCompleted: 0,
   termRanges: DEFAULT_TERM_RANGES.map(r => ({ ...r })),
-  settings: { includeWeekends: false, dayStartHour: 9, dayEndHour: 19 },
+  settings: { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice() },
   rounds: {},
   students: [],
   openStudent: null,
@@ -962,6 +1003,9 @@ function applySavedState(saved) {
   S.weeksCompleted = saved.weeksCompleted || 0;
   S.termRanges = (saved.termRanges && saved.termRanges.length) ? saved.termRanges : S.termRanges;
   S.settings = saved.settings || S.settings;
+  if (!S.settings.priorityOrder || !S.settings.priorityOrder.length) {
+    S.settings.priorityOrder = DEFAULT_PRIORITY_ORDER.slice();
+  }
   S.students = saved.students || S.students;
   S.log = saved.log || [];
   S.hoursSort = saved.hoursSort || "first";
@@ -1103,7 +1147,7 @@ function runSolver() {
   if (!rnd.offered.size) { flash("Paint some blocks first"); return; }
   const participants = getParticipants(rnd);
   if (!participants.length) { flash("No students available this week"); return; }
-  rnd.result = solve(participants, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd));
+  rnd.result = solve(participants, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd), S.settings.priorityOrder);
   rnd.chosen = 0;
   rnd.optionsExpanded = false;
   S.tab = "plan";
@@ -1244,7 +1288,8 @@ function undoConfirmSchedule() {
         rnd.offered,
         rnd.dayPreferences || {},
         roundDays(rnd),
-        roundSlots(rnd)
+        roundSlots(rnd),
+        S.settings.priorityOrder
       );
 
       // Try to re-select the option that most closely matches the confirmed
@@ -1287,7 +1332,7 @@ function rescheduleWeek() {
     avail: (rnd.replies[l.id] && rnd.replies[l.id].avail) || new Set(),
   }));
   if (!pool.length) { flash("Nobody left to reschedule"); return; }
-  const solved = solve(pool, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd));
+  const solved = solve(pool, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd), S.settings.priorityOrder);
   if (!solved.options.length) { flash("No tighter arrangement available"); return; }
   const fresh = solved.options[0].assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" }));
   rnd.plan.lessons = [...rnd.plan.lessons.filter(l => l.status !== "planned"), ...fresh];
@@ -1501,9 +1546,11 @@ function saveTermDates() {
 /*  offered blocks keeps whatever shape it was created with.           */
 /* ================================================================== */
 
-let settingsDraft = { includeWeekends: false, dayStartHour: 9, dayEndHour: 19 };
+let settingsDraft = { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice() };
+// Transient — which of the two Settings sub-tabs is showing.
+let settingsTab = "general";
 function openSettingsDraft() {
-  settingsDraft = { ...S.settings };
+  settingsDraft = { ...S.settings, priorityOrder: (S.settings.priorityOrder || DEFAULT_PRIORITY_ORDER).slice() };
 }
 function toggleWeekendSetting() {
   settingsDraft.includeWeekends = !settingsDraft.includeWeekends;
@@ -1523,8 +1570,13 @@ function saveSettings() {
   const start = Number(settingsDraft.dayStartHour);
   const end = Number(settingsDraft.dayEndHour);
   if (!(end > start)) { flash("End time must be after start time"); return; }
-  S.settings = { includeWeekends: !!settingsDraft.includeWeekends, dayStartHour: start, dayEndHour: end };
-  flash("Settings updated — applies to weeks that are still completely blank");
+  S.settings = {
+    includeWeekends: !!settingsDraft.includeWeekends,
+    dayStartHour: start,
+    dayEndHour: end,
+    priorityOrder: (settingsDraft.priorityOrder || DEFAULT_PRIORITY_ORDER).slice(),
+  };
+  flash("Settings updated");
   render();
 }
 
@@ -1655,6 +1707,75 @@ function mountAllGrids() {
   document.querySelectorAll('.grid-wrap[data-role="offer"], .grid-wrap[data-role="reply"]').forEach(mountPaintGrid);
 }
 
+// Drag-to-reorder for the Priorities list. Same spirit as the grid's own
+// touch handling above: no re-render mid-gesture, just direct DOM moves,
+// with the underlying array only committed to settingsDraft on release.
+function mountPriorityList(el) {
+  if (!el) return;
+  const getRows = () => Array.from(el.querySelectorAll(".priority-row"));
+
+  const renumber = () => {
+    getRows().forEach((row, i) => {
+      row.dataset.idx = i;
+      const rank = row.querySelector(".priority-rank");
+      if (rank) rank.textContent = i + 1;
+    });
+  };
+
+  let dragEl = null;
+  let startY = 0;
+
+  const onMove = (clientY) => {
+    if (!dragEl) return;
+    dragEl.style.transform = "translateY(" + (clientY - startY) + "px)";
+    const rows = getRows();
+    const dragIndex = rows.indexOf(dragEl);
+    for (let i = 0; i < rows.length; i++) {
+      if (i === dragIndex) continue;
+      const rect = rows[i].getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (clientY < mid && i < dragIndex) {
+        el.insertBefore(dragEl, rows[i]);
+        renumber();
+        startY = clientY;
+        dragEl.style.transform = "translateY(0px)";
+        break;
+      }
+      if (clientY > mid && i > dragIndex) {
+        el.insertBefore(dragEl, rows[i].nextSibling);
+        renumber();
+        startY = clientY;
+        dragEl.style.transform = "translateY(0px)";
+        break;
+      }
+    }
+  };
+
+  function onPointerMove(e) { onMove(e.clientY); }
+  function onPointerUp() {
+    if (!dragEl) return;
+    dragEl.classList.remove("dragging");
+    dragEl.style.transform = "";
+    settingsDraft.priorityOrder = getRows().map((r) => r.dataset.key);
+    dragEl = null;
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+  }
+
+  el.querySelectorAll(".priority-handle").forEach((handle) => {
+    handle.addEventListener("pointerdown", (e) => {
+      const row = handle.closest(".priority-row");
+      if (!row) return;
+      e.preventDefault();
+      dragEl = row;
+      startY = e.clientY;
+      row.classList.add("dragging");
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+    });
+  });
+}
+
 /* ================================================================== */
 /*  Render                                                             */
 /* ================================================================== */
@@ -1674,6 +1795,7 @@ function render() {
   };
   app.innerHTML = renderHeader() + (sections[currentSection] ? sections[currentSection]() : renderTabContent());
   mountAllGrids();
+  mountPriorityList(document.getElementById("priorityList"));
   scheduleSave();
 }
 
@@ -1742,7 +1864,7 @@ async function signOut() {
 function goSection(section) {
   currentSection = section;
   if (section === "termdates") openTermDatesDraft();
-  if (section === "settings") openSettingsDraft();
+  if (section === "settings") { openSettingsDraft(); settingsTab = "general"; }
   sidebarOpen = false; syncSidebarDOM(); render();
 }
 
@@ -1799,11 +1921,32 @@ function renderTermDatesSection() {
     "</div>";
 }
 
-function renderSettingsSection() {
+function priorityMeta(key) {
+  return {
+    days: { label: "Fewest days", desc: "Fit everyone into as few teaching days as possible" },
+    gaps: { label: "No gaps", desc: "Keep each teaching day tightly packed, with no idle time between lessons" },
+    preference: { label: "Preferred days", desc: "Favour the days you\u2019ve marked as preferred, and steer clear of the ones you\u2019ve marked to avoid" },
+  }[key];
+}
+
+function renderPrioritiesTab() {
+  const order = (settingsDraft.priorityOrder && settingsDraft.priorityOrder.length) ? settingsDraft.priorityOrder : DEFAULT_PRIORITY_ORDER;
+  const rows = order.map((k, i) => {
+    const m = priorityMeta(k);
+    return '<div class="priority-row" data-key="' + k + '" data-idx="' + i + '">' +
+      '<span class="priority-rank">' + (i + 1) + '</span>' +
+      '<span class="priority-label"><strong>' + m.label + '</strong><span>' + m.desc + '</span></span>' +
+      '<span class="priority-handle" aria-hidden="true">\u2630</span>' +
+      '</div>';
+  }).join("");
+  return '<p class="lede">Drag to set what matters most when Cadence works out a week. It tries to satisfy whatever\u2019s nearer the top first, only falling back to the next one when there\u2019s a genuine tie.</p>' +
+    '<div class="priority-list" id="priorityList">' + rows + '</div>';
+}
+
+function renderGeneralSettingsTab() {
   const d = settingsDraft;
   const hourLabel = (h) => String(h).padStart(2, "0") + ":00";
-  return '<div class="pad">' +
-    '<p class="lede">These shape the grid on the Offer tab. They only apply to weeks that are still completely blank \u2014 the moment you paint a block or mark a week as not teaching, that week\u2019s shape locks in for good, even if you change these again later.</p>' +
+  return '<p class="lede">These shape the grid on the Offer tab. They only apply to weeks that are still completely blank \u2014 the moment you paint a block or mark a week as not teaching, that week\u2019s shape locks in for good, even if you change these again later.</p>' +
     '<div class="field"><label>Weekends</label>' +
     '<button class="btn' + (d.includeWeekends ? " notteaching-active" : "") + '" style="width:100%" data-action="toggleWeekendSetting">' +
     (d.includeWeekends ? "Weekends included \u2014 tap to go back to weekdays only" : "Weekdays only \u2014 tap to include Saturday and Sunday") + '</button></div>' +
@@ -1816,8 +1959,17 @@ function renderSettingsSection() {
     '<button class="step" data-action="adjustSettingsHour" data-which="end" data-delta="-1" ' + (d.dayEndHour <= d.dayStartHour + 1 ? "disabled" : "") + '>\u2013</button>' +
     "<b>" + hourLabel(d.dayEndHour) + "</b>" +
     '<button class="step" data-action="adjustSettingsHour" data-which="end" data-delta="1" ' + (d.dayEndHour >= 22 ? "disabled" : "") + '>+</button>' +
-    "</div></div>" +
-    '<div class="btnrow"><button class="btn sig" data-action="saveSettings">Save changes</button></div>' +
+    "</div></div>";
+}
+
+function renderSettingsSection() {
+  const tabsHTML = '<div class="tabs" style="padding:0 0 14px">' +
+    '<button class="tab' + (settingsTab === "general" ? " sel" : "") + '" data-action="settingsTab" data-tab="general">General</button>' +
+    '<button class="tab' + (settingsTab === "priorities" ? " sel" : "") + '" data-action="settingsTab" data-tab="priorities">Priorities</button>' +
+    "</div>";
+  const body = settingsTab === "priorities" ? renderPrioritiesTab() : renderGeneralSettingsTab();
+  return '<div class="pad">' + tabsHTML + body +
+    '<div class="btnrow" style="margin-top:16px"><button class="btn sig" data-action="saveSettings">Save changes</button></div>' +
     "</div>";
 }
 
@@ -2172,6 +2324,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "toggleWeekendSetting") toggleWeekendSetting();
   else if (action === "adjustSettingsHour") adjustSettingsHour(el.dataset.which, Number(el.dataset.delta));
   else if (action === "saveSettings") saveSettings();
+  else if (action === "settingsTab") { settingsTab = el.dataset.tab; render(); }
   else if (action === "sampleReplies") sampleReplies();
   else if (action === "toggleStudentOpen") {
     const r = activeRound().replies[id];

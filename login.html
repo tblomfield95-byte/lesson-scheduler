@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Log in — Cadence.</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Cadence">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -223,7 +225,7 @@ async function playCadenceIntro() {
 
     1. Give the travelling mark its large starting font size.
     2. Measure its real rendered width/height.
-    3. Position it with literal pixel left/top values so it starts exactly centred.
+    3. Position it horizontally centred and slightly above the screen's vertical midpoint.
     4. Measure the hidden permanent heading.
     5. Animate left, top and font-size directly to those final values.
   */
@@ -234,12 +236,12 @@ async function playCadenceIntro() {
   let introRect = intro.getBoundingClientRect();
 
   const startLeft = (window.innerWidth - introRect.width) / 2;
-  const startTop = (window.innerHeight - introRect.height) / 2;
+  const startTop = window.innerHeight * 0.46 - introRect.height / 2;
 
   intro.style.left = startLeft + "px";
   intro.style.top = startTop + "px";
 
-  // Read once more after applying the exact centred pixel position.
+  // Read once more after applying the starting pixel position.
   introRect = intro.getBoundingClientRect();
   const finalRect = finalMark.getBoundingClientRect();
   const finalFontSize = parseFloat(getComputedStyle(finalMark).fontSize);

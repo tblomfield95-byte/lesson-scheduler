@@ -265,6 +265,7 @@
   .grid-locked{border:1px solid var(--rule);border-radius:8px;
                background:repeating-linear-gradient(45deg,#E7E1D2,#E7E1D2 8px,#F2EFE7 8px,#F2EFE7 16px);
                padding:36px 16px;text-align:center;color:var(--ink-soft);font-size:13.5px;line-height:1.5}
+  .offer-locked{opacity:.5;pointer-events:none}
 
   .meter{display:flex;justify-content:space-between;align-items:baseline;margin:12px 0 0;
          font-size:13px;color:var(--ink-soft)}
@@ -820,6 +821,7 @@ function blankRound(weekStart) {
     result: null,
     chosen: 0,
     notTeaching: false,
+    sent: false,
     dayPreferences: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
     optionsExpanded: false,
     includeWeekends: S.settings.includeWeekends,
@@ -899,6 +901,7 @@ function serializeState() {
       result: rr.result,
       chosen: rr.chosen,
       notTeaching: !!rr.notTeaching,
+      sent: !!rr.sent,
       dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
       includeWeekends: !!rr.includeWeekends,
       dayStartHour: rr.dayStartHour,
@@ -945,6 +948,7 @@ function applySavedState(saved) {
       result: rr.result || null,
       chosen: rr.chosen || 0,
       notTeaching: !!rr.notTeaching,
+      sent: !!rr.sent,
       dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
       // A round saved before this feature existed has none of these — default
       // to exactly what was hardcoded before, so nothing already painted shifts.
@@ -1027,6 +1031,7 @@ function flash(msg) {
 function clearOffer() {
   const rnd = activeRound();
   if (rnd.notTeaching) { rnd.notTeaching = false; S.weeksCompleted = Math.max(0, S.weeksCompleted - 1); }
+  rnd.sent = false;
   rnd.offered = new Set(); rnd.result = null;
   render();
 }
@@ -1312,9 +1317,7 @@ function nextWeek() {
   render();
 }
 
-async function goReplies() {
-  S.tab = "replies";
-  render();
+async function copyStudentLink() {
   const url = window.location.origin + "/s/" + (ME.slug || "") + "/" + S.week;
   try {
     await navigator.clipboard.writeText(url);
@@ -1322,6 +1325,23 @@ async function goReplies() {
   } catch (e) {
     flash("Couldn't copy — the link is " + url);
   }
+}
+
+// Stays on the Offer tab rather than jumping to Replies — sending is now a
+// lock, not a navigation. The grid and this button freeze until "Edit
+// availability" is tapped, so there's no risk of quietly repainting blocks
+// after students have already been told what's on offer.
+function sendToStudents() {
+  const rnd = activeRound();
+  rnd.sent = true;
+  render();
+  copyStudentLink();
+}
+
+function editAvailability() {
+  const rnd = activeRound();
+  rnd.sent = false;
+  render();
 }
 
 async function saveProfile() {
@@ -1764,9 +1784,17 @@ function renderWeekPicker() {
 function renderOfferTab() {
   const rnd = activeRound();
   const hours = (rnd.offered.size * SLOT_MIN) / 60;
+  const grid = buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour });
   const gridBlock = rnd.notTeaching
     ? '<div class="grid-locked">Marked as not teaching this week.<br>Tap \u201cNot teaching this week\u201d again, or \u201cClear\u201d, to paint times.</div>'
-    : buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour });
+    : rnd.sent
+      ? '<div class="offer-locked">' + grid + '</div>'
+      : grid;
+  const sendRow = rnd.sent
+    ? '<div class="btnrow" style="margin-top:16px"><button class="btn primary" disabled>Send to students</button></div>' +
+      '<div class="btnrow"><button class="btn" data-action="copyStudentLink">Copy URL</button>' +
+      '<button class="btn" data-action="editAvailability">Edit availability</button></div>'
+    : '<div class="btnrow" style="margin-top:16px"><button class="btn primary" data-action="sendToStudents" ' + (rnd.offered.size && !rnd.notTeaching ? "" : "disabled") + '>Send to students</button></div>';
   return '<div class="pad">' +
     renderWeekPicker() +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
@@ -1783,7 +1811,7 @@ function renderOfferTab() {
     '</div>' +
     gridBlock +
     '<div class="meter"><span>Offered this week</span><b>' + hours + 'h</b></div>' +
-    '<div class="btnrow" style="margin-top:16px"><button class="btn primary" data-action="goReplies" ' + (rnd.offered.size && !rnd.notTeaching ? "" : "disabled") + '>Send to students</button></div>' +
+    sendRow +
     "</div>";
 }
 
@@ -2067,7 +2095,9 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "skipWeek") skipWeek();
   else if (action === "prevWeek") prevWeek();
   else if (action === "nextWeek") nextWeek();
-  else if (action === "goReplies") goReplies();
+  else if (action === "sendToStudents") sendToStudents();
+  else if (action === "copyStudentLink") copyStudentLink();
+  else if (action === "editAvailability") editAvailability();
   else if (action === "cycleDayPref") cycleDayPreference(Number(el.dataset.day));
   else if (action === "toggleMoreOptions") toggleMoreOptions();
   else if (action === "toggleSidebar") toggleSidebar();

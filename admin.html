@@ -329,8 +329,26 @@
           font-size:12.5px;color:var(--ink-soft)}
   .stepper{display:flex;align-items:center;gap:10px}
   .stepper b{font-size:13px;font-weight:600;color:var(--ink);min-width:58px;text-align:center}
-  .step{font:inherit;font-size:16px;line-height:1;width:28px;height:28px;border-radius:14px;
-        border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+  .step{
+        font:inherit;
+        font-size:16px;
+        line-height:1;
+        width:28px;
+        height:28px;
+        padding:0 0 1px;
+        border-radius:14px;
+        border:1px solid var(--rule);
+        background:var(--panel);
+        color:var(--ink);
+        cursor:pointer;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        text-align:center;
+        vertical-align:middle;
+        -webkit-appearance:none;
+        appearance:none;
+      }
   .step:disabled{opacity:.32;cursor:default}
   .step:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
 

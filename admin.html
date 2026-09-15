@@ -227,7 +227,7 @@
     .term-date-grid{gap:10px}
     .term-date-grid input[type="date"]{font-size:13px;padding-left:4px;padding-right:4px}
   }
-  .title{font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:0;margin:0;line-height:1.15}
+  .title{font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:0;margin:0;line-height:1.15;color:var(--sig)}
   .wk{font-size:13px;color:var(--ink-soft);white-space:nowrap}
   .tabs{display:flex;gap:2px;padding:0 12px 10px;overflow-x:auto}
   .tab{flex:1;min-width:74px;border:none;background:none;padding:7px 6px;font:inherit;font-size:13px;
@@ -1269,7 +1269,7 @@ function confirmSchedule() {
   // Keep rnd.result and rnd.chosen intact so "Undo confirmation" can return
   // to the exact option set that was just confirmed.
   S.imgUrl = ""; S.fallbackText = "";
-  flash("Week confirmed — post it to the group");
+  flash("Week confirmed. Post it to the group");
   render();
 }
 
@@ -1337,7 +1337,7 @@ function rescheduleWeek() {
   const fresh = solved.options[0].assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" }));
   rnd.plan.lessons = [...rnd.plan.lessons.filter(l => l.status !== "planned"), ...fresh];
   S.imgUrl = ""; S.fallbackText = "";
-  flash("Rescheduled — repost to the group");
+  flash("Rescheduled. Repost to the group");
   render();
 }
 
@@ -1401,7 +1401,7 @@ async function copyStudentLink() {
     await navigator.clipboard.writeText(url);
     flash("Student link copied to clipboard");
   } catch (e) {
-    flash("Couldn't copy — the link is " + url);
+    flash("Couldn't copy. The link is " + url);
   }
 }
 
@@ -1432,11 +1432,11 @@ async function saveProfile() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name, instrument }),
     });
-    if (!res.ok) { flash("Couldn't save — try again"); return; }
+    if (!res.ok) { flash("Couldn't save. Try again"); return; }
     flash("Profile updated");
     render();
   } catch (e) {
-    flash("Couldn't save — check your connection");
+    flash("Couldn't save. Check your connection");
   }
 }
 
@@ -1587,10 +1587,10 @@ function saveSettings() {
 async function deleteAccount() {
   try {
     const res = await fetch("/api/account", { method: "DELETE" });
-    if (!res.ok) { flash("Couldn't delete your account — try again"); confirmingDeleteAccount = false; render(); return; }
+    if (!res.ok) { flash("Couldn't delete your account. Try again"); confirmingDeleteAccount = false; render(); return; }
     window.location.href = "/login.html";
   } catch (e) {
-    flash("Couldn't reach the server — check your connection");
+    flash("Couldn't reach the server. Check your connection");
     confirmingDeleteAccount = false; render();
   }
 }
@@ -1806,7 +1806,7 @@ function renderHeader() {
   const inScheduler = currentSection === "scheduler";
   let header = '<div class="bar"><div class="bartop">' +
     '<span class="hbrow"><button class="hamburger" data-action="toggleSidebar" aria-label="Menu"><svg width="24" height="18" viewBox="0 0 24 18" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="3" rx="1.5" fill="currentColor"/><rect y="7.5" width="24" height="3" rx="1.5" fill="currentColor"/><rect y="15" width="24" height="3" rx="1.5" fill="currentColor"/></svg></button>' +
-    '<h1 class="title"' + (inScheduler ? "" : ' style="color:var(--sig)"') + '>' + (inScheduler ? title : sectionTitles[currentSection]) + '</h1></span>' +
+    '<h1 class="title">' + (inScheduler ? title : sectionTitles[currentSection]) + '</h1></span>' +
     (inScheduler ? '<div class="wk">' + S.weeksCompleted + " of " + termWeeks() + ' weeks done</div>' : '<span></span>') +
     '</div>';
   if (inScheduler) {
@@ -1876,7 +1876,7 @@ function renderProfileSection() {
     '<div class="btnrow"><button class="btn sig" data-action="saveProfile">Save changes</button></div>' +
     '<div class="panel" style="border-color:var(--sig);margin-top:24px">' +
     '<h3 style="color:var(--sig)">Account deletion</h3>' +
-    '<p class="lede" style="margin-bottom:12px">Deleting your account removes your profile, students, schedules and hours from Cadence, and frees up this email address \u2014 a future visit to the login page will start a brand new account. This can\u2019t be undone.</p>' +
+    '<p class="lede" style="margin-bottom:12px">Deleting your account removes your profile, students, schedules and hours from Cadence, and frees up this email address. Visit the login page again after that and it\u2019ll treat you as a brand new sign-up. This can\u2019t be undone.</p>' +
     (confirmingDeleteAccount
       ? '<p class="lede" style="color:var(--sig);font-weight:600;margin-bottom:10px">Are you absolutely sure? This can\u2019t be undone.</p>' +
         '<div class="btnrow"><button class="btn" data-action="cancelDeleteAccount">Cancel</button>' +
@@ -1894,7 +1894,7 @@ function renderStudentsSection() {
     "</div>"
   ).join("");
   return '<div class="pad">' +
-    '<p class="lede">Edit names or allocated hours here. Removing someone stops them appearing in future weeks — hours already logged for them stay on record.</p>' +
+    '<p class="lede">Edit names or allocated hours here. Removing someone stops them appearing in future weeks, though hours already logged for them stay on record.</p>' +
     '<div class="panel students-panel">' + studentRows +
     '<div class="student-add-row"><input type="text" data-bind="newStudentName" value="' + escapeHTML(newStudentDraft.name) + '" placeholder="New student\u2019s name">' +
     '<div class="student-hours-wrap"><input type="number" step="0.5" min="0" data-bind="newStudentAllocated" value="' + newStudentDraft.allocated + '" placeholder="Hours" aria-label="Allocated hours"></div>' +
@@ -1946,10 +1946,10 @@ function renderPrioritiesTab() {
 function renderGeneralSettingsTab() {
   const d = settingsDraft;
   const hourLabel = (h) => String(h).padStart(2, "0") + ":00";
-  return '<p class="lede">These shape the grid on the Offer tab. They only apply to weeks that are still completely blank \u2014 the moment you paint a block or mark a week as not teaching, that week\u2019s shape locks in for good, even if you change these again later.</p>' +
+  return '<p class="lede">These shape the grid on the Offer tab, but only for weeks that are still completely blank. The moment you paint a block or mark a week as not teaching, that week\u2019s shape locks in for good, even if you change these again later.</p>' +
     '<div class="field"><label>Weekends</label>' +
     '<button class="btn' + (d.includeWeekends ? " notteaching-active" : "") + '" style="width:100%" data-action="toggleWeekendSetting">' +
-    (d.includeWeekends ? "Weekends included \u2014 tap to go back to weekdays only" : "Weekdays only \u2014 tap to include Saturday and Sunday") + '</button></div>' +
+    (d.includeWeekends ? "Weekends included. Tap to go back to weekdays only" : "Weekdays only. Tap to include Saturday and Sunday") + '</button></div>' +
     '<div class="field"><label>Grid starts at</label><div class="stepper">' +
     '<button class="step" data-action="adjustSettingsHour" data-which="start" data-delta="-1" ' + (d.dayStartHour <= 6 ? "disabled" : "") + '>\u2013</button>' +
     "<b>" + hourLabel(d.dayStartHour) + "</b>" +
@@ -2011,7 +2011,7 @@ function renderOfferTab() {
   return '<div class="pad">' +
     renderWeekPicker() +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
-    '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + ' — check this matches the week you mean; correct it if a reading week or anything else has thrown it off.</p>' +
+    '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + '. Check this matches the week you mean, and correct it if a reading week or anything else has thrown it off.</p>' +
     '<p class="lede">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
     '<div class="dayprefs"><div class="dayprefs-head"><b>Teaching day preference</b><span>Tap to cycle Neutral → Preferred → Avoid</span></div>' +
     '<div class="dayprefs-grid" style="grid-template-columns:repeat(' + roundDays(rnd).length + ',minmax(0,1fr))">' + roundDays(rnd).map((d, i) => {
@@ -2031,7 +2031,7 @@ function renderOfferTab() {
 function renderRepliesTab() {
   const rnd = activeRound();
   if (rnd.notTeaching) {
-    return '<div class="pad">' + renderWeekPicker() + '<p class="empty">This week is marked as not teaching — nothing to collect. Undo it on the Offer tab if that\u2019s changed.</p></div>';
+    return '<div class="pad">' + renderWeekPicker() + '<p class="empty">This week is marked as not teaching, so there\u2019s nothing to collect. Undo it on the Offer tab if that\u2019s changed.</p></div>';
   }
   const heat = getHeat(rnd);
   let body;
@@ -2042,7 +2042,7 @@ function renderRepliesTab() {
       const r = rnd.replies[s.id];
       const st = r ? r.status : "waiting";
       const isStudentReply = !!r && r.source !== "admin";
-      const ownerText = !r ? "" : isStudentReply ? " · submitted by student" : " · entered by you";
+      const ownerText = !r ? "" : isStudentReply ? " (from the student)" : " (you entered this)";
       const statusText = (st === "in" ? (r.avail.size + " slots free") : st === "skip" ? "Not this week" : st === "none" ? "Nothing works" : "Waiting") + ownerText;
       const curLesson = lessonFor(rnd, s.id);
       let lenrow = "";
@@ -2121,7 +2121,7 @@ function renderPreConfirmPlanTab() {
     ).join("");
     return '<div class="opt' + (actualIdx === rnd.chosen ? " sel" : "") + '" data-action="chooseOption" data-idx="' + actualIdx + '">' +
       '<div class="opthead"><b>' + daysLabel + "</b><span>" + gapsLabel + "</span></div>" + lines +
-      '<div class="option-reason">' + prefText + ' · ' + opt.days + ' teaching day' + (opt.days === 1 ? "" : "s") + '</div></div>';
+      '<div class="option-reason">' + prefText + ', ' + opt.days + ' teaching day' + (opt.days === 1 ? "" : "s") + '</div></div>';
   };
 
   const optionsHTML = r.options.slice(0, 3).map(renderOption).join("");
@@ -2246,7 +2246,7 @@ function renderHoursTab() {
 
     const note = remaining <= 0 ? "Allocation complete"
       : behind ? "Needs " + perWeek.toFixed(1) + "h a week to finish in time"
-      : remaining + "h left — roughly " + lessonsLeft + " more hour-long lesson" + (lessonsLeft === 1 ? "" : "s");
+      : remaining + "h left, roughly " + lessonsLeft + " more hour-long lesson" + (lessonsLeft === 1 ? "" : "s");
 
     let ledger = "";
     if (open) {

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Log in — Cadence.</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -31,7 +32,17 @@
     margin:0 auto;
   }
 
+  .brand-mark{
+    flex:none;
+    width:0.62em;
+    height:0.85em;
+    color:var(--sig);
+  }
+
   #brandWordmark{
+    display:flex;
+    align-items:center;
+    gap:0.14em;
     font-family:var(--serif);
     font-size:36px;
     line-height:1;
@@ -56,6 +67,9 @@
     position:fixed;
     margin:0;
     padding:0;
+    display:flex;
+    align-items:center;
+    gap:0.14em;
     font-family:var(--serif);
     line-height:1;
     font-weight:700;
@@ -149,11 +163,23 @@
 <body>
 
 <div id="brandIntro" aria-hidden="true">
-  <div id="brandIntroMark">Cadence.</div>
+  <div id="brandIntroMark">
+    <svg class="brand-mark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="3" width="4" height="18" rx="1.5" fill="currentColor"/>
+      <rect x="11" y="3" width="9" height="18" rx="2" fill="currentColor"/>
+    </svg>
+    <span>Cadence.</span>
+  </div>
 </div>
 
 <div class="pad">
-  <h1 id="brandWordmark">Cadence.</h1>
+  <h1 id="brandWordmark">
+    <svg class="brand-mark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="3" width="4" height="18" rx="1.5" fill="currentColor"/>
+      <rect x="11" y="3" width="9" height="18" rx="2" fill="currentColor"/>
+    </svg>
+    <span>Cadence.</span>
+  </h1>
 
   <div id="loginContent" class="login-content">
     <p class="sub">Enter your email and we'll give you a link to log in — no password needed.</p>

@@ -33,7 +33,7 @@
           color:var(--ink);cursor:pointer}
   .choice.sel{border-color:var(--sig);background:var(--sig);color:#fff;font-weight:560}
   .grid-wrap{border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--panel);
-             touch-action:none;user-select:none;-webkit-user-select:none;margin:14px 0}
+             touch-action:auto;user-select:none;-webkit-user-select:none;margin:14px 0}
   .grid-head{display:flex;border-bottom:1px solid var(--rule);background:var(--paper)}
   .dayhead{flex:1;text-align:center;padding:8px 0;font-size:12px;font-weight:600;color:var(--ink-soft)}
   .gutter{width:46px;flex:none}
@@ -246,9 +246,14 @@ function mountGrid() {
     const t = e.touches[0];
     const c = cellAt(el, t.clientX, t.clientY);
     if (!c) return;
-    e.preventDefault();
     const k = key(c.d, c.i);
+
+    // A swipe beginning on a grey/unavailable cell should behave like
+    // ordinary page scrolling rather than starting a paint gesture.
     if (!R.offered.has(k)) return;
+
+    // Only capture the touch once we know the starting cell is paintable.
+    e.preventDefault();
     painting = !R.avail.has(k); last = k; apply(c, painting);
   }, { passive: false });
   el.addEventListener("touchmove", (e) => {

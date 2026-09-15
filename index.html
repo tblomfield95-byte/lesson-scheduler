@@ -469,7 +469,26 @@ async function playCadenceIntro() {
   );
   try { await animation.finished; } catch (e) {}
 
-  intro.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+  // Lock the mark into a plain, resize-invariant resting position rather
+  // than leaving it as a frozen top + transform combination. `top` is
+  // NOT safe here: if Safari's toolbar later collapses (the viewport
+  // growing taller), an element positioned via `top` does not move,
+  // while the real page content — and #brandFooter itself, correctly
+  // anchored via `bottom:0` — both shift down to fill the new space.
+  // That leaves the mark stranded exactly where the OLD, shorter
+  // viewport put it, now overlapping whatever content shifted into that
+  // spot. `bottom` doesn't have this problem: the browser recalculates
+  // it against the CURRENT viewport on every resize, same as
+  // #brandFooter's own bottom:0. footerInner's distance from the
+  // viewport's bottom edge is constant regardless of toolbar state (it
+  // comes entirely from fixed-pixel padding), so measuring it once here
+  // stays valid through any later toolbar collapse this code never sees.
+  const distanceFromBottom = window.innerHeight - finalRect.bottom;
+  intro.style.transform = "";
+  intro.style.top = "";
+  intro.style.bottom = distanceFromBottom + "px";
+  intro.style.left = finalRect.left + "px";
+  intro.style.fontSize = finalFontSize + "px";
   intro.style.color = finalColor;
 
   footer.classList.add("revealed");
@@ -482,59 +501,6 @@ async function playCadenceIntro() {
   // (permanently invisible) footerInner text or removed. That duplicate
   // text exists solely as a measuring target for finalRect above.
 }
-
-// The footer's own position is always correct (confirmed by direct
-// on-device measurement — footer.bottom exactly equals the current
-// viewport height at every instant). What actually looks wrong is that
-// Safari's toolbar collapsing suddenly reveals new page content right
-// where the footer already permanently sits, for the instant before a
-// further scroll moves that content past it. Since we know exactly when
-// that reveal happens — a visualViewport resize — the footer can just
-// step out of the way for that one moment instead.
-function hideFooterDuringToolbarResize() {
-  const footer = document.getElementById("brandFooter");
-  if (!footer || !window.visualViewport) return;
-  let hideTimer = null;
-  window.visualViewport.addEventListener("resize", () => {
-    footer.style.transition = "none";
-    footer.style.opacity = "0";
-    clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => {
-      footer.style.transition = "opacity .25s ease";
-      footer.style.opacity = "1";
-    }, 220);
-  });
-}
-hideFooterDuringToolbarResize();
-
-// TEMPORARY DIAGNOSTIC — confirms whether visualViewport's resize event
-// actually fires for this specific toolbar-collapse gesture at all,
-// before assuming the fix above can ever work. Screenshot this box
-// during the buggy scroll.
-(function () {
-  if (!window.visualViewport) return;
-  const box = document.createElement("div");
-  box.style.cssText =
-    "position:fixed;top:0;left:0;right:0;z-index:9999;" +
-    "background:rgba(0,0,0,.82);color:#0f0;font:11px/1.4 monospace;" +
-    "padding:6px 8px;white-space:pre;pointer-events:none;";
-  document.body.appendChild(box);
-  let count = 0;
-  const render = (label) => {
-    box.textContent =
-      "resize events fired: " + count + "\n" +
-      "last event: " + label + "\n" +
-      "vv.height: " + window.visualViewport.height.toFixed(1) + "\n" +
-      "innerHeight: " + window.innerHeight + "\n" +
-      "time: " + new Date().toISOString().slice(11, 23);
-  };
-  render("none yet");
-  window.visualViewport.addEventListener("resize", () => {
-    count++;
-    render("resize");
-  });
-  window.addEventListener("resize", () => render("window.resize (fallback)"));
-})();
 
 boot();
 playCadenceIntro();

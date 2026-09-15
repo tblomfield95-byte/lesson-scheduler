@@ -245,7 +245,7 @@
   .weekpicker-mid span{display:block;font-size:12px;color:var(--ink-soft);margin-top:2px}
 
   .grid-wrap{border:1px solid var(--rule);border-radius:7px;overflow:hidden;background:var(--panel);
-             touch-action:none;user-select:none;-webkit-user-select:none}
+             touch-action:auto;user-select:none;-webkit-user-select:none}
   .grid-head{display:flex;border-bottom:1px solid var(--rule);background:var(--paper)}
   .dayhead{flex:1;text-align:center;padding:8px 0;font-size:12px;font-weight:600;color:var(--ink-soft)}
   .gutter{width:46px;flex:none}
@@ -1545,9 +1545,14 @@ function mountPaintGrid(el) {
     const t = e.touches[0];
     const c = cellAt(el, t.clientX, t.clientY);
     if (!c) return;
-    e.preventDefault(); // claim the gesture before the browser starts a scroll
     const k = key(c.d, c.i);
+
+    // Where this grid has grey/unavailable cells, let touches that begin
+    // there pass through to the browser so the page can scroll normally.
     if (offeredSet && !offeredSet.has(k)) return;
+
+    // Paintable cells still capture the gesture for drag-to-paint.
+    e.preventDefault();
     painting = !isSelected(k); last = k; apply(c, painting);
   }, { passive: false });
 
@@ -2175,11 +2180,3 @@ document.getElementById("sidebarPanel").addEventListener("click", (e) => {
 
   const btn = e.target.closest("[data-section]");
   if (btn) goSection(btn.dataset.section);
-});
-syncSidebarDOM();
-
-render();
-Promise.all([loadState(), loadMe()]).then(render);
-</script>
-</body>
-</html>

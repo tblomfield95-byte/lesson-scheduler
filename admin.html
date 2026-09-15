@@ -289,6 +289,12 @@
   .cell.on{background:var(--sig)}
   .cell.muted{background:#EEEAE2;border-right-color:#DDD6C9;border-bottom-color:#DDD6C9;cursor:default}
   .cell.heat{background:var(--sig)}
+  /* touch-action is scoped to the two interactive grid roles only — the
+     read-only "heat" overlay has no paint listener and must stay freely
+     scrollable everywhere, muted or not. */
+  .grid-wrap[data-role="offer"] .cell,
+  .grid-wrap[data-role="reply"] .cell{touch-action:none}
+  .grid-wrap[data-role="reply"] .cell.muted{touch-action:pan-y}
   .heatnum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
            font-size:10px;color:#fff;font-weight:600;pointer-events:none}
   .grid-locked{border:1px solid var(--rule);border-radius:8px;
@@ -1691,21 +1697,19 @@ function mountPaintGrid(el) {
     if (!c) return;
     const k = key(c.d, c.i);
 
-    // Where this grid has grey/unavailable cells, let touches that begin
-    // there pass through to the browser so the page can scroll normally.
+    // Where this grid has grey/unavailable cells, touch-action:pan-y in
+    // CSS already lets those scroll normally — this listener stays
+    // passive throughout so it never fights the browser's own scrolling.
     if (offeredSet && !offeredSet.has(k)) return;
 
-    // Paintable cells still capture the gesture for drag-to-paint.
-    e.preventDefault();
     painting = !isSelected(k); last = k; apply(c, painting);
-  }, { passive: false });
+  }, { passive: true });
 
   el.addEventListener("touchmove", (e) => {
     if (painting === null) return;
-    e.preventDefault();
     const t = e.touches[0];
     move(t.clientX, t.clientY);
-  }, { passive: false });
+  }, { passive: true });
 
   el.addEventListener("touchend", end);
   el.addEventListener("touchcancel", end);

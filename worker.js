@@ -111,6 +111,15 @@ async function handleVerify(url, env) {
   return new Response(null, { status: 302, headers });
 }
 
+function handleLogout() {
+  const headers = new Headers();
+  headers.append(
+    "Set-Cookie",
+    "session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0"
+  );
+  return new Response(null, { status: 204, headers });
+}
+
 async function handleMe(request, env) {
   const teacherId = await requireSession(request, env);
   if (!teacherId) return json({ error: "not logged in" }, 401);
@@ -247,7 +256,7 @@ async function handleReply(request, env) {
   const wk = String(week);
   state.rounds[wk] = state.rounds[wk] || { weekStart: null, offered: [], replies: {}, plan: null, result: null, chosen: 0 };
   state.rounds[wk].replies = state.rounds[wk].replies || {};
-  
+
   // If status is "clear", delete the reply entirely instead of storing a cleared response
   if (status === "clear") {
     delete state.rounds[wk].replies[studentId];
@@ -257,7 +266,7 @@ async function handleReply(request, env) {
     const validLesson = Number.isInteger(requestedLesson) && requestedLesson >= 1 && requestedLesson <= 4 ? requestedLesson : prevLesson;
     state.rounds[wk].replies[studentId] = { status, avail, lesson: validLesson };
   }
-  
+
   await env.DB.prepare(
     `INSERT INTO app_state (id, data, updated_at) VALUES (?, ?, datetime('now'))
      ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
@@ -276,6 +285,7 @@ export default {
 
     if (path === "/api/login" && request.method === "POST") return handleLoginRequest(request, env, url);
     if (path === "/api/verify" && request.method === "GET") return handleVerify(url, env);
+    if (path === "/api/logout" && request.method === "POST") return handleLogout();
     if (path === "/api/me" && request.method === "GET") return handleMe(request, env);
     if (path === "/api/profile" && request.method === "POST") return handleProfile(request, env);
     if (path === "/api/onboarding" && request.method === "POST") return handleOnboarding(request, env);

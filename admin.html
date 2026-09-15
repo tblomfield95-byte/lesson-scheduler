@@ -90,7 +90,6 @@
     align-items:center;
     padding:12px 0;
   }
-  .student-divider{height:1px;background:var(--rule);margin:0}
   .student-edit-row:first-child{padding-top:2px}
   .student-edit-row input,
   .student-add-row input{
@@ -1901,8 +1900,7 @@ function renderProfileSection() {
 }
 
 function renderStudentsSection() {
-  const studentRows = S.students.map((s, i) =>
-    (i > 0 ? '<div class="student-divider"></div>' : "") +
+  const studentRows = S.students.map((s) =>
     '<div class="student-edit-row">' +
     '<input type="text" data-bind="studentName" data-id="' + s.id + '" value="' + escapeHTML(s.name) + '" aria-label="Student name">' +
     '<div class="student-hours-wrap"><input type="number" step="0.5" min="0" data-bind="studentHours" data-id="' + s.id + '" value="' + s.allocated + '" aria-label="Allocated hours"></div>' +

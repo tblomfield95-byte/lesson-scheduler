@@ -186,6 +186,19 @@ async function handleProfile(request, env) {
   return json({ ok: true });
 }
 
+async function handleDeleteAccount(request, env) {
+  const teacherId = await requireSession(request, env);
+  if (!teacherId) return json({ error: "not logged in" }, 401);
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM app_state WHERE id = ?").bind(teacherId),
+    env.DB.prepare("DELETE FROM login_tokens WHERE teacher_id = ?").bind(teacherId),
+    env.DB.prepare("DELETE FROM teachers WHERE id = ?").bind(teacherId),
+  ]);
+  const headers = new Headers({ "content-type": "application/json" });
+  headers.append("Set-Cookie", "session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0");
+  return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
+}
+
 async function handleOnboarding(request, env) {
   const teacherId = await requireSession(request, env);
   if (!teacherId) return json({ error: "not logged in" }, 401);
@@ -360,6 +373,7 @@ export default {
     if (path === "/api/logout" && request.method === "POST") return handleLogout();
     if (path === "/api/me" && request.method === "GET") return handleMe(request, env);
     if (path === "/api/profile" && request.method === "POST") return handleProfile(request, env);
+    if (path === "/api/account" && request.method === "DELETE") return handleDeleteAccount(request, env);
     if (path === "/api/onboarding" && request.method === "POST") return handleOnboarding(request, env);
 
     if (path === "/api/state") {

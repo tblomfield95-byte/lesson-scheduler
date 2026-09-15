@@ -80,7 +80,7 @@
     white-space:nowrap;
     text-rendering:optimizeLegibility;
     -webkit-font-smoothing:antialiased;
-    will-change:left,top,font-size;
+    will-change:transform;
   }
 
   .login-content{
@@ -211,6 +211,7 @@ async function playCadenceIntro() {
   if (window.matchMedia("(prefers-reduced-motion:reduce)").matches) {
     finalMark.style.opacity = "1";
     content.classList.add("revealed");
+    overlay.remove();
     return;
   }
 
@@ -221,46 +222,39 @@ async function playCadenceIntro() {
   } catch (e) {}
 
   /*
-    No transform is used anywhere in the wordmark animation.
-
-    1. Give the travelling mark its large starting font size.
-    2. Measure its real rendered width/height.
-    3. Position it horizontally centred and slightly above the screen's vertical midpoint.
-    4. Measure the hidden permanent heading.
-    5. Animate left, top and font-size directly to those final values.
+    Lay the travelling mark out AT the permanent heading's exact final
+    position and size from the start, then use a single transform to make
+    it LOOK large and centred higher up the screen. Every frame of the
+    animation below only ever touches transform — never left/top/font-size
+    — since animating those directly forces a layout recalculation on
+    every frame of a fixed-position element, which is what left Safari's
+    fixed-position tracking degraded on this page for the address bar's
+    entire remaining lifetime (the actual cause of the footer/fixed-bar
+    drift bug seen on other pages using this same intro).
   */
-  const startSize = Math.min(86, Math.max(64, window.innerWidth * 0.16));
-  intro.style.fontSize = startSize + "px";
-
-  // Force layout now that the font size is known.
-  let introRect = intro.getBoundingClientRect();
-
-  const startLeft = (window.innerWidth - introRect.width) / 2;
-  const startTop = window.innerHeight * 0.42 - introRect.height / 2;
-
-  intro.style.left = startLeft + "px";
-  intro.style.top = startTop + "px";
-
-  // Read once more after applying the starting pixel position.
-  introRect = intro.getBoundingClientRect();
   const finalRect = finalMark.getBoundingClientRect();
   const finalFontSize = parseFloat(getComputedStyle(finalMark).fontSize);
+  intro.style.fontSize = finalFontSize + "px";
+  intro.style.left = finalRect.left + "px";
+  intro.style.top = finalRect.top + "px";
+
+  const introRect = intro.getBoundingClientRect();
+  const startSize = Math.min(86, Math.max(64, window.innerWidth * 0.16));
+  const scale = startSize / finalFontSize;
+  const startCenterX = window.innerWidth / 2;
+  const startCenterY = window.innerHeight * 0.42;
+  const introCenterX = introRect.left + introRect.width / 2;
+  const introCenterY = introRect.top + introRect.height / 2;
+  const translateX = startCenterX - introCenterX;
+  const translateY = startCenterY - introCenterY;
 
   // Deliberate splash hold.
   await new Promise(resolve => setTimeout(resolve, 1900));
 
   const animation = intro.animate(
     [
-      {
-        left:introRect.left + "px",
-        top:introRect.top + "px",
-        fontSize:startSize + "px"
-      },
-      {
-        left:finalRect.left + "px",
-        top:finalRect.top + "px",
-        fontSize:finalFontSize + "px"
-      }
+      { transform: `translate(${translateX}px, ${translateY}px) scale(${scale})` },
+      { transform: "translate(0px, 0px) scale(1)" }
     ],
     {
       duration:1350,
@@ -273,13 +267,7 @@ async function playCadenceIntro() {
     await animation.finished;
   } catch (e) {}
 
-  /*
-    Lock the travelling mark to the final pixel values before swapping.
-    This avoids a final-frame interpolation discrepancy in WebKit.
-  */
-  intro.style.left = finalRect.left + "px";
-  intro.style.top = finalRect.top + "px";
-  intro.style.fontSize = finalFontSize + "px";
+  intro.style.transform = "translate(0px, 0px) scale(1)";
 
   // Reveal the real heading underneath at the identical position/size.
   finalMark.style.opacity = "1";
@@ -289,7 +277,9 @@ async function playCadenceIntro() {
     requestAnimationFrame(resolve);
   }));
 
-  overlay.style.display = "none";
+  // Fully remove the overlay (rather than hiding it) so nothing from the
+  // animation lingers in a compositing layer for the rest of the page.
+  overlay.remove();
 
   // Form arrives only after the wordmark is fully at rest.
   await new Promise(resolve => setTimeout(resolve, 140));

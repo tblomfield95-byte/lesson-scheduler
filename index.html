@@ -84,10 +84,10 @@
   .row{display:flex;height:25px}
   .row .time{font-size:10.5px;color:var(--ink-soft);padding-right:6px;text-align:right;
              line-height:25px;border-right:1px solid var(--rule)}
-  .cell{flex:1;border-right:1px solid #EFECE6;border-bottom:1px solid #EFECE6;cursor:pointer}
+  .cell{flex:1;border-right:1px solid #EFECE6;border-bottom:1px solid #EFECE6;cursor:pointer;touch-action:none}
   .cell:last-child{border-right:none}
   .cell.on{background:var(--sig)}
-  .cell.muted{background:#EEEAE2;border-right-color:#DDD6C9;border-bottom-color:#DDD6C9;cursor:default}
+  .cell.muted{background:#EEEAE2;border-right-color:#DDD6C9;border-bottom-color:#DDD6C9;cursor:default;touch-action:pan-y}
   .btn{font:inherit;font-size:14px;padding:12px 18px;border-radius:7px;border:1px solid var(--sig);
        background:var(--sig);color:#fff;font-weight:560;cursor:pointer;width:100%;text-align:center}
   .btn:disabled{opacity:.4;cursor:default}
@@ -310,15 +310,13 @@ function mountGrid() {
     if (!c) return;
     const k = key(c.d, c.i);
     if (!R.offered.has(k)) return;
-    e.preventDefault();
     painting = !R.avail.has(k); last = k; apply(c, painting);
-  }, { passive: false });
+  }, { passive: true });
   el.addEventListener("touchmove", (e) => {
     if (painting === null) return;
-    e.preventDefault();
     const t = e.touches[0];
     move(t.clientX, t.clientY);
-  }, { passive: false });
+  }, { passive: true });
   el.addEventListener("touchend", end);
   el.addEventListener("touchcancel", end);
   el.addEventListener("mousedown", (e) => {

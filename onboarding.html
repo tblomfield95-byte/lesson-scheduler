@@ -249,7 +249,7 @@
     <section class="step-panel" id="panel-1">
       <div class="pad">
         <h1>Term dates</h1>
-        <p class="sub">Used to work out real calendar dates for each week. Reading weeks aren't entered here — mark those "Not teaching" as they come round instead.</p>
+        <p class="sub">Used to work out real calendar dates for each week. For reading weeks, just mark that week "Not teaching" when it comes round, rather than entering it here.</p>
         <div id="err"></div>
 
         <div class="term-count-card">
@@ -309,7 +309,7 @@
             </div>
             <ol class="tour-legend">
               <li><span class="num">1</span>Drag across the times you could teach this week.</li>
-              <li><span class="num">2</span>Send it round — students only ever see these blocks.</li>
+              <li><span class="num">2</span>Send it round. Students only ever see these blocks.</li>
             </ol>
           </article>
 
@@ -335,7 +335,7 @@
             </div>
             <ol class="tour-legend">
               <li><span class="num">1</span>Each student taps their name and says if they need a lesson.</li>
-              <li><span class="num">2</span>They mark which of your times work — nothing outside your blocks.</li>
+              <li><span class="num">2</span>They mark which of your times work. Nothing outside your blocks is selectable.</li>
             </ol>
           </article>
 
@@ -539,7 +539,7 @@ document.getElementById("go").addEventListener("click", async () => {
     }
     goToStep(2);
   } catch (e) {
-    errEl.innerHTML = '<p class="err">Couldn\u2019t reach the server \u2014 check your connection.</p>';
+    errEl.innerHTML = '<p class="err">Couldn\u2019t reach the server. Check your connection.</p>';
     refreshHeight();
     btn.disabled = false; btn.textContent = "Finish setup";
   }

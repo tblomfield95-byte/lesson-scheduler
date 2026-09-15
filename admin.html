@@ -228,6 +228,7 @@
        background:var(--panel);color:var(--ink);cursor:pointer}
   .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:560}
   .btn.sig{background:var(--sig);color:#fff;border-color:var(--sig);font-weight:560}
+  .btn.outline-sig{background:none;color:var(--sig);border-color:var(--sig)}
   .btn.confirm-pending{background:var(--warn);color:#fff;border-color:var(--warn);font-weight:560;
                         animation:confirmPulse 0.35s ease}
   @keyframes confirmPulse{0%{transform:scale(1)}35%{transform:scale(1.07)}65%{transform:scale(0.97)}100%{transform:scale(1)}}
@@ -1464,6 +1465,11 @@ function handleResetClick() {
   }
 }
 
+// Transient, session-only — a second, explicit confirm-and-warn step
+// (Cancel / Yes, delete) rather than a double-tap on the same button:
+// this is more destructive than "Reset year", so it gets a harder stop.
+let confirmingDeleteAccount = false;
+
 /* ================================================================== */
 /*  Term Dates — transient draft, snapshotted from S.termRanges each   */
 /*  time the section is opened, applied only on explicit save.        */
@@ -1520,6 +1526,21 @@ function saveSettings() {
   S.settings = { includeWeekends: !!settingsDraft.includeWeekends, dayStartHour: start, dayEndHour: end };
   flash("Settings updated — applies to weeks that are still completely blank");
   render();
+}
+
+/* ================================================================== */
+/*  Account deletion                                                    */
+/* ================================================================== */
+
+async function deleteAccount() {
+  try {
+    const res = await fetch("/api/account", { method: "DELETE" });
+    if (!res.ok) { flash("Couldn't delete your account — try again"); confirmingDeleteAccount = false; render(); return; }
+    window.location.href = "/login.html";
+  } catch (e) {
+    flash("Couldn't reach the server — check your connection");
+    confirmingDeleteAccount = false; render();
+  }
 }
 
 /* ================================================================== */
@@ -1731,7 +1752,15 @@ function renderProfileSection() {
     '<div class="field"><label>Your name</label><input type="text" data-bind="profileName" value="' + escapeHTML(ME.name || "") + '"></div>' +
     '<div class="field"><label>Instrument</label><input type="text" data-bind="profileInstrument" value="' + escapeHTML(ME.instrument || "") + '"></div>' +
     '<div class="btnrow"><button class="btn sig" data-action="saveProfile">Save changes</button></div>' +
-    "</div>";
+    '<div class="panel" style="border-color:var(--sig);margin-top:24px">' +
+    '<h3 style="color:var(--sig)">Account deletion</h3>' +
+    '<p class="lede" style="margin-bottom:12px">Deleting your account removes your profile, students, schedules and hours from Cadence, and frees up this email address \u2014 a future visit to the login page will start a brand new account. This can\u2019t be undone.</p>' +
+    (confirmingDeleteAccount
+      ? '<p class="lede" style="color:var(--sig);font-weight:600;margin-bottom:10px">Are you absolutely sure? This can\u2019t be undone.</p>' +
+        '<div class="btnrow"><button class="btn" data-action="cancelDeleteAccount">Cancel</button>' +
+        '<button class="btn sig" data-action="confirmDeleteAccount">Yes, delete my account</button></div>'
+      : '<div class="btnrow"><button class="btn outline-sig" data-action="requestDeleteAccount">Delete my account</button></div>') +
+    "</div></div>";
 }
 
 function renderStudentsSection() {
@@ -2134,6 +2163,9 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "toggleMoreOptions") toggleMoreOptions();
   else if (action === "toggleSidebar") toggleSidebar();
   else if (action === "saveProfile") saveProfile();
+  else if (action === "requestDeleteAccount") { confirmingDeleteAccount = true; render(); }
+  else if (action === "cancelDeleteAccount") { confirmingDeleteAccount = false; render(); }
+  else if (action === "confirmDeleteAccount") deleteAccount();
   else if (action === "addStudent") addStudent();
   else if (action === "removeStudent") removeStudent(id);
   else if (action === "saveTermDates") saveTermDates();

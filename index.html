@@ -470,26 +470,24 @@ async function playCadenceIntro() {
   try { await animation.finished; } catch (e) {}
   animation.cancel();
 
-  // Lock the mark into a plain, resize-invariant resting position rather
-  // than leaving it as a frozen top + transform combination. `top` is
-  // NOT safe here: if Safari's toolbar later collapses (the viewport
-  // growing taller), an element positioned via `top` does not move,
-  // while the real page content — and #brandFooter itself, correctly
-  // anchored via `bottom:0` — both shift down to fill the new space.
-  // That leaves the mark stranded exactly where the OLD, shorter
-  // viewport put it, now overlapping whatever content shifted into that
-  // spot. `bottom` doesn't have this problem: the browser recalculates
-  // it against the CURRENT viewport on every resize, same as
-  // #brandFooter's own bottom:0. footerInner's distance from the
-  // viewport's bottom edge is constant regardless of toolbar state (it
-  // comes entirely from fixed-pixel padding), so measuring it once here
-  // stays valid through any later toolbar collapse this code never sees.
+  // Keep the SAME rendering technique forever — large native font-size,
+  // shrunk only by a constant transform:scale() — rather than switching
+  // to a natively-small font-size once landed. That switch was the
+  // actual cause of the visible "snap": a large glyph shrunk by the
+  // compositor and a small glyph rasterised natively at that size don't
+  // render quite identically, so swapping technique right as the
+  // animation ends showed up as a jump in weight/shape.
+  //
+  // `bottom`/`left` (not `top`) keep this correctly placed if Safari's
+  // toolbar later changes the viewport height — `bottom` is
+  // recalculated live by the browser, the same way #brandFooter's own
+  // `bottom:0` is; `top` would stay frozen against whatever viewport
+  // existed at this exact moment.
   const distanceFromBottom = window.innerHeight - finalRect.bottom;
-  intro.style.transform = "";
   intro.style.top = "";
-  intro.style.bottom = distanceFromBottom + "px";
-  intro.style.left = finalRect.left + "px";
-  intro.style.fontSize = finalFontSize + "px";
+  intro.style.left = (finalRect.left + finalRect.width / 2 - introRect.width / 2) + "px";
+  intro.style.bottom = (distanceFromBottom + (finalRect.height - introRect.height) / 2) + "px";
+  intro.style.transform = `scale(${scale})`;
   intro.style.color = finalColor;
 
   footer.classList.add("revealed");

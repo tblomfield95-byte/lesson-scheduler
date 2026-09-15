@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Set up your studio — Cadence.</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18,9 +19,53 @@
     background:var(--paper); color:var(--ink); min-height:100vh;
   }
   *{box-sizing:border-box}
+
+  /* ---------------------------------------------------------------- */
+  /*  Masthead — sticky, sized to actually anchor the page, unchanged  */
+  /*  across both steps. Only the step indicator beneath it updates.   */
+  /* ---------------------------------------------------------------- */
+  .masthead{
+    position:sticky;top:0;z-index:10;
+    background:var(--paper);
+    border-bottom:1px solid var(--rule);
+    padding:26px 20px 16px;
+  }
+  .masthead-inner{max-width:480px;margin:0 auto}
+  .wordmark{
+    display:flex;align-items:center;gap:11px;
+    font-family:var(--serif);font-weight:700;
+    font-size:clamp(30px,8vw,40px);
+    letter-spacing:-0.025em;color:var(--sig);
+    margin:0 0 16px;line-height:1;
+  }
+  .wordmark svg{flex:none;width:0.72em;height:0.98em}
+  .stepline{display:flex;gap:22px;list-style:none;margin:0;padding:0}
+  .stepline-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft)}
+  .stepline-num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:20px;height:20px;border-radius:50%;
+    border:1px solid var(--rule);background:var(--panel);
+    font-size:11px;font-weight:600;color:var(--ink-soft);
+    transition:background-color .3s ease,border-color .3s ease,color .3s ease;
+  }
+  .stepline-item.is-active{color:var(--ink);font-weight:600}
+  .stepline-item.is-active .stepline-num{background:var(--sig);border-color:var(--sig);color:#fff}
+  .stepline-item.is-done .stepline-num{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+
+  /* ---------------------------------------------------------------- */
+  /*  Sliding stage — both steps live side by side in a 200%-wide      */
+  /*  track; moving between them animates transform and the wrapper's  */
+  /*  height together, the same easing the admin app uses for its      */
+  /*  sidebar reveal.                                                  */
+  /* ---------------------------------------------------------------- */
+  .stage{overflow:hidden;transition:height .58s cubic-bezier(.22,.72,.16,1)}
+  .stage-track{
+    display:flex;width:200%;
+    transition:transform .58s cubic-bezier(.22,.72,.16,1);
+  }
+  .step-panel{width:50%;flex:none;min-width:0}
   .pad{padding:24px 18px 60px;max-width:480px;margin:0 auto}
-  .brand{display:flex;align-items:center;gap:8px;font-family:var(--serif);font-size:15px;font-weight:600;color:var(--sig);margin:0 0 18px}
-  .brand-mark{flex:none;color:var(--sig)}
+
   h1{font-family:var(--serif);font-size:21px;font-weight:600;margin:0 0 6px}
   .sub{font-size:14px;color:var(--ink-soft);line-height:1.5;margin:0 0 20px}
   label{display:block;font-size:13px;color:var(--ink-soft);margin:0 0 5px}
@@ -36,6 +81,8 @@
   .btn{width:100%;font:inherit;font-size:15px;padding:13px;border-radius:7px;border:1px solid var(--sig);
        background:var(--sig);color:#fff;font-weight:560;cursor:pointer}
   .btn:disabled{opacity:.5;cursor:default}
+  .back-link{display:block;width:100%;text-align:left;font:inherit;font-size:13.5px;color:var(--sig);
+             background:none;border:none;padding:0 0 14px;cursor:pointer}
   .err{color:#96591A;font-size:13px;margin:-8px 0 14px}
   h3{font-family:var(--serif);font-size:16px;font-weight:600;margin:26px 0 6px}
 
@@ -126,43 +173,106 @@
       padding-right:4px;
     }
   }
+  @media (prefers-reduced-motion:reduce){
+    .stage,.stage-track,.stepline-num{transition:none}
+  }
 </style>
 </head>
 <body>
-<div class="pad">
-  <p class="brand">
-    <svg class="brand-mark" width="14" height="19" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <rect x="3" y="3" width="4" height="18" rx="1.5" fill="currentColor"/>
-      <rect x="11" y="3" width="9" height="18" rx="2" fill="currentColor"/>
-    </svg>
-    Cadence.
-  </p>
-  <h1>Set up your studio</h1>
-  <p class="sub">Just once — your name, instrument, and the students you teach with their allocated hours for the year.</p>
-  <div id="err"></div>
 
-  <label>Your name</label>
-  <input type="text" id="name" placeholder="Jane Smith">
-  <label>Instrument</label>
-  <input type="text" id="instrument" placeholder="Violin">
-
-  <h3>Students</h3>
-  <div id="students"></div>
-  <button class="add" id="addStudent">+ Add another student</button>
-
-  <h3>Term dates</h3>
-  <p class="sub" style="margin-top:-2px">Used to work out real calendar dates for each week. Reading weeks aren't entered here — mark those "Not teaching" as they come round instead.</p>
-  <div class="term-count-card">
-    <label for="termCount">Number of terms</label>
-    <input type="number" id="termCount" min="1" max="6" value="3">
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="wordmark">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="3" y="3" width="4" height="18" rx="1.5" fill="currentColor"/>
+        <rect x="11" y="3" width="9" height="18" rx="2" fill="currentColor"/>
+      </svg>
+      <span>Cadence.</span>
+    </div>
+    <ol class="stepline" id="stepline" aria-label="Setup progress">
+      <li class="stepline-item is-active" id="stepline-0"><span class="stepline-num">1</span>Studio details</li>
+      <li class="stepline-item" id="stepline-1"><span class="stepline-num">2</span>Term dates</li>
+    </ol>
   </div>
-  <div id="terms"></div>
+</header>
 
-  <button class="btn" id="go">Finish setup</button>
-</div>
+<main class="stage" id="stage">
+  <div class="stage-track" id="stageTrack">
+
+    <section class="step-panel" id="panel-0">
+      <div class="pad">
+        <h1>Set up your studio</h1>
+        <p class="sub">Your name, instrument, and the students you teach with their allocated hours for the year.</p>
+        <div id="errDetails"></div>
+
+        <label>Your name</label>
+        <input type="text" id="name" placeholder="Jane Smith">
+        <label>Instrument</label>
+        <input type="text" id="instrument" placeholder="Violin">
+
+        <h3>Students</h3>
+        <div id="students"></div>
+        <button class="add" id="addStudent">+ Add another student</button>
+
+        <button class="btn" id="nextBtn">Next</button>
+      </div>
+    </section>
+
+    <section class="step-panel" id="panel-1">
+      <div class="pad">
+        <h1>Term dates</h1>
+        <p class="sub">Used to work out real calendar dates for each week. Reading weeks aren't entered here — mark those "Not teaching" as they come round instead.</p>
+        <div id="err"></div>
+
+        <div class="term-count-card">
+          <label for="termCount">Number of terms</label>
+          <input type="number" id="termCount" min="1" max="6" value="3">
+        </div>
+        <div id="terms"></div>
+
+        <button class="back-link" id="backBtn">← Back to studio details</button>
+        <button class="btn" id="go">Finish setup</button>
+      </div>
+    </section>
+
+  </div>
+</main>
+
 <script>
 let rows = [{ name: "", allocated: "" }];
 let terms = [{ start: "", end: "" }, { start: "", end: "" }, { start: "", end: "" }];
+let currentStep = 0;
+
+/* -------------------------------------------------------------- */
+/*  Step transition — slide the track, resize the stage to match.  */
+/* -------------------------------------------------------------- */
+
+function refreshHeight() {
+  const stage = document.getElementById("stage");
+  const panel = document.getElementById("panel-" + currentStep);
+  stage.style.height = panel.scrollHeight + "px";
+}
+
+function updateStepline() {
+  [0, 1].forEach((i) => {
+    const el = document.getElementById("stepline-" + i);
+    el.classList.toggle("is-active", i === currentStep);
+    el.classList.toggle("is-done", i < currentStep);
+  });
+}
+
+function goToStep(idx) {
+  currentStep = idx;
+  document.getElementById("stageTrack").style.transform = "translateX(" + (-idx * 50) + "%)";
+  refreshHeight();
+  updateStepline();
+}
+
+window.addEventListener("resize", () => refreshHeight());
+
+/* -------------------------------------------------------------- */
+/*  Students (step 1)                                              */
+/* -------------------------------------------------------------- */
 
 function renderRows() {
   const el = document.getElementById("students");
@@ -182,10 +292,37 @@ function renderRows() {
     btn.addEventListener("click", () => {
       rows.splice(Number(btn.dataset.remove), 1);
       renderRows();
+      if (currentStep === 0) refreshHeight();
     });
   });
 }
 renderRows();
+
+document.getElementById("addStudent").addEventListener("click", () => {
+  rows.push({ name: "", allocated: "" });
+  renderRows();
+  if (currentStep === 0) refreshHeight();
+});
+
+document.getElementById("nextBtn").addEventListener("click", () => {
+  const name = document.getElementById("name").value.trim();
+  const instrument = document.getElementById("instrument").value.trim();
+  const students = rows.filter(r => r.name.trim());
+  const errEl = document.getElementById("errDetails");
+  errEl.innerHTML = "";
+  if (!name || !instrument || !students.length) {
+    errEl.innerHTML = '<p class="err">Fill in your name, instrument, and at least one student.</p>';
+    refreshHeight();
+    return;
+  }
+  goToStep(1);
+});
+
+document.getElementById("backBtn").addEventListener("click", () => goToStep(0));
+
+/* -------------------------------------------------------------- */
+/*  Term dates (step 2)                                             */
+/* -------------------------------------------------------------- */
 
 function renderTerms() {
   const el = document.getElementById("terms");
@@ -213,11 +350,7 @@ document.getElementById("termCount").addEventListener("input", (e) => {
   while (terms.length < n) terms.push({ start: "", end: "" });
   terms.length = n;
   renderTerms();
-});
-
-document.getElementById("addStudent").addEventListener("click", () => {
-  rows.push({ name: "", allocated: "" });
-  renderRows();
+  if (currentStep === 1) refreshHeight();
 });
 
 document.getElementById("go").addEventListener("click", async () => {
@@ -227,12 +360,9 @@ document.getElementById("go").addEventListener("click", async () => {
   const termRanges = terms.filter(t => t.start && t.end);
   const errEl = document.getElementById("err");
   errEl.innerHTML = "";
-  if (!name || !instrument || !students.length) {
-    errEl.innerHTML = '<p class="err">Fill in your name, instrument, and at least one student.</p>';
-    return;
-  }
   if (termRanges.length !== terms.length) {
     errEl.innerHTML = '<p class="err">Fill in a start and end date for every term.</p>';
+    refreshHeight();
     return;
   }
   const btn = document.getElementById("go");
@@ -244,13 +374,24 @@ document.getElementById("go").addEventListener("click", async () => {
       body: JSON.stringify({ name, instrument, students, termRanges }),
     });
     const data = await res.json();
-    if (!res.ok) { errEl.innerHTML = '<p class="err">' + (data.error || "Something went wrong.") + "</p>"; btn.disabled = false; btn.textContent = "Finish setup"; return; }
+    if (!res.ok) {
+      errEl.innerHTML = '<p class="err">' + (data.error || "Something went wrong.") + "</p>";
+      refreshHeight();
+      btn.disabled = false; btn.textContent = "Finish setup"; return;
+    }
     window.location.href = "/admin.html";
   } catch (e) {
     errEl.innerHTML = '<p class="err">Couldn\u2019t reach the server \u2014 check your connection.</p>';
+    refreshHeight();
     btn.disabled = false; btn.textContent = "Finish setup";
   }
 });
+
+/* -------------------------------------------------------------- */
+/*  Boot                                                            */
+/* -------------------------------------------------------------- */
+
+refreshHeight();
 </script>
 </body>
 </html>

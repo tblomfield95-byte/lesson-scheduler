@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Set up your studio — Cadence</title>
+<title>Set up your studio — Cadence.</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18,7 +19,8 @@
   }
   *{box-sizing:border-box}
   .pad{padding:24px 18px 60px;max-width:480px;margin:0 auto}
-  .brand{font-family:var(--serif);font-size:15px;font-weight:600;color:var(--sig);margin:0 0 18px}
+  .brand{display:flex;align-items:center;gap:8px;font-family:var(--serif);font-size:15px;font-weight:600;color:var(--sig);margin:0 0 18px}
+  .brand-mark{flex:none;color:var(--sig)}
   h1{font-family:var(--serif);font-size:21px;font-weight:600;margin:0 0 6px}
   .sub{font-size:14px;color:var(--ink-soft);line-height:1.5;margin:0 0 20px}
   label{display:block;font-size:13px;color:var(--ink-soft);margin:0 0 5px}
@@ -128,7 +130,13 @@
 </head>
 <body>
 <div class="pad">
-  <p class="brand">Cadence</p>
+  <p class="brand">
+    <svg class="brand-mark" width="14" height="19" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="3" y="3" width="4" height="18" rx="1.5" fill="currentColor"/>
+      <rect x="11" y="3" width="9" height="18" rx="2" fill="currentColor"/>
+    </svg>
+    Cadence.
+  </p>
   <h1>Set up your studio</h1>
   <p class="sub">Just once — your name, instrument, and the students you teach with their allocated hours for the year.</p>
   <div id="err"></div>

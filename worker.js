@@ -60,55 +60,99 @@ async function requireSession(request, env) {
    Auth routes
 ================================================================== */
 
+function authJSON(obj, status = 200) {
+  return new Response(JSON.stringify(obj), { status, headers: {
+    "content-type": "application/json", "cache-control": "no-store"
+  }});
+}
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
 async function handleLoginRequest(request, env, url) {
   let body;
-  try { body = JSON.parse(await request.text()); } catch (e) { return json({ error: "invalid json" }, 400); }
-  const email = (body.email || "").trim().toLowerCase();
-  if (!email || !email.includes("@")) return json({ error: "Enter a valid email" }, 400);
-
-  let row = await env.DB.prepare("SELECT id FROM teachers WHERE email = ?").bind(email).first();
-  let teacherId;
-  if (row) {
-    teacherId = row.id;
-  } else {
-    await env.DB.prepare("INSERT INTO teachers (email) VALUES (?)").bind(email).run();
-    const created = await env.DB.prepare("SELECT id FROM teachers WHERE email = ?").bind(email).first();
-    teacherId = created.id;
+  try { body = await request.json(); } catch { return authJSON({error:"Enter a valid email address."},400); }
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return authJSON({error:"Enter a valid email address."},400);
   }
-
+  let origin;
+  try {
+    const base = new URL(env.APP_ORIGIN);
+    if (base.protocol !== "https:" || base.username || base.password) throw new Error();
+    origin = base.origin;
+  } catch { return authJSON({error:"Email login isn't ready yet. Please try again later."},503); }
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM || !env.SESSION_SECRET) {
+    return authJSON({error:"Email login isn't ready yet. Please try again later."},503);
+  }
+  if (request.headers.get("Origin") && request.headers.get("Origin") !== origin) {
+    return authJSON({error:"Please request your link from the Cadence login page."},403);
+  }
+  await env.DB.prepare("INSERT OR IGNORE INTO teachers (email) VALUES (?)").bind(email).run();
+  const teacher = await env.DB.prepare("SELECT id FROM teachers WHERE email = ?").bind(email).first();
   const token = randomToken();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-  await env.DB.prepare("INSERT INTO login_tokens (token, teacher_id, expires_at, used) VALUES (?, ?, ?, 0)")
-    .bind(token, teacherId, expiresAt).run();
-
-  const link = url.origin + "/api/verify?token=" + token;
-
-  // No email provider wired up yet — the link is handed straight back so
-  // the whole flow can be tested today. Swap this for a real email send
-  // (e.g. via Resend) once that's set up; nothing else needs to change.
-  return json({ ok: true, link });
+  // Atomic per-address cooldown, including attempts where delivery fails.
+  const cutoff = new Date(Date.now() + 14 * 60 * 1000).toISOString();
+  const inserted = await env.DB.prepare(`INSERT INTO login_tokens (token, teacher_id, expires_at, used)
+    SELECT ?, ?, ?, 0 WHERE NOT EXISTS
+    (SELECT 1 FROM login_tokens WHERE teacher_id = ? AND expires_at > ?)`)
+    .bind(token, teacher.id, expiresAt, teacher.id, cutoff).run();
+  if (!inserted.meta.changes) return authJSON({error:"Please wait a minute before requesting another link."},429);
+  const link = origin + "/api/verify?token=" + encodeURIComponent(token);
+  const safeLink = escapeHTML(link);
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method:"POST",
+      headers:{"Authorization":"Bearer " + env.RESEND_API_KEY,"Content-Type":"application/json"},
+      signal:AbortSignal.timeout(15000),
+      body:JSON.stringify({
+        from:env.EMAIL_FROM, to:[email], subject:"Your Cadence login link",
+        text:"Log in to Cadence\n\nOpen this link, then select Continue to Cadence:\n" + link +
+          "\n\nThis link expires in 15 minutes and can only be used once. If you didn't request it, you can ignore this email.",
+        html:'<!doctype html><html><body style="margin:0;background:#F2EFE7;color:#211C17;font-family:Arial,sans-serif;padding:32px 16px">' +
+          '<div style="max-width:440px;margin:auto;background:#fff;border:1px solid #DCD5C6;border-radius:12px;padding:28px">' +
+          '<div style="font-family:Georgia,serif;font-size:30px;font-weight:bold;color:#6E1423">Cadence.</div>' +
+          '<h1 style="font-size:21px;margin-top:28px">Your login link</h1><p style="line-height:1.6">Ready to organise your lessons? Tap below to continue.</p>' +
+          '<p style="margin:28px 0"><a href="' + safeLink + '" style="display:inline-block;background:#6E1423;color:white;text-decoration:none;padding:14px 22px;border-radius:7px;font-weight:bold">Log in to Cadence</a></p>' +
+          '<p style="font-size:13px;line-height:1.6;color:#6B6157">This link expires in 15 minutes and can only be used once. If you didn’t request it, you can ignore this email.</p>' +
+          '<p style="font-size:12px;line-height:1.6;word-break:break-all">Button not working? Open this link:<br><a href="' + safeLink + '">' + safeLink + '</a></p></div></body></html>'
+      })
+    });
+    if (!response.ok) throw new Error("Email delivery rejected");
+  } catch {
+    await env.DB.prepare("UPDATE login_tokens SET used = 1 WHERE token = ?").bind(token).run();
+    return authJSON({error:"We couldn't send your email. Please wait a minute and try again."},502);
+  }
+  return authJSON({ok:true});
 }
 
-async function handleVerify(url, env) {
-  const token = url.searchParams.get("token");
-  if (!token) return new Response("Missing token", { status: 400 });
-  const row = await env.DB.prepare("SELECT teacher_id, expires_at, used FROM login_tokens WHERE token = ?").bind(token).first();
-  if (!row || row.used || new Date(row.expires_at) < new Date()) {
-    return new Response("This link has expired or already been used. Request a new one from the login page.", { status: 400 });
+async function handleVerify(request, url, env) {
+  const headers = {"cache-control":"no-store", "referrer-policy":"no-referrer", "content-type":"text/html; charset=utf-8",
+    "content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"};
+  const page = (body, status = 200) => new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Log in — Cadence.</title><body style="background:#F2EFE7;color:#211C17;font:16px Arial,sans-serif;margin:0;padding:48px 24px"><main style="max-width:420px;margin:auto"><h1 style="font-family:Georgia,serif;color:#6E1423">Cadence.</h1>' + body + '</main></body></html>',{status,headers});
+  let token = url.searchParams.get("token");
+  if (request.method === "POST") {
+    if (request.headers.get("Origin") && request.headers.get("Origin") !== url.origin) return page("Please open your email link again.",403);
+    try { token = (await request.formData()).get("token"); } catch { token = null; }
   }
-
+  const invalid = () => page('<p>This link has expired or has already been used.</p><p><a href="/login.html">Request a new login link</a></p>',400);
+  if (typeof token !== "string" || !/^[A-Za-z0-9_-]{32}$/.test(token)) return invalid();
+  const row = await env.DB.prepare("SELECT teacher_id, expires_at, used FROM login_tokens WHERE token = ?").bind(token).first();
+  if (!row || row.used || new Date(row.expires_at).getTime() <= Date.now()) return invalid();
+  // GET previews do not consume the token: mail scanners can safely open this page.
+  if (request.method === "GET") return page('<p>Your login link is ready.</p><form method="post" action="/api/verify"><input type="hidden" name="token" value="' + token + '"><button style="background:#6E1423;color:#fff;border:0;border-radius:7px;padding:14px 20px;font:inherit;cursor:pointer">Continue to Cadence</button></form>');
   const teacher = await env.DB.prepare("SELECT onboarded FROM teachers WHERE id = ?").bind(row.teacher_id).first();
+  if (!teacher) return invalid();
   const cookieVal = await makeSessionCookie(row.teacher_id, env);
-  const dest = teacher && teacher.onboarded ? "/admin.html" : "/onboarding.html";
-
-  // Only burn the token once the session is actually built — an earlier
-  // failure (a missing secret, say) shouldn't waste a one-time link.
-  await env.DB.prepare("UPDATE login_tokens SET used = 1 WHERE token = ?").bind(token).run();
-
-  const headers = new Headers();
-  headers.set("Location", dest);
-  headers.append("Set-Cookie", "session=" + cookieVal + "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000");
-  return new Response(null, { status: 302, headers });
+  // Only one concurrent request can redeem a token.
+  const claimed = await env.DB.prepare("UPDATE login_tokens SET used = 1 WHERE token = ? AND used = 0 AND expires_at > ?")
+    .bind(token,new Date().toISOString()).run();
+  if (!claimed.meta.changes) return invalid();
+  return new Response(null, {status:303,headers:{
+    "Location":teacher.onboarded ? "/admin.html" : "/onboarding.html",
+    "Cache-Control":"no-store", "Referrer-Policy":"no-referrer",
+    "Set-Cookie":"session=" + cookieVal + "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000"
+  }});
 }
 
 function handleLogout() {
@@ -284,7 +328,7 @@ export default {
     const path = url.pathname;
 
     if (path === "/api/login" && request.method === "POST") return handleLoginRequest(request, env, url);
-    if (path === "/api/verify" && request.method === "GET") return handleVerify(url, env);
+    if (path === "/api/verify" && ["GET", "POST"].includes(request.method)) return handleVerify(request, url, env);
     if (path === "/api/logout" && request.method === "POST") return handleLogout();
     if (path === "/api/me" && request.method === "GET") return handleMe(request, env);
     if (path === "/api/profile" && request.method === "POST") return handleProfile(request, env);

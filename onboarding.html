@@ -253,11 +253,16 @@
         <p class="sub">Used to work out real calendar dates for each week. For reading weeks, just mark that week "Not teaching" when it comes round, rather than entering it here.</p>
         <div id="err"></div>
 
-        <div class="term-count-card">
-          <label for="termCount">Number of terms</label>
-          <input type="number" id="termCount" min="1" max="6" value="3">
+        <button type="button" class="btn" id="rollingToggleBtn" style="margin-bottom:18px;background:none;color:var(--sig);border-color:var(--sig)">I teach on a rolling basis \u2014 skip term dates</button>
+        <p class="sub" id="rollingModeNote" style="display:none;margin-top:-10px">Weeks will just keep counting up with no end date and no holiday jumps. Use "Not teaching this week" for any breaks once you're set up \u2014 you can switch to term dates later from Settings.</p>
+
+        <div id="termDatesFields">
+          <div class="term-count-card">
+            <label for="termCount">Number of terms</label>
+            <input type="number" id="termCount" min="1" max="6" value="3">
+          </div>
+          <div id="terms"></div>
         </div>
-        <div id="terms"></div>
 
         <button class="back-link" id="backBtn">← Back to teaching details</button>
         <button class="btn" id="go">Finish setup</button>
@@ -483,6 +488,30 @@ document.getElementById("backBtn").addEventListener("click", () => goToStep(0));
 /*  Term dates (step 1)                                             */
 /* -------------------------------------------------------------- */
 
+let rollingMode = false;
+
+function renderRollingToggle() {
+  const btn = document.getElementById("rollingToggleBtn");
+  const fields = document.getElementById("termDatesFields");
+  const note = document.getElementById("rollingModeNote");
+  if (rollingMode) {
+    btn.textContent = "Rolling weeks \u2014 tap to use term dates instead";
+    btn.style.background = "var(--sig)";
+    btn.style.color = "#fff";
+  } else {
+    btn.textContent = "I teach on a rolling basis \u2014 skip term dates";
+    btn.style.background = "none";
+    btn.style.color = "var(--sig)";
+  }
+  fields.style.display = rollingMode ? "none" : "";
+  note.style.display = rollingMode ? "" : "none";
+  if (currentStep === 1) refreshHeight();
+}
+document.getElementById("rollingToggleBtn").addEventListener("click", () => {
+  rollingMode = !rollingMode;
+  renderRollingToggle();
+});
+
 function renderTerms() {
   const el = document.getElementById("terms");
   el.innerHTML = terms.map((t, i) =>
@@ -516,10 +545,11 @@ document.getElementById("go").addEventListener("click", async () => {
   const name = document.getElementById("name").value.trim();
   const instrument = document.getElementById("instrument").value.trim();
   const students = rows.filter(r => r.name.trim());
-  const termRanges = terms.filter(t => t.start && t.end);
+  const termRanges = rollingMode ? [] : terms.filter(t => t.start && t.end);
+  const schedulingMode = rollingMode ? "rolling" : "terms";
   const errEl = document.getElementById("err");
   errEl.innerHTML = "";
-  if (termRanges.length !== terms.length) {
+  if (!rollingMode && termRanges.length !== terms.length) {
     errEl.innerHTML = '<p class="err">Fill in a start and end date for every term.</p>';
     refreshHeight();
     return;
@@ -530,7 +560,7 @@ document.getElementById("go").addEventListener("click", async () => {
     const res = await fetch("/api/onboarding", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, instrument, students, termRanges }),
+      body: JSON.stringify({ name, instrument, students, termRanges, schedulingMode }),
     });
     const data = await res.json();
     if (!res.ok) {

@@ -470,10 +470,42 @@
   .toast.show{animation:toastFade 2.6s ease-in-out both}
   @keyframes toastFade{0%{opacity:0}12%{opacity:1}82%{opacity:1}100%{opacity:0}}
   .empty{font-size:13.5px;color:var(--ink-soft);line-height:1.55;padding:20px 0}
+  #brandFooter{
+    position:fixed;left:0;right:0;bottom:0;z-index:40;
+    display:flex;align-items:center;justify-content:center;
+    padding:12px 0 14px;
+    background:linear-gradient(to top, var(--paper) 55%, transparent);
+    pointer-events:none;
+  }
+  #brandFooterInner{
+    display:flex;align-items:center;justify-content:center;gap:0.14em;
+    width:max-content;
+    font-family:var(--serif);
+    font-size:12.5px;
+    line-height:1;
+    font-weight:700;
+    letter-spacing:-0.025em;
+    color:var(--ink-soft);
+    white-space:nowrap;
+    text-rendering:optimizeLegibility;
+    -webkit-font-smoothing:antialiased;
+  }
+  #brandFooter .brand-mark{flex:none;width:0.78em;height:0.78em;transform:translateY(0.035em)}
 </style>
 </head>
 <body>
 <div id="app"></div>
+
+<div id="brandFooter">
+  <div id="brandFooterInner">
+    <svg class="brand-mark" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <rect width="40" height="40" rx="9" fill="#6E1423"/>
+      <rect x="9" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/>
+      <rect x="21" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/>
+    </svg>
+    <span>Cadence.</span>
+  </div>
+</div>
 <div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
 <div id="sidebarPanel" class="sidebar-panel"></div>
 <div id="toast" class="toast" hidden></div>

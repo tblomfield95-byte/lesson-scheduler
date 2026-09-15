@@ -1183,8 +1183,53 @@ function confirmSchedule() {
     weekStart: rnd.weekStart,
     lessons: opt.assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" })),
   };
-  rnd.result = null; S.imgUrl = ""; S.fallbackText = "";
+  // Keep rnd.result and rnd.chosen intact so "Undo confirmation" can return
+  // to the exact option set that was just confirmed.
+  S.imgUrl = ""; S.fallbackText = "";
   flash("Week confirmed — post it to the group");
+  render();
+}
+
+function undoConfirmSchedule() {
+  const rnd = activeRound();
+  if (!rnd.plan) return;
+
+  // If this round came from an older saved state where result was cleared
+  // on confirmation, rebuild the solver result from the still-current
+  // replies and offered blocks so the teacher isn't stranded.
+  if (!rnd.result || !rnd.result.options || !rnd.result.options.length) {
+    const participants = getParticipants(rnd);
+    if (participants.length && rnd.offered.size) {
+      rnd.result = solve(
+        participants,
+        rnd.offered,
+        rnd.dayPreferences || {},
+        roundDays(rnd),
+        roundSlots(rnd)
+      );
+
+      // Try to re-select the option that most closely matches the confirmed
+      // plan. Fall back to option 0 if no exact assignment is found.
+      const planSig = rnd.plan.lessons
+        .filter(l => l.status === "planned")
+        .map(l => l.id + ":" + l.d + ":" + l.start)
+        .sort()
+        .join("|");
+
+      const matchIdx = rnd.result.options.findIndex(opt =>
+        opt.assign
+          .map(a => a.id + ":" + a.d + ":" + a.start)
+          .sort()
+          .join("|") === planSig
+      );
+      rnd.chosen = matchIdx >= 0 ? matchIdx : 0;
+    }
+  }
+
+  rnd.plan = null;
+  S.imgUrl = "";
+  S.fallbackText = "";
+  flash("Confirmation undone");
   render();
 }
 
@@ -1901,7 +1946,8 @@ function renderLivePlanTab() {
   const actionRow = '<div class="btnrow">' +
     (freed.length > 0 ? '<button class="btn primary" data-action="closeGaps">Close the gaps</button>' : "") +
     '<button class="btn" data-action="copyLive" ' + (live.length ? "" : "disabled") + ">Copy as text</button>" +
-    '<button class="btn" data-action="imageLive" ' + (live.length ? "" : "disabled") + ">Make an image</button></div>";
+    '<button class="btn" data-action="imageLive" ' + (live.length ? "" : "disabled") + ">Make an image</button>" +
+    '<button class="btn" data-action="undoConfirmSchedule">Undo confirmation</button></div>';
 
   const fallback = S.fallbackText ? '<textarea class="fallback" readonly rows="' + (S.fallbackText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.fallbackText) + "</textarea>" : "";
   const imgBlock = S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + plan.weekNo + '.png">Save image</a></div>' : "";
@@ -2066,6 +2112,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, rnd.dayStartHour); }
   else if (action === "imageChosen") { const rnd = activeRound(); doImage(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, S.week, rnd.dayStartHour); }
   else if (action === "confirmSchedule") confirmSchedule();
+  else if (action === "undoConfirmSchedule") undoConfirmSchedule();
   else if (action === "cancelEarly") setLessonStatus(id, "cancelled_early");
   else if (action === "cancelLate") setLessonStatus(id, "cancelled_late");
   else if (action === "uncancel") setLessonStatus(id, "planned");

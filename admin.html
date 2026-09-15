@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Cadence</title>
+<title>Cadence.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1520,7 +1520,7 @@ function render() {
 
 function renderHeader() {
   const tabs = [["week", "Offer"], ["replies", "Replies"], ["plan", "Schedule"], ["hours", "Hours"]];
-  const title = (ME.instrument ? ME.instrument + " Lessons" : "Cadence") + (ME.name ? " - " + ME.name : "");
+  const title = (ME.instrument ? ME.instrument + " Lessons" : "Cadence.") + (ME.name ? " - " + ME.name : "");
   const sectionTitles = { profile: "Profile", students: "Students", termdates: "Term Dates", settings: "Settings" };
   const inScheduler = currentSection === "scheduler";
   let header = '<div class="bar"><div class="bartop">' +
@@ -1538,7 +1538,7 @@ function renderHeader() {
 
 function renderSidebarItems() {
   const items = [["scheduler", "Scheduler"], ["profile", "Profile"], ["students", "Students"], ["termdates", "Term Dates"], ["settings", "Settings"]];
-  return '<div class="sidebar-brand">Cadence</div>' +
+  return '<div class="sidebar-brand">Cadence.</div>' +
     items.map(([k, label]) => '<button class="sidebar-item' + (currentSection === k ? " sel" : "") + '" data-section="' + k + '">' + label + "</button>").join("");
 }
 

@@ -505,6 +505,9 @@
     padding:12px 0 14px;
     background:linear-gradient(to top, var(--paper) 55%, transparent);
     pointer-events:none;
+    transform:translateZ(0);
+    -webkit-transform:translateZ(0);
+    will-change:transform;
   }
   #brandFooterInner{
     display:flex;align-items:center;justify-content:center;gap:0.14em;

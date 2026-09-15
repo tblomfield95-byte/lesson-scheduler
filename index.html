@@ -428,76 +428,63 @@ async function playCadenceIntro() {
   if (window.matchMedia("(prefers-reduced-motion:reduce)").matches) {
     app.classList.add("revealed");
     footer.classList.add("revealed");
-    overlay.remove();
     return;
   }
 
   try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) {}
 
-  // Lay the travelling mark out AT its final resting place and size from
-  // the very start — matching the permanent footer wordmark exactly —
-  // then use a single transform to make it LOOK centred and large. Every
-  // frame of the animation below only ever touches transform and color,
-  // both compositor-only properties, so nothing here triggers layout.
-  // (Animating left/top/font-size directly, as this used to, forces a
-  // layout recalculation on every frame of a fixed-position element,
-  // which is what left Safari's fixed-position tracking degraded for
-  // the rest of the page's life — the actual cause of the footer bug.)
+  // Render the mark natively at its large starting size — crisp glyph
+  // rasterisation — and reach the small final size purely by scaling
+  // DOWN via transform. Downscaling stays sharp under GPU compositing;
+  // scaling text UP from a small native render looks pixelated, which is
+  // why the mark is never laid out at its small final size at all.
+  //
+  // Only transform and color are ever animated frame-to-frame — both
+  // compositor-only properties — since animating left/top/font-size
+  // directly forces a layout recalculation on every frame of a
+  // fixed-position element, which is what degraded Safari's fixed-
+  // position tracking for the rest of the page's life (the original
+  // footer-drift bug this replaced).
   const finalStyle = getComputedStyle(footerInner);
   const finalFontSize = parseFloat(finalStyle.fontSize);
   const finalColor = finalStyle.color;
+  const startSize = Math.min(72, Math.max(52, window.innerWidth * 0.14));
 
-  intro.style.fontSize = finalFontSize + "px";
-  intro.style.fontWeight = finalStyle.fontWeight;
-  intro.style.letterSpacing = finalStyle.letterSpacing;
+  intro.style.fontSize = startSize + "px";
+  let introRect = intro.getBoundingClientRect();
+  intro.style.left = ((window.innerWidth - introRect.width) / 2) + "px";
+  intro.style.top = ((window.innerHeight - introRect.height) / 2) + "px";
+  introRect = intro.getBoundingClientRect();
 
   const finalRect = footerInner.getBoundingClientRect();
-  intro.style.left = finalRect.left + "px";
-  intro.style.top = finalRect.top + "px";
-
-  const introRect = intro.getBoundingClientRect();
-  const startSize = Math.min(72, Math.max(52, window.innerWidth * 0.14));
-  const scale = startSize / finalFontSize;
-  const dx = (window.innerWidth / 2) - (introRect.left + introRect.width / 2);
-  const dy = (window.innerHeight / 2) - (introRect.top + introRect.height / 2);
+  const scale = finalFontSize / startSize;
+  const dx = (finalRect.left + finalRect.width / 2) - (introRect.left + introRect.width / 2);
+  const dy = (finalRect.top + finalRect.height / 2) - (introRect.top + introRect.height / 2);
   const startColor = getComputedStyle(intro).color;
-
-  // Apply the starting visual state synchronously, in the same tick as the
-  // layout properties above — otherwise the browser paints the in-between
-  // state (small, sitting at the final footer position) during the delay
-  // below, which is exactly the flash-then-jump this fixes.
-  intro.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
-  intro.style.color = startColor;
 
   await new Promise(r => setTimeout(r, 700));
 
   const animation = intro.animate(
     [
-      { transform: `translate(${dx}px, ${dy}px) scale(${scale})`, color: startColor },
-      { transform: "translate(0px, 0px) scale(1)", color: finalColor },
+      { transform: "translate(0px, 0px) scale(1)", color: startColor },
+      { transform: `translate(${dx}px, ${dy}px) scale(${scale})`, color: finalColor },
     ],
     { duration: 1000, easing: "cubic-bezier(.42,0,.18,1)", fill: "forwards" }
   );
   try { await animation.finished; } catch (e) {}
 
-  intro.style.transform = "translate(0px, 0px) scale(1)";
+  intro.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
   intro.style.color = finalColor;
 
-  // Give Safari one complete paint with both marks coincident and the
-  // footer still fully transparent, so the fade below actually animates
-  // rather than jumping straight to its end state.
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-
   footer.classList.add("revealed");
+
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   app.classList.add("revealed");
 
-  // Wait for the footer's own opacity fade (.4s, in CSS) to fully finish
-  // before removing the travelling mark — removing it any earlier leaves
-  // a visible gap where neither the mark nor the fully-opaque footer is
-  // showing yet.
-  await new Promise(r => setTimeout(r, 420));
-
-  overlay.remove();
+  // The travelling mark stays visible forever, exactly where it landed,
+  // as the permanent footer wordmark — it is never swapped for the real
+  // (permanently invisible) footerInner text or removed. That duplicate
+  // text exists solely as a measuring target for finalRect above.
 }
 
 boot();

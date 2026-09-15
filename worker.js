@@ -111,7 +111,18 @@ async function handleLoginRequest(request, env, url) {
           "\n\nThis link expires in 15 minutes and can only be used once. If you didn't request it, you can ignore this email.",
         html:'<!doctype html><html><body style="margin:0;background:#F2EFE7;color:#211C17;font-family:Arial,sans-serif;padding:32px 16px">' +
           '<div style="max-width:440px;margin:auto;background:#fff;border:1px solid #DCD5C6;border-radius:12px;padding:28px">' +
-          '<div style="font-family:Georgia,serif;font-size:30px;font-weight:bold;color:#6E1423">Cadence.</div>' +
+          '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 6px">' +
+          '<tr>' +
+          '<td width="40" height="40" style="width:40px;height:40px;background-color:#6E1423;border-radius:9px" valign="middle">' +
+					'<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>' +
+					'<td width="6" height="22" style="width:6px;height:22px;line-height:22px;font-size:0;background-color:#F2EFE7;border-radius:2px">&nbsp;</td>' +
+					'<td width="6" style="width:6px;font-size:0;line-height:0">&nbsp;</td>' +
+					'<td width="12" height="22" style="width:12px;height:22px;line-height:22px;font-size:0;background-color:#F2EFE7;border-radius:3px">&nbsp;</td>' +
+					'</tr></table>' +
+					'</td>' +
+					'<td width="10" style="width:10px;font-size:0;line-height:0">&nbsp;</td>' +
+					'<td style="font-family:Georgia,serif;font-size:30px;font-weight:bold;color:#6E1423" valign="middle">Cadence.</td>' +
+					'</tr></table>' +
           '<h1 style="font-size:21px;margin-top:28px">Your login link</h1><p style="line-height:1.6">Ready to organise your lessons? Tap below to continue.</p>' +
           '<p style="margin:28px 0"><a href="' + safeLink + '" style="display:inline-block;background:#6E1423;color:white;text-decoration:none;padding:14px 22px;border-radius:7px;font-weight:bold">Log in to Cadence</a></p>' +
           '<p style="font-size:13px;line-height:1.6;color:#6B6157">This link expires in 15 minutes and can only be used once. If you didn’t request it, you can ignore this email.</p>' +

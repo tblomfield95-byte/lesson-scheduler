@@ -248,6 +248,12 @@ async function playCadenceIntro() {
   const translateX = startCenterX - introCenterX;
   const translateY = startCenterY - introCenterY;
 
+  // Apply the starting transform synchronously, in the same tick as the
+  // layout properties above — otherwise the browser paints the small,
+  // final-position state during the splash hold below, flashing there
+  // before jumping to the correct centred/large starting appearance.
+  intro.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+
   // Deliberate splash hold.
   await new Promise(resolve => setTimeout(resolve, 1900));
 

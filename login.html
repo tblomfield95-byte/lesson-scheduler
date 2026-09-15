@@ -217,7 +217,7 @@ async function playCadenceIntro() {
   const finalFontSize = parseFloat(getComputedStyle(finalMark).fontSize);
 
   // Deliberate splash hold.
-  await new Promise(resolve => setTimeout(resolve, 1700));
+  await new Promise(resolve => setTimeout(resolve, 1900));
 
   const animation = intro.animate(
     [
@@ -233,8 +233,8 @@ async function playCadenceIntro() {
       }
     ],
     {
-      duration:1000,
-      easing:"cubic-bezier(.22,.72,.16,1)",
+      duration:1350,
+      easing:"cubic-bezier(.42,0,.18,1)",
       fill:"forwards"
     }
   );

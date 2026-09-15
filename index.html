@@ -40,8 +40,15 @@
   #brandFooterInner{
     display:flex;align-items:center;justify-content:center;gap:0.32em;
     width:max-content;
-    font-family:var(--serif);font-size:12.5px;font-weight:600;color:var(--ink-soft);
+    font-family:var(--serif);
+    font-size:12.5px;
+    line-height:1;
+    font-weight:700;
+    letter-spacing:-0.025em;
+    color:var(--ink-soft);
     white-space:nowrap;
+    text-rendering:optimizeLegibility;
+    -webkit-font-smoothing:antialiased;
   }
   #brandFooter.revealed{opacity:1}
   @media (prefers-reduced-motion:reduce){
@@ -452,6 +459,8 @@ async function playCadenceIntro() {
   const finalStyle = getComputedStyle(footerInner);
   const finalFontSize = parseFloat(finalStyle.fontSize);
   const finalColor = finalStyle.color;
+  const finalFontWeight = finalStyle.fontWeight;
+  const finalLetterSpacing = finalStyle.letterSpacing;
 
   await new Promise(r => setTimeout(r, 700));
 
@@ -467,7 +476,9 @@ async function playCadenceIntro() {
         left: finalRect.left + "px",
         top: finalRect.top + "px",
         fontSize: finalFontSize + "px",
-        color: finalColor
+        color: finalColor,
+        fontWeight: finalFontWeight,
+        letterSpacing: finalLetterSpacing
       },
     ],
     { duration: 1000, easing: "cubic-bezier(.42,0,.18,1)", fill: "forwards" }
@@ -478,6 +489,12 @@ async function playCadenceIntro() {
   intro.style.top = finalRect.top + "px";
   intro.style.fontSize = finalFontSize + "px";
   intro.style.color = finalColor;
+  intro.style.fontWeight = finalFontWeight;
+  intro.style.letterSpacing = finalLetterSpacing;
+
+  // Put the real footer underneath the travelling mark while they are
+  // visually identical, then allow two complete paint frames before
+  // removing the overlay. This avoids a one-frame typography swap.
   footer.classList.add("revealed");
 
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));

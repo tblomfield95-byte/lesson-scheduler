@@ -50,6 +50,7 @@
   .sidebar-backdrop.open{opacity:1;background:rgba(27,36,48,.45);pointer-events:auto}
   .sidebar-panel{position:fixed;top:0;left:0;bottom:0;width:230px;max-width:80vw;background:var(--panel);
                  z-index:61;box-shadow:2px 0 16px rgba(0,0,0,.18);padding:18px 0;overflow-y:auto;
+                 display:flex;flex-direction:column;
                  transform:translateX(-100%);transition:transform .58s cubic-bezier(.22,.72,.16,1)}
   .sidebar-panel.open{transform:translateX(0)}
   .sidebar-brand{font-family:var(--serif);font-size:19px;font-weight:600;color:var(--sig);
@@ -57,6 +58,22 @@
   .sidebar-item{display:block;width:100%;text-align:left;font:inherit;font-size:15px;padding:12px 18px;
                 border:none;background:none;color:var(--ink);cursor:pointer}
   .sidebar-item.sel{background:var(--sig-soft);color:var(--sig);font-weight:600}
+  .sidebar-signout{
+    display:block;
+    width:100%;
+    margin-top:auto;
+    padding:15px 18px 4px;
+    border:none;
+    border-top:1px solid var(--rule);
+    background:none;
+    color:var(--sig);
+    text-align:left;
+    font:inherit;
+    font-size:15px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .sidebar-signout:focus-visible{outline:2px solid var(--sig);outline-offset:-2px}
   .field{margin-bottom:16px}
   .field label{display:block;font-size:13px;color:var(--ink-soft);margin:0 0 5px}
   .field input{width:100%;font:inherit;font-size:15px;padding:11px 13px;border-radius:7px;
@@ -1557,7 +1574,8 @@ function renderHeader() {
 function renderSidebarItems() {
   const items = [["scheduler", "Scheduler"], ["profile", "Profile"], ["students", "Students"], ["termdates", "Term Dates"], ["settings", "Settings"]];
   return '<div class="sidebar-brand">Cadence.</div>' +
-    items.map(([k, label]) => '<button class="sidebar-item' + (currentSection === k ? " sel" : "") + '" data-section="' + k + '">' + label + "</button>").join("");
+    items.map(([k, label]) => '<button class="sidebar-item' + (currentSection === k ? " sel" : "") + '" data-section="' + k + '">' + label + "</button>").join("") +
+    '<button class="sidebar-signout" data-sidebar-action="signOut">Sign out</button>';
 }
 
 // The panel and backdrop live outside #app's innerHTML churn deliberately —
@@ -1586,6 +1604,17 @@ function syncSidebarDOM() {
 
 function toggleSidebar() { sidebarOpen = !sidebarOpen; syncSidebarDOM(); }
 function closeSidebar() { sidebarOpen = false; syncSidebarDOM(); }
+
+async function signOut() {
+  try {
+    await fetch("/api/logout", { method: "POST" });
+  } catch (e) {
+    // Still leave the protected app; if the request failed, the login page
+    // is the safest destination and a retry can happen from there.
+  }
+  window.location.href = "/login.html";
+}
+
 function goSection(section) {
   currentSection = section;
   if (section === "termdates") openTermDatesDraft();
@@ -2094,6 +2123,9 @@ document.getElementById("app").addEventListener("change", (e) => {
 
 document.getElementById("sidebarBackdrop").addEventListener("click", closeSidebar);
 document.getElementById("sidebarPanel").addEventListener("click", (e) => {
+  const signOutBtn = e.target.closest('[data-sidebar-action="signOut"]');
+  if (signOutBtn) { signOut(); return; }
+
   const btn = e.target.closest("[data-section]");
   if (btn) goSection(btn.dataset.section);
 });

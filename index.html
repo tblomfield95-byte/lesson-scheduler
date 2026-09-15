@@ -23,9 +23,8 @@
   #app{opacity:0;transition:opacity .45s ease}
   #app.revealed{opacity:1}
   .brand-mark{flex:none;width:0.78em;height:0.78em;transform:translateY(0.035em)}
-  #brandIntro{position:fixed;inset:0;z-index:100;pointer-events:none}
   #brandIntroMark{
-    position:fixed;margin:0;padding:0;
+    position:fixed;margin:0;padding:0;z-index:100;pointer-events:none;
     display:flex;align-items:center;gap:0.14em;
     font-family:var(--serif);line-height:1;font-weight:700;letter-spacing:-0.025em;
     color:var(--sig);white-space:nowrap;
@@ -55,7 +54,7 @@
   }
   #brandFooter.revealed{opacity:1}
   @media (prefers-reduced-motion:reduce){
-    #brandIntro{display:none}
+    #brandIntroMark{display:none}
     #app{opacity:1}
     #brandFooter{opacity:1;transition:none}
     #brandFooterInner{visibility:visible}
@@ -109,15 +108,13 @@
 </style>
 </head>
 <body>
-<div id="brandIntro" aria-hidden="true">
-  <div id="brandIntroMark">
-    <svg class="brand-mark" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-      <rect width="40" height="40" rx="9" fill="#6E1423"/>
-      <rect x="8" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/>
-      <rect x="20" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/>
-    </svg>
-    <span>Cadence.</span>
-  </div>
+<div id="brandIntroMark" aria-hidden="true">
+  <svg class="brand-mark" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+    <rect width="40" height="40" rx="9" fill="#6E1423"/>
+    <rect x="8" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/>
+    <rect x="20" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/>
+  </svg>
+  <span>Cadence.</span>
 </div>
 
 <div id="app"></div>
@@ -418,12 +415,11 @@ function render() {
 }
 
 async function playCadenceIntro() {
-  const overlay = document.getElementById("brandIntro");
   const intro = document.getElementById("brandIntroMark");
   const footer = document.getElementById("brandFooter");
   const footerInner = document.getElementById("brandFooterInner");
   const app = document.getElementById("app");
-  if (!overlay || !intro || !footer || !footerInner || !app) return;
+  if (!intro || !footer || !footerInner || !app) return;
 
   if (window.matchMedia("(prefers-reduced-motion:reduce)").matches) {
     app.classList.add("revealed");

@@ -327,6 +327,34 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // Keep www on the same host as emailed links and the host-only session cookie.
+    if (env.APP_ORIGIN) {
+      const canonical = new URL(env.APP_ORIGIN);
+      if (url.hostname === "www." + canonical.hostname) {
+        const destination = new URL(url.pathname + url.search, canonical.origin);
+        return new Response(null, {status:307, headers:{
+          "Location":destination.href, "Cache-Control":"no-store"
+        }});
+      }
+    }
+
+    // Returning teachers skip login while their existing session is valid.
+    if (["GET", "HEAD"].includes(request.method) &&
+        ["/", "/login", "/login.html"].includes(path)) {
+      const teacherId = await requireSession(request, env);
+      const teacher = teacherId
+        ? await env.DB.prepare("SELECT onboarded FROM teachers WHERE id = ?").bind(teacherId).first()
+        : null;
+      if (teacher || path === "/" || path === "/login") {
+        const destination = teacher
+          ? (teacher.onboarded ? "/admin.html" : "/onboarding.html")
+          : "/login.html";
+        return new Response(null, {status:302, headers:{
+          "Location":new URL(destination, url).href, "Cache-Control":"no-store"
+        }});
+      }
+    }
+
     if (path === "/api/login" && request.method === "POST") return handleLoginRequest(request, env, url);
     if (path === "/api/verify" && ["GET", "POST"].includes(request.method)) return handleVerify(request, url, env);
     if (path === "/api/logout" && request.method === "POST") return handleLogout();
@@ -362,7 +390,6 @@ export default {
       return env.ASSETS.fetch(new Request(new URL("/index.html", url), request));
     }
 
-    if (path === "/") return Response.redirect(url.origin + "/login.html", 302);
 
     return env.ASSETS.fetch(request);
   },

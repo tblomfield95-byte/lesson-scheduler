@@ -507,6 +507,35 @@ function hideFooterDuringToolbarResize() {
 }
 hideFooterDuringToolbarResize();
 
+// TEMPORARY DIAGNOSTIC — confirms whether visualViewport's resize event
+// actually fires for this specific toolbar-collapse gesture at all,
+// before assuming the fix above can ever work. Screenshot this box
+// during the buggy scroll.
+(function () {
+  if (!window.visualViewport) return;
+  const box = document.createElement("div");
+  box.style.cssText =
+    "position:fixed;top:0;left:0;right:0;z-index:9999;" +
+    "background:rgba(0,0,0,.82);color:#0f0;font:11px/1.4 monospace;" +
+    "padding:6px 8px;white-space:pre;pointer-events:none;";
+  document.body.appendChild(box);
+  let count = 0;
+  const render = (label) => {
+    box.textContent =
+      "resize events fired: " + count + "\n" +
+      "last event: " + label + "\n" +
+      "vv.height: " + window.visualViewport.height.toFixed(1) + "\n" +
+      "innerHeight: " + window.innerHeight + "\n" +
+      "time: " + new Date().toISOString().slice(11, 23);
+  };
+  render("none yet");
+  window.visualViewport.addEventListener("resize", () => {
+    count++;
+    render("resize");
+  });
+  window.addEventListener("resize", () => render("window.resize (fallback)"));
+})();
+
 boot();
 playCadenceIntro();
 </script>

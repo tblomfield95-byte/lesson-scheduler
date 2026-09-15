@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Set up your studio — Cadence.</title>
+<title>Set up your teaching — Cadence.</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,7 +13,7 @@
   html,body{margin:0;padding:0}
   body{
     --ink:#211C17; --ink-soft:#6B6157; --paper:#F2EFE7; --panel:#FFFFFF;
-    --rule:#DCD5C6; --sig:#6E1423;
+    --rule:#DCD5C6; --sig:#6E1423; --sig-soft:#EDDEDD;
     --serif: "Source Serif 4", Georgia, serif;
     font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
     background:var(--paper); color:var(--ink); min-height:100vh;
@@ -22,7 +22,8 @@
 
   /* ---------------------------------------------------------------- */
   /*  Masthead — sticky, sized to actually anchor the page, unchanged  */
-  /*  across both steps. Only the step indicator beneath it updates.   */
+  /*  across every step. The step indicator retires once you're past  */
+  /*  the form-filling part of the flow.                               */
   /* ---------------------------------------------------------------- */
   .masthead{
     position:sticky;top:0;z-index:10;
@@ -36,10 +37,18 @@
     font-family:var(--serif);font-weight:700;
     font-size:clamp(30px,8vw,40px);
     letter-spacing:-0.025em;color:var(--sig);
-    margin:0 0 16px;line-height:1;
+    margin:0;line-height:1;
   }
   .wordmark svg{flex:none;width:0.72em;height:0.98em}
-  .stepline{display:flex;gap:22px;list-style:none;margin:0;padding:0}
+  .stepline-wrap{
+    display:grid;grid-template-rows:1fr;
+    margin-top:16px;
+    transition:grid-template-rows .48s cubic-bezier(.22,.72,.16,1), margin-top .48s cubic-bezier(.22,.72,.16,1);
+  }
+  .stepline-wrap.collapsed{grid-template-rows:0fr;margin-top:0}
+  .stepline-wrap-inner{overflow:hidden}
+  .stepline{display:flex;gap:22px;list-style:none;margin:0;padding:0;opacity:1;transition:opacity .32s ease}
+  .stepline-wrap.collapsed .stepline{opacity:0}
   .stepline-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft)}
   .stepline-num{
     display:inline-flex;align-items:center;justify-content:center;
@@ -53,17 +62,16 @@
   .stepline-item.is-done .stepline-num{background:var(--ink);border-color:var(--ink);color:var(--paper)}
 
   /* ---------------------------------------------------------------- */
-  /*  Sliding stage — both steps live side by side in a 200%-wide      */
-  /*  track; moving between them animates transform and the wrapper's  */
-  /*  height together, the same easing the admin app uses for its      */
-  /*  sidebar reveal.                                                  */
+  /*  Sliding stage — all four screens live side by side in a track;   */
+  /*  moving between them animates transform and the wrapper's height  */
+  /*  together, the same easing the admin app uses for its sidebar.    */
   /* ---------------------------------------------------------------- */
   .stage{overflow:hidden;transition:height .58s cubic-bezier(.22,.72,.16,1)}
   .stage-track{
-    display:flex;width:200%;
+    display:flex;width:400%;
     transition:transform .58s cubic-bezier(.22,.72,.16,1);
   }
-  .step-panel{width:50%;flex:none;min-width:0}
+  .step-panel{width:25%;flex:none;min-width:0}
   .pad{padding:24px 18px 60px;max-width:480px;margin:0 auto}
 
   h1{font-family:var(--serif);font-size:21px;font-weight:600;margin:0 0 6px}
@@ -87,94 +95,110 @@
   h3{font-family:var(--serif);font-size:16px;font-weight:600;margin:26px 0 6px}
 
   .term-count-card{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:14px;
-    padding:13px 14px;
-    margin-bottom:12px;
-    border:1px solid var(--rule);
-    border-radius:8px;
-    background:var(--panel);
+    display:flex;align-items:center;justify-content:space-between;gap:14px;
+    padding:13px 14px;margin-bottom:12px;
+    border:1px solid var(--rule);border-radius:8px;background:var(--panel);
   }
-  .term-count-card label{
-    margin:0;
-    font-size:14px;
-    font-weight:580;
-    color:var(--ink);
-  }
-  .term-count-card input{
-    width:68px;
-    margin:0;
-    text-align:center;
-    padding:9px 8px;
-    background:var(--paper);
-  }
+  .term-count-card label{margin:0;font-size:14px;font-weight:580;color:var(--ink)}
+  .term-count-card input{width:68px;margin:0;text-align:center;padding:9px 8px;background:var(--paper)}
   .term-card{
-    width:100%;
-    min-width:0;
-    overflow:hidden;
-    border:1px solid var(--rule);
-    border-radius:12px;
-    background:var(--panel);
-    padding:14px;
-    margin-bottom:12px;
+    width:100%;min-width:0;overflow:hidden;
+    border:1px solid var(--rule);border-radius:12px;background:var(--panel);
+    padding:14px;margin-bottom:12px;
   }
   .term-card-head{margin-bottom:11px}
-  .term-card-head h4{
-    margin:0;
-    font-family:var(--serif);
-    font-size:16px;
-    font-weight:600;
-  }
-  .term-date-grid{
-    display:grid;
-    grid-template-columns:repeat(2,minmax(0,1fr));
-    gap:14px;
-    width:100%;
-    min-width:0;
-  }
-  .term-date-grid .term-field{
-    min-width:0;
-    width:100%;
-  }
-  .term-date-grid label{
-    font-size:12.5px;
-    margin-bottom:6px;
-  }
+  .term-card-head h4{margin:0;font-family:var(--serif);font-size:16px;font-weight:600}
+  .term-date-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;width:100%;min-width:0}
+  .term-date-grid .term-field{min-width:0;width:100%}
+  .term-date-grid label{font-size:12.5px;margin-bottom:6px}
   .term-date-grid input[type="date"]{
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    width:100%;
-    max-width:100%;
-    min-width:0;
-    height:44px;
-    box-sizing:border-box;
-    font:inherit;
-    font-size:13.5px;
-    line-height:1;
-    padding:10px 6px;
-    margin:0;
-    text-align:center;
-    border-radius:7px;
-    border:1px solid var(--rule);
-    background:var(--paper);
-    color:var(--ink);
-    -webkit-appearance:none;
-    appearance:none;
+    display:flex;align-items:center;justify-content:center;
+    width:100%;max-width:100%;min-width:0;height:44px;box-sizing:border-box;
+    font:inherit;font-size:13.5px;line-height:1;padding:10px 6px;margin:0;text-align:center;
+    border-radius:7px;border:1px solid var(--rule);background:var(--paper);color:var(--ink);
+    -webkit-appearance:none;appearance:none;
   }
   @media (max-width:390px){
     .term-card{padding:12px}
     .term-date-grid{gap:10px}
-    .term-date-grid input[type="date"]{
-      font-size:13px;
-      padding-left:4px;
-      padding-right:4px;
-    }
+    .term-date-grid input[type="date"]{font-size:13px;padding-left:4px;padding-right:4px}
   }
+
+  /* ---------------------------------------------------------------- */
+  /*  Setup complete                                                   */
+  /* ---------------------------------------------------------------- */
+  .complete-pad{text-align:center;padding-top:44px}
+  .complete-mark{
+    width:88px;height:88px;margin:0 auto 22px;border-radius:22px;
+    background:var(--sig-soft);display:flex;align-items:center;justify-content:center;
+  }
+  .complete-mark svg{width:32px;height:44px;color:var(--sig)}
+  .complete-pad h1{font-size:23px}
+  .complete-pad .sub{margin-left:auto;margin-right:auto;max-width:340px}
+  .complete-pad .btn{margin-bottom:10px}
+  .complete-pad .back-link{text-align:center}
+
+  /* ---------------------------------------------------------------- */
+  /*  Tutorial card wheel — annotated mock screens, swipe or Next.     */
+  /* ---------------------------------------------------------------- */
+  .tour-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:4px}
+  .tour-head h1{margin-bottom:0}
+  .skip-link{font:inherit;font-size:13px;color:var(--ink-soft);background:none;border:none;cursor:pointer;
+             padding:4px 0;flex:none}
+  .tour-track{
+    display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;
+    margin:0 -18px;padding:0 18px;scrollbar-width:none;
+  }
+  .tour-track::-webkit-scrollbar{display:none}
+  .tour-card{scroll-snap-align:center;flex:0 0 100%;min-width:0;padding-right:18px}
+  .tour-card h2{font-family:var(--serif);font-size:17px;font-weight:600;margin:0 0 12px}
+  .tour-shot{border:1px solid var(--rule);border-radius:14px;background:var(--panel);padding:16px;margin-bottom:16px}
+  .shot-bar{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;color:var(--ink-soft);
+            margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--rule)}
+  .shot-bar b{font-family:var(--serif);font-size:13.5px;color:var(--ink);font-weight:600}
+  .callout-anchor{position:relative}
+  .callout-badge{
+    position:absolute;width:19px;height:19px;border-radius:50%;background:var(--sig);color:#fff;
+    font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 0 0 3px var(--panel);
+  }
+  .mini-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:3px}
+  .mini-cell{aspect-ratio:1/0.8;border-radius:2px;background:var(--panel);border:1px solid var(--rule)}
+  .mini-cell.muted{background:#EEEAE2;border-color:#DDD6C9}
+  .mini-cell.on,.mini-cell.picked{background:var(--sig);border-color:var(--sig)}
+  .mini-list{display:flex;flex-direction:column;gap:7px}
+  .mini-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:7px 9px;
+            border:1px solid var(--rule);border-radius:7px;background:var(--paper)}
+  .mini-row.replied{border-color:var(--sig);background:var(--sig-soft);color:var(--sig);font-weight:600}
+  .mini-opts{display:flex;flex-direction:column;gap:8px}
+  .mini-opt{border:1px solid var(--rule);border-radius:8px;padding:10px 11px;font-size:12px}
+  .mini-opt.picked{border-color:var(--sig);box-shadow:inset 0 0 0 1px var(--sig)}
+  .mini-opt b{display:block;font-size:12.5px;margin-bottom:3px}
+  .mini-btn{background:var(--ink);color:var(--paper);font-size:12px;font-weight:600;text-align:center;
+            padding:9px;border-radius:7px}
+  .mini-tracks{display:flex;flex-direction:column;gap:11px}
+  .mini-track-row{font-size:11.5px;color:var(--ink-soft)}
+  .mini-track-top{display:flex;justify-content:space-between;margin-bottom:5px}
+  .mini-track-top b{color:var(--ink);font-weight:600;font-size:12px}
+  .mini-track{height:5px;background:#EDEAE4;border-radius:3px;overflow:hidden}
+  .mini-track-fill{height:100%;background:var(--sig)}
+  .mini-track-fill.behind{background:#96591A}
+
+  .tour-legend{list-style:none;margin:0 0 22px;padding:0;font-size:13px;color:var(--ink-soft);line-height:1.5}
+  .tour-legend li{display:flex;gap:9px;margin-bottom:7px}
+  .tour-legend .num{
+    flex:none;width:18px;height:18px;border-radius:50%;background:var(--sig-soft);color:var(--sig);
+    font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px;
+  }
+  .tour-nav{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:2px}
+  .tour-dots{display:flex;gap:6px}
+  .tour-dot{width:7px;height:7px;border-radius:50%;background:var(--rule);transition:background-color .3s ease,transform .3s ease}
+  .tour-dot.active{background:var(--sig);transform:scale(1.35)}
+  .tour-nav .btn{width:auto;padding:12px 22px}
+
   @media (prefers-reduced-motion:reduce){
-    .stage,.stage-track,.stepline-num{transition:none}
+    .stage,.stage-track,.stepline-wrap,.stepline,.stepline-num{transition:none}
+    .tour-track{scroll-behavior:auto}
   }
 </style>
 </head>
@@ -189,19 +213,24 @@
       </svg>
       <span>Cadence.</span>
     </div>
-    <ol class="stepline" id="stepline" aria-label="Setup progress">
-      <li class="stepline-item is-active" id="stepline-0"><span class="stepline-num">1</span>Studio details</li>
-      <li class="stepline-item" id="stepline-1"><span class="stepline-num">2</span>Term dates</li>
-    </ol>
+    <div class="stepline-wrap" id="steplineWrap">
+      <div class="stepline-wrap-inner">
+        <ol class="stepline" id="stepline" aria-label="Setup progress">
+          <li class="stepline-item is-active" id="stepline-0"><span class="stepline-num">1</span>Teaching details</li>
+          <li class="stepline-item" id="stepline-1"><span class="stepline-num">2</span>Term dates</li>
+        </ol>
+      </div>
+    </div>
   </div>
 </header>
 
 <main class="stage" id="stage">
   <div class="stage-track" id="stageTrack">
 
+    <!-- Step 0 — Teaching details -->
     <section class="step-panel" id="panel-0">
       <div class="pad">
-        <h1>Set up your studio</h1>
+        <h1>Set up your teaching</h1>
         <p class="sub">Your name, instrument, and the students you teach with their allocated hours for the year.</p>
         <div id="errDetails"></div>
 
@@ -218,6 +247,7 @@
       </div>
     </section>
 
+    <!-- Step 1 — Term dates -->
     <section class="step-panel" id="panel-1">
       <div class="pad">
         <h1>Term dates</h1>
@@ -230,8 +260,138 @@
         </div>
         <div id="terms"></div>
 
-        <button class="back-link" id="backBtn">← Back to studio details</button>
+        <button class="back-link" id="backBtn">← Back to teaching details</button>
         <button class="btn" id="go">Finish setup</button>
+      </div>
+    </section>
+
+    <!-- Step 2 — Setup complete -->
+    <section class="step-panel" id="panel-2">
+      <div class="pad complete-pad">
+        <div class="complete-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="4" height="18" rx="1.5" fill="currentColor"/>
+            <rect x="11" y="3" width="9" height="18" rx="2" fill="currentColor"/>
+          </svg>
+        </div>
+        <h1>You're all set</h1>
+        <p class="sub">Cadence has your students and term dates. Next, a quick look at how a teaching week runs.</p>
+        <button class="btn" id="tourBtn">Show me how it works</button>
+        <button class="back-link" id="skipTourBtn">Skip and go to my dashboard</button>
+      </div>
+    </section>
+
+    <!-- Step 3 — Tutorial card wheel -->
+    <section class="step-panel" id="panel-3">
+      <div class="pad">
+        <div class="tour-head">
+          <h1>How Cadence works</h1>
+          <button class="skip-link" id="skipTourBtn2">Skip</button>
+        </div>
+        <p class="sub">Swipe through, or use Next.</p>
+
+        <div class="tour-track" id="tourTrack">
+
+          <article class="tour-card">
+            <h2>Paint your free times</h2>
+            <div class="tour-shot">
+              <div class="shot-bar"><b>Offer</b><span>Week 4 of 30</span></div>
+              <div class="callout-anchor">
+                <div class="mini-grid">
+                  <div class="mini-cell"></div><div class="mini-cell"></div><div class="mini-cell on"></div><div class="mini-cell on"></div><div class="mini-cell"></div><div class="mini-cell"></div>
+                  <div class="mini-cell"></div><div class="mini-cell"></div><div class="mini-cell on"></div><div class="mini-cell on"></div><div class="mini-cell"></div><div class="mini-cell"></div>
+                  <div class="mini-cell on"></div><div class="mini-cell on"></div><div class="mini-cell"></div><div class="mini-cell"></div><div class="mini-cell on"></div><div class="mini-cell on"></div>
+                </div>
+                <span class="callout-badge" style="top:-9px;left:38%">1</span>
+              </div>
+              <div class="callout-anchor" style="margin-top:14px">
+                <div class="mini-btn">Send to students</div>
+                <span class="callout-badge" style="top:-9px;right:-6px">2</span>
+              </div>
+            </div>
+            <ol class="tour-legend">
+              <li><span class="num">1</span>Drag across the times you could teach this week.</li>
+              <li><span class="num">2</span>Send it round — students only ever see these blocks.</li>
+            </ol>
+          </article>
+
+          <article class="tour-card">
+            <h2>Students say what suits them</h2>
+            <div class="tour-shot">
+              <div class="shot-bar"><b>Replies</b><span>2 of 3 replied</span></div>
+              <div class="callout-anchor">
+                <div class="mini-list">
+                  <div class="mini-row replied">Amelia<span>✓ Times given</span></div>
+                  <div class="mini-row replied">Josh<span>✓ Not needed</span></div>
+                  <div class="mini-row">Priya<span>Waiting</span></div>
+                </div>
+                <span class="callout-badge" style="top:-9px;left:12px">1</span>
+              </div>
+              <div class="callout-anchor" style="margin-top:14px">
+                <div class="mini-grid">
+                  <div class="mini-cell muted"></div><div class="mini-cell"></div><div class="mini-cell picked"></div><div class="mini-cell"></div><div class="mini-cell muted"></div><div class="mini-cell muted"></div>
+                  <div class="mini-cell muted"></div><div class="mini-cell"></div><div class="mini-cell picked"></div><div class="mini-cell"></div><div class="mini-cell muted"></div><div class="mini-cell muted"></div>
+                </div>
+                <span class="callout-badge" style="top:-9px;right:32%">2</span>
+              </div>
+            </div>
+            <ol class="tour-legend">
+              <li><span class="num">1</span>Each student taps their name and says if they need a lesson.</li>
+              <li><span class="num">2</span>They mark which of your times work — nothing outside your blocks.</li>
+            </ol>
+          </article>
+
+          <article class="tour-card">
+            <h2>Cadence works out the week</h2>
+            <div class="tour-shot">
+              <div class="shot-bar"><b>Schedule</b><span>2 options found</span></div>
+              <div class="callout-anchor">
+                <div class="mini-opts">
+                  <div class="mini-opt picked"><b>Tue + Thu</b>no gaps</div>
+                  <div class="mini-opt"><b>Wed only</b>45 min idle</div>
+                </div>
+                <span class="callout-badge" style="top:-9px;left:14px">1</span>
+              </div>
+              <div class="callout-anchor" style="margin-top:14px">
+                <div class="mini-btn">Confirm and log hours</div>
+                <span class="callout-badge" style="top:-9px;right:-6px">2</span>
+              </div>
+            </div>
+            <ol class="tour-legend">
+              <li><span class="num">1</span>It finds arrangements that fit everyone, fewest days first.</li>
+              <li><span class="num">2</span>Pick one and it's locked in for the week.</li>
+            </ol>
+          </article>
+
+          <article class="tour-card">
+            <h2>Hours track themselves</h2>
+            <div class="tour-shot">
+              <div class="shot-bar"><b>Hours</b><span>62h of 81.5h taught</span></div>
+              <div class="callout-anchor">
+                <div class="mini-tracks">
+                  <div class="mini-track-row">
+                    <div class="mini-track-top"><b>Amelia</b><span>9 / 12h</span></div>
+                    <div class="mini-track"><div class="mini-track-fill" style="width:75%"></div></div>
+                  </div>
+                  <div class="mini-track-row">
+                    <div class="mini-track-top"><b>Josh</b><span>4 / 11h</span></div>
+                    <div class="mini-track"><div class="mini-track-fill behind" style="width:36%"></div></div>
+                  </div>
+                </div>
+                <span class="callout-badge" style="top:-9px;left:34%">1</span>
+              </div>
+            </div>
+            <ol class="tour-legend">
+              <li><span class="num">1</span>Every confirmed lesson logs itself against a student's allocation, so you always know who's on track.</li>
+            </ol>
+          </article>
+
+        </div>
+
+        <div class="tour-nav">
+          <div class="tour-dots" id="tourDots"></div>
+          <button class="btn" id="tourNextBtn">Next</button>
+        </div>
       </div>
     </section>
 
@@ -239,6 +399,7 @@
 </main>
 
 <script>
+const STEP_COUNT = 4;
 let rows = [{ name: "", allocated: "" }];
 let terms = [{ start: "", end: "" }, { start: "", end: "" }, { start: "", end: "" }];
 let currentStep = 0;
@@ -259,11 +420,12 @@ function updateStepline() {
     el.classList.toggle("is-active", i === currentStep);
     el.classList.toggle("is-done", i < currentStep);
   });
+  document.getElementById("steplineWrap").classList.toggle("collapsed", currentStep >= 2);
 }
 
 function goToStep(idx) {
   currentStep = idx;
-  document.getElementById("stageTrack").style.transform = "translateX(" + (-idx * 50) + "%)";
+  document.getElementById("stageTrack").style.transform = "translateX(" + (-idx * (100 / STEP_COUNT)) + "%)";
   refreshHeight();
   updateStepline();
 }
@@ -271,7 +433,7 @@ function goToStep(idx) {
 window.addEventListener("resize", () => refreshHeight());
 
 /* -------------------------------------------------------------- */
-/*  Students (step 1)                                              */
+/*  Students (step 0)                                              */
 /* -------------------------------------------------------------- */
 
 function renderRows() {
@@ -321,7 +483,7 @@ document.getElementById("nextBtn").addEventListener("click", () => {
 document.getElementById("backBtn").addEventListener("click", () => goToStep(0));
 
 /* -------------------------------------------------------------- */
-/*  Term dates (step 2)                                             */
+/*  Term dates (step 1)                                             */
 /* -------------------------------------------------------------- */
 
 function renderTerms() {
@@ -379,12 +541,68 @@ document.getElementById("go").addEventListener("click", async () => {
       refreshHeight();
       btn.disabled = false; btn.textContent = "Finish setup"; return;
     }
-    window.location.href = "/admin.html";
+    goToStep(2);
   } catch (e) {
     errEl.innerHTML = '<p class="err">Couldn\u2019t reach the server \u2014 check your connection.</p>';
     refreshHeight();
     btn.disabled = false; btn.textContent = "Finish setup";
   }
+});
+
+/* -------------------------------------------------------------- */
+/*  Setup complete (step 2)                                         */
+/* -------------------------------------------------------------- */
+
+document.getElementById("tourBtn").addEventListener("click", () => goToStep(3));
+document.getElementById("skipTourBtn").addEventListener("click", () => { window.location.href = "/admin.html"; });
+document.getElementById("skipTourBtn2").addEventListener("click", () => { window.location.href = "/admin.html"; });
+
+/* -------------------------------------------------------------- */
+/*  Tutorial card wheel (step 3)                                    */
+/* -------------------------------------------------------------- */
+
+const tourTrack = document.getElementById("tourTrack");
+const tourCards = Array.from(tourTrack.querySelectorAll(".tour-card"));
+const tourDotsEl = document.getElementById("tourDots");
+const tourNextBtn = document.getElementById("tourNextBtn");
+let tourIndex = 0;
+let tourScrollTicking = false;
+
+tourDotsEl.innerHTML = tourCards.map((_, i) =>
+  '<span class="tour-dot' + (i === 0 ? " active" : "") + '" data-i="' + i + '"></span>'
+).join("");
+const tourDots = Array.from(tourDotsEl.children);
+
+function setTourIndex(i) {
+  tourIndex = i;
+  tourDots.forEach((d, di) => d.classList.toggle("active", di === i));
+  tourNextBtn.textContent = i === tourCards.length - 1 ? "Get started" : "Next";
+}
+
+tourTrack.addEventListener("scroll", () => {
+  if (tourScrollTicking) return;
+  tourScrollTicking = true;
+  requestAnimationFrame(() => {
+    const w = tourTrack.clientWidth;
+    const i = Math.round(tourTrack.scrollLeft / w);
+    if (i !== tourIndex) setTourIndex(Math.max(0, Math.min(tourCards.length - 1, i)));
+    tourScrollTicking = false;
+  });
+});
+
+tourDotsEl.addEventListener("click", (e) => {
+  const dot = e.target.closest("[data-i]");
+  if (!dot) return;
+  const i = Number(dot.dataset.i);
+  tourTrack.scrollTo({ left: i * tourTrack.clientWidth, behavior: "smooth" });
+});
+
+tourNextBtn.addEventListener("click", () => {
+  if (tourIndex >= tourCards.length - 1) {
+    window.location.href = "/admin.html";
+    return;
+  }
+  tourTrack.scrollTo({ left: (tourIndex + 1) * tourTrack.clientWidth, behavior: "smooth" });
 });
 
 /* -------------------------------------------------------------- */

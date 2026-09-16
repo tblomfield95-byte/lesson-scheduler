@@ -80,7 +80,7 @@
     white-space:nowrap;
     text-rendering:optimizeLegibility;
     -webkit-font-smoothing:antialiased;
-    will-change:transform;
+    will-change:left,top,font-size;
   }
 
   .login-content{
@@ -222,56 +222,53 @@ async function playCadenceIntro() {
   } catch (e) {}
 
   /*
-    Lay the travelling mark out AT the permanent heading's exact final
-    position and size from the start, then use a single transform to make
-    it LOOK large and centred higher up the screen. Every frame of the
-    animation below only ever touches transform — never left/top/font-size
-    — since animating those directly forces a layout recalculation on
-    every frame of a fixed-position element, which is what left Safari's
-    fixed-position tracking degraded on this page for the address bar's
-    entire remaining lifetime (the actual cause of the footer/fixed-bar
-    drift bug seen on other pages using this same intro).
-  */
-  /*
-    Render the mark natively at its large starting size — crisp glyph
-    rasterisation — and reach the small final size purely by scaling
-    DOWN via transform. Downscaling stays sharp under GPU compositing;
-    scaling text UP from a small native render looks pixelated, which is
-    why the mark is never laid out at its small final size at all.
-
-    Only transform is ever animated frame-to-frame — a compositor-only
-    property — since animating left/top/font-size directly forces a
-    layout recalculation on every frame of a fixed-position element,
-    which is what degraded Safari's fixed-position tracking for the
-    rest of a page's life on the pages that keep this mark on screen
-    permanently after landing.
+    Animates left, top and font-size directly, rather than transform.
+    That's deliberately different from the mark used on pages where it
+    stays on screen permanently afterward (the student and admin pages'
+    footer/header marks) — there, animating left/top every frame degrades
+    Safari's fixed-position tracking for the rest of the page's life, so
+    those use transform-only instead. That risk doesn't apply here: this
+    overlay is fully removed from the DOM the moment the animation ends
+    (see overlay.remove() below), so there's nothing left for degraded
+    tracking to affect.
   */
   const startSize = Math.min(86, Math.max(64, window.innerWidth * 0.16));
   intro.style.fontSize = startSize + "px";
 
+  // Force layout now that the font size is known.
   let introRect = intro.getBoundingClientRect();
-  intro.style.left = ((window.innerWidth - introRect.width) / 2) + "px";
-  intro.style.top = (window.innerHeight * 0.42 - introRect.height / 2) + "px";
-  introRect = intro.getBoundingClientRect();
 
+  const startLeft = (window.innerWidth - introRect.width) / 2;
+  const startTop = window.innerHeight * 0.42 - introRect.height / 2;
+
+  intro.style.left = startLeft + "px";
+  intro.style.top = startTop + "px";
+
+  // Read once more after applying the starting pixel position.
+  introRect = intro.getBoundingClientRect();
   const finalRect = finalMark.getBoundingClientRect();
   const finalFontSize = parseFloat(getComputedStyle(finalMark).fontSize);
-  const scale = finalFontSize / startSize;
-  const dx = (finalRect.left + finalRect.width / 2) - (introRect.left + introRect.width / 2);
-  const dy = (finalRect.top + finalRect.height / 2) - (introRect.top + introRect.height / 2);
 
   // Deliberate splash hold.
   await new Promise(resolve => setTimeout(resolve, 1900));
 
   const animation = intro.animate(
     [
-      { transform: "translate(0px, 0px) scale(1)" },
-      { transform: `translate(${dx}px, ${dy}px) scale(${scale})` }
+      {
+        left: introRect.left + "px",
+        top: introRect.top + "px",
+        fontSize: startSize + "px"
+      },
+      {
+        left: finalRect.left + "px",
+        top: finalRect.top + "px",
+        fontSize: finalFontSize + "px"
+      }
     ],
     {
-      duration:1350,
-      easing:"cubic-bezier(.42,0,.18,1)",
-      fill:"forwards"
+      duration: 1350,
+      easing: "cubic-bezier(.42,0,.18,1)",
+      fill: "forwards"
     }
   );
 
@@ -279,14 +276,11 @@ async function playCadenceIntro() {
     await animation.finished;
   } catch (e) {}
 
-  // Release the animation's hold on transform before setting it directly
-  // below — a finished fill:forwards animation keeps actively controlling
-  // the property, and takes priority over a plain inline style on the
-  // same property, so without this the mark can visibly settle toward an
-  // intermediate point before an abrupt correction to its true resting
-  // position, rather than arriving there in one continuous motion.
-  animation.cancel();
-  intro.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+  // Lock the travelling mark to the final pixel values before swapping —
+  // avoids a final-frame interpolation discrepancy in WebKit.
+  intro.style.left = finalRect.left + "px";
+  intro.style.top = finalRect.top + "px";
+  intro.style.fontSize = finalFontSize + "px";
 
   // Reveal the real heading underneath at the identical position/size.
   finalMark.style.opacity = "1";

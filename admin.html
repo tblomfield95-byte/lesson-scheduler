@@ -1462,7 +1462,7 @@ async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startH
   const blob = await new Promise(res => c.toBlob(res, "image/png"));
   const file = new File([blob], "lessons-week-" + filenameWeekNo + ".png", { type: "image/png" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: heading }); return; } catch (e) { /* fall through */ }
+    try { await navigator.share({ files: [file] }); return; } catch (e) { /* fall through */ }
   }
   if (S.imgUrl) URL.revokeObjectURL(S.imgUrl);
   S.imgUrl = URL.createObjectURL(blob);
@@ -3033,9 +3033,10 @@ document.getElementById("app").addEventListener("change", (e) => {
     if (!Number.isInteger(chosen) || !rnd.result || !rnd.result.options[chosen]) return;
     rnd.chosen = chosen;
     S.imgUrl = ""; S.fallbackText = "";
+    // Dismiss the native picker before replacing the select. Refocusing
+    // its replacement can reopen the picker on iOS Safari.
+    el.blur();
     render();
-    const picker = document.querySelector('[data-bind="agendaOption"]');
-    if (picker) picker.focus({ preventScroll: true });
   }
   else if (bind === "week") {
     let n = parseInt(el.value, 10);

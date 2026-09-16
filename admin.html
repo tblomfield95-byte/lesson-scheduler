@@ -2891,7 +2891,6 @@ function renderHoursTab() {
 
   return '<div class="pad"><p class="lede">' + totalTaught + "h taught of " + totalAllocated + "h allocated" +
     (rolling ? "" : ", with " + weeksLeft + " weeks left") + '. Tap a name to see or add individual lessons.</p>' +
-    exportPanel +
     '<div class="hours-sort"><label for="hoursSort">Sort by</label><select id="hoursSort" data-bind="hoursSort">' +
       '<option value="first" ' + ((S.hoursSort || "first") === "first" ? "selected" : "") + '>First name</option>' +
       '<option value="surname" ' + (S.hoursSort === "surname" ? "selected" : "") + '>Surname</option>' +
@@ -2899,6 +2898,7 @@ function renderHoursTab() {
       '<option value="remaining" ' + (S.hoursSort === "remaining" ? "selected" : "") + '>Hours Remaining</option>' +
     '</select></div>' +
     '<div class="panel">' + rows + "</div>" +
+    exportPanel +
     '<div class="btnrow"><button class="btn' + (confirmingReset ? " confirm-pending" : "") + '" data-action="resetYearConfirm">' +
     (confirmingReset ? "Tap again to confirm" : "Reset year") + '</button></div></div>';
 }

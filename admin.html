@@ -553,11 +553,6 @@
     -webkit-font-smoothing:antialiased;
   }
   #brandFooter .brand-mark{flex:none;width:0.78em;height:0.78em;transform:translateY(0.035em)}
-  input:focus-visible, select:focus-visible, textarea:focus-visible,
-  button:focus-visible, a:focus-visible {
-    outline:2px solid var(--sig);
-    outline-offset:3px;
-  }
 </style>
 </head>
 <body>
@@ -577,29 +572,25 @@
 <div id="sidebarPanel" class="sidebar-panel"></div>
 <div id="toast" class="toast" hidden></div>
 <script>
-// Keep keyboard traversal consistent across fields and action buttons.
-// Capture Tab before browser navigation; leave page boundaries to Safari.
+// Safari on iPad doesn't move focus between text fields on Tab by
+// default — that only happens with "Full Keyboard Access" turned on in
+// Accessibility settings, which almost nobody enables. With a hardware
+// keyboard, pressing Tab there just exits the field with nowhere to go.
+// Advancing focus by hand here makes Tab work as expected regardless of
+// that setting. Fields are queried fresh on every keypress (rather than
+// once) since this app's field list changes constantly — students added,
+// tabs switched, and so on.
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return;
-  const sidebar = document.getElementById("sidebarPanel");
-  const root = sidebar && sidebar.classList.contains("open")
-    ? sidebar : document.getElementById("app");
-  if (!root || !root.contains(document.activeElement)) return;
-  const selector = 'input:not([type="hidden"]), select, textarea, button, a[href], [tabindex]';
-  const controls = Array.from(root.querySelectorAll(selector)).filter(el => {
-    const style = getComputedStyle(el);
-    return el.tabIndex >= 0 && !el.matches(":disabled") &&
-      !el.closest('[hidden], [inert], [aria-hidden="true"]') &&
-      el.getClientRects().length > 0 && style.visibility !== "hidden" &&
-      style.visibility !== "collapse";
-  });
-  const index = controls.indexOf(document.activeElement);
-  if (index < 0) return;
-  const next = controls[index + (e.shiftKey ? -1 : 1)];
-  if (!next) return;
+  if (e.key !== "Tab") return;
+  const selector = 'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])';
+  const fields = Array.from(document.querySelectorAll(selector)).filter(el => el.offsetParent !== null);
+  const idx = fields.indexOf(document.activeElement);
+  if (idx === -1) return;
+  const next = fields[e.shiftKey ? idx - 1 : idx + 1];
+  if (!next) return; // at the boundary — let the browser's own tab order take over
   e.preventDefault();
   next.focus();
-}, { capture: true });
+});
 
 /* ================================================================== */
 /*  Constants                                                          */
@@ -2288,8 +2279,8 @@ function goSection(section) {
 function renderProfileSection() {
   return '<div class="pad">' +
     '<p class="lede">This is what was collected when you first set up your account.</p>' +
-    '<div class="field"><label for="profileName">Your name</label><input id="profileName" type="text" autocomplete="name" data-bind="profileName" value="' + escapeHTML(ME.name || "") + '"></div>' +
-    '<div class="field"><label for="profileInstrument">Instrument</label><input id="profileInstrument" type="text" data-bind="profileInstrument" value="' + escapeHTML(ME.instrument || "") + '"></div>' +
+    '<div class="field"><label>Your name</label><input type="text" data-bind="profileName" value="' + escapeHTML(ME.name || "") + '"></div>' +
+    '<div class="field"><label>Instrument</label><input type="text" data-bind="profileInstrument" value="' + escapeHTML(ME.instrument || "") + '"></div>' +
     '<div class="btnrow"><button class="btn sig" data-action="saveProfile">Save changes</button></div>' +
     '<div class="panel" style="border-color:var(--sig);margin-top:24px">' +
     '<h3 style="color:var(--sig)">Account deletion</h3>' +

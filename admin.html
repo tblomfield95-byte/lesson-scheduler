@@ -1259,8 +1259,10 @@ function runSolver() {
   rnd.result = solve(participants, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd), S.settings.priorityOrder);
   rnd.chosen = 0;
   rnd.optionsExpanded = false;
+  const tabOrder = ["week", "replies", "plan", "hours"];
+  const dir = tabOrder.indexOf("plan") >= tabOrder.indexOf(S.tab) ? 1 : -1;
   S.tab = "plan";
-  render();
+  animatedRender(dir);
 }
 
 function cycleDayPreference(day) {
@@ -1477,7 +1479,7 @@ function endWeek() {
   ensureRound(S.week);
   S.imgUrl = ""; S.fallbackText = ""; S.tab = "hours";
   flash(entries.length + " lessons logged");
-  render();
+  animatedRender(1);
 }
 
 // A toggle now, not a one-shot jump — tapping it marks the CURRENT week
@@ -1854,7 +1856,7 @@ function buildGridHTML(role, opts) {
       const k = key(d, i);
       const isOffered = !offered || offered.has(k);
       const on = selected && selected.has(k);
-      const h = heat ? (heat[k] || 0) : 0;
+      const h = heat && isOffered ? (heat[k] || 0) : 0;
       let cls = "cell";
       if (!isOffered) cls += " muted";
       if (on) cls += " on";
@@ -2420,7 +2422,8 @@ function renderRepliesTab() {
       const st = r ? r.status : "waiting";
       const isStudentReply = !!r && r.source !== "admin";
       const ownerText = !r ? "" : isStudentReply ? " (from the student)" : " (you entered this)";
-      const statusText = (st === "in" ? (r.avail.size + " slots free") : st === "skip" ? "Not this week" : st === "none" ? "Nothing works" : "Waiting") + ownerText;
+      const validAvailCount = r && r.avail ? [...r.avail].filter(k => rnd.offered.has(k)).length : 0;
+      const statusText = (st === "in" ? (validAvailCount + " slots free") : st === "skip" ? "Not this week" : st === "none" ? "Nothing works" : "Waiting") + ownerText;
       const curLesson = lessonFor(rnd, s.id);
       let lenrow = "";
       if (st === "in") {

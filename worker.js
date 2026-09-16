@@ -422,10 +422,48 @@ export default {
       return env.ASSETS.fetch(new Request(new URL("/onboarding.html", url), request));
     }
 
-    // Student links: /s/<slug>/<week> — always the same page, slug and
-    // week both read client-side from the URL
+    // Student links: /s/<slug>/<week> — always the same page underneath
+    // (slug and week are read client-side from the URL for the app
+    // itself), but the raw HTML is rewritten per request so a pasted link
+    // unfurls with the teacher's name, the specific week, and a branded
+    // image, rather than the bare static <title> every link would
+    // otherwise share.
     if (path.startsWith("/s/")) {
-      return env.ASSETS.fetch(new Request(new URL("/index.html", url), request));
+      const parts = path.split("/").filter(Boolean); // ["s", slug, week]
+      const slug = parts[1] || "";
+      const week = parts[2] || "";
+      const teacher = slug
+        ? await env.DB.prepare("SELECT name, instrument FROM teachers WHERE slug = ?").bind(slug).first()
+        : null;
+
+      const assetResponse = await env.ASSETS.fetch(new Request(new URL("/index.html", url), request));
+      let html = await assetResponse.text();
+
+      const title = teacher
+        ? "Week " + week + " \u2014 " + teacher.instrument + " Lessons with " + teacher.name
+        : "Cadence. \u2014 Week " + week;
+      const description = teacher
+        ? "Let " + teacher.name + " know your availability for week " + week + "."
+        : "Give your teacher your availability for week " + week + ".";
+      const ogImage = url.origin + "/og-image.png";
+
+      html = html
+        .replace(/<title>.*?<\/title>/, "<title>" + escapeHTML(title) + "</title>")
+        .replace(
+          "</head>",
+          '<meta property="og:type" content="website">\n' +
+          '<meta property="og:title" content="' + escapeHTML(title) + '">\n' +
+          '<meta property="og:description" content="' + escapeHTML(description) + '">\n' +
+          '<meta property="og:image" content="' + ogImage + '">\n' +
+          '<meta property="og:url" content="' + escapeHTML(url.origin + path) + '">\n' +
+          '<meta name="twitter:card" content="summary_large_image">\n' +
+          '<meta name="twitter:title" content="' + escapeHTML(title) + '">\n' +
+          '<meta name="twitter:description" content="' + escapeHTML(description) + '">\n' +
+          '<meta name="twitter:image" content="' + ogImage + '">\n' +
+          "</head>"
+        );
+
+      return new Response(html, { headers: { "content-type": "text/html;charset=UTF-8" } });
     }
 
 

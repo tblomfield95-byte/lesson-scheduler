@@ -2031,6 +2031,19 @@ let sidebarCloseTimer = null;
 // rebuilt as one blob each render — this is what lets the header and
 // (when unchanged) the week picker/subtabs bar stay perfectly still while
 // only the content that actually differs between two screens slides.
+// Comparing a hand-built template string directly against element.innerHTML
+// is unreliable — the browser re-serializes HTML into its own canonical
+// form when you read .innerHTML back (dropping redundant whitespace like
+// the stray space left by an empty conditional attribute, for instance),
+// so two semantically identical strings can compare as different. Parsing
+// the fresh string through a throwaway element first puts both sides
+// through the same normalization, so the comparison is apples to apples.
+function normalizeHTML(html) {
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return div.innerHTML;
+}
+
 function ensureAppSkeleton() {
   const app = document.getElementById("app");
   if (!document.getElementById("appBody")) {
@@ -2089,7 +2102,7 @@ async function animatedRender(direction) {
     return;
   }
 
-  const subbarChanging = subbarEl.innerHTML !== computeSubbarHTML();
+  const subbarChanging = subbarEl.innerHTML !== normalizeHTML(computeSubbarHTML());
   const targets = subbarChanging ? [subbarEl, bodyEl] : [bodyEl];
   const outX = direction > 0 ? "-22px" : "22px";
   const inX = direction > 0 ? "22px" : "-22px";

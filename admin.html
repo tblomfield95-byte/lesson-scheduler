@@ -2040,12 +2040,6 @@ let sidebarCloseTimer = null;
 // so two semantically identical strings can compare as different. Parsing
 // the fresh string through a throwaway element first puts both sides
 // through the same normalization, so the comparison is apples to apples.
-function normalizeHTML(html) {
-  const div = document.createElement("div");
-  div.innerHTML = html;
-  return div.innerHTML;
-}
-
 function ensureAppSkeleton() {
   const app = document.getElementById("app");
   if (!document.getElementById("appBody")) {
@@ -2071,10 +2065,25 @@ function computeSubbarHTML() {
   return "";
 }
 
+// What *kind* of subbar is showing, independent of which item within it is
+// currently active. Comparing identity rather than raw HTML is what keeps
+// the General/Priorities bar (and any subtabs added to Settings later)
+// genuinely still when toggling between them — their HTML technically
+// differs by a "sel" class each time, which a literal content diff would
+// (correctly, but unhelpfully) treat as "changed" and slide. Identity says
+// "still the same subtabs bar" regardless of which tab within it is lit up.
+function computeSubbarIdentity() {
+  if (currentSection === "scheduler") return S.tab === "hours" ? "none" : "weekpicker";
+  if (currentSection === "settings") return "settings-subtabs";
+  return "none";
+}
+let __subbarIdentity = "none";
+
 function render() {
   ensureAppSkeleton();
   document.getElementById("appHeader").innerHTML = renderHeader();
   document.getElementById("appSubbar").innerHTML = computeSubbarHTML();
+  __subbarIdentity = computeSubbarIdentity();
   const sections = {
     profile: renderProfileSection,
     students: renderStudentsSection,
@@ -2090,9 +2099,10 @@ function render() {
 // The header always updates instantly (it's structurally identical across
 // every scheduler tab, and across Profile/Students/Term Dates/Settings
 // only its title text differs — not worth animating). The subbar only
-// slides along with the body when it's genuinely different content on the
-// other side of the transition; when it's the same week picker or the
-// same subtabs bar, it's left completely alone, exactly as asked.
+// slides along with the body when it's a genuinely different KIND of
+// subbar on the other side of the transition — the same week picker or
+// the same subtabs bar (whichever item within it is active) is left
+// completely alone, exactly as asked.
 async function animatedRender(direction) {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   ensureAppSkeleton();
@@ -2104,7 +2114,7 @@ async function animatedRender(direction) {
     return;
   }
 
-  const subbarChanging = subbarEl.innerHTML !== normalizeHTML(computeSubbarHTML());
+  const subbarChanging = computeSubbarIdentity() !== __subbarIdentity;
   const targets = subbarChanging ? [subbarEl, bodyEl] : [bodyEl];
   const outX = direction > 0 ? "-22px" : "22px";
   const inX = direction > 0 ? "22px" : "-22px";
@@ -2464,7 +2474,7 @@ function renderRepliesTab() {
     lede +
     (DEV_MODE ? '<div class="btnrow"><button class="btn sig" data-action="sampleReplies" ' + (rnd.offered.size ? "" : "disabled") + ">Load sample replies</button></div>" : "") +
     body + heatPanel +
-    '<div class="btnrow"><button class="btn primary" data-action="runSolver" ' + (participants.length ? "" : "disabled") + ">Work out the schedule</button></div>" +
+    '<div class="btnrow"><button class="btn sig" data-action="runSolver" ' + (participants.length ? "" : "disabled") + ">Work out the schedule</button></div>" +
     "</div>";
 }
 
@@ -2571,7 +2581,7 @@ function renderLivePlanTab() {
   }
 
   const actionRow = '<div class="btnrow">' +
-    (freed.length > 0 ? '<button class="btn primary" data-action="closeGaps">Close the gaps</button>' : "") +
+    (freed.length > 0 ? '<button class="btn sig" data-action="closeGaps">Close the gaps</button>' : "") +
     '<button class="btn" data-action="copyLive" ' + (live.length ? "" : "disabled") + ">Copy as text</button>" +
     '<button class="btn" data-action="imageLive" ' + (live.length ? "" : "disabled") + ">Make an image</button>" +
     '<button class="btn" data-action="undoConfirmSchedule">Undo confirmation</button></div>';

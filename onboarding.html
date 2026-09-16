@@ -411,13 +411,20 @@ let currentStep = 0;
 // Accessibility settings, which almost nobody enables. With a hardware
 // keyboard, pressing Tab there just exits the field with nowhere to go.
 // Advancing focus by hand here makes Tab work as expected regardless of
-// that setting. Fields are queried fresh on every keypress (rather than
-// once) since onboarding's field list changes as students/terms are
-// added or removed.
+// that setting.
+//
+// Scoped to #panel-<currentStep> specifically, not the whole document:
+// all four step panels sit side-by-side in the DOM permanently (this is
+// a sliding track — inactive panels are moved off-screen via transform,
+// never display:none'd), so an unscoped query would include fields from
+// steps that aren't currently visible, and tabbing into one of those
+// looks exactly like focus silently vanishing.
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
+  const panel = document.getElementById("panel-" + currentStep);
+  if (!panel) return;
   const selector = 'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])';
-  const fields = Array.from(document.querySelectorAll(selector)).filter(el => el.offsetParent !== null);
+  const fields = Array.from(panel.querySelectorAll(selector));
   const idx = fields.indexOf(document.activeElement);
   if (idx === -1) return;
   const next = fields[e.shiftKey ? idx - 1 : idx + 1];

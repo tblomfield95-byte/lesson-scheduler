@@ -532,6 +532,49 @@
   .mini:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
   .struck{text-decoration:line-through;color:var(--ink-soft)}
 
+
+  /* Agenda: the same schedule data in a compact, day-by-day view. */
+  .schedule-view-switch{display:flex;justify-content:flex-end;gap:4px;margin:0 0 16px}
+  .schedule-view-switch button{font:inherit;font-size:13px;min-height:40px;padding:8px 16px;
+    border:1px solid var(--rule);border-radius:7px;background:var(--panel);color:var(--ink-soft);cursor:pointer}
+  .schedule-view-switch button[aria-pressed="true"]{background:var(--sig);border-color:var(--sig);color:#fff}
+  .agenda{background:#FFFCF7;border:1px solid var(--rule);border-radius:12px;overflow:hidden;margin:0 0 18px}
+  .agenda-head{background:var(--sig);color:#fff;padding:22px 22px 21px}
+  .agenda-kicker{display:flex;justify-content:space-between;gap:16px;font-size:10px;letter-spacing:1.6px;text-transform:uppercase;line-height:1.5}
+  .agenda-head h2{font:500 29px/1.2 var(--serif);letter-spacing:-.6px;margin:16px 0 8px}
+  .agenda-head p{font-size:12px;line-height:1.6;margin:0;opacity:.9}
+  .agenda-body{padding:7px 22px 0}
+  .agenda-day{padding:17px 0 3px}
+  .agenda-day-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}
+  .agenda-day-heading h3{font:600 13px/1.5 "IBM Plex Sans",sans-serif;margin:0;color:var(--ink)}
+  .agenda-day-heading span{flex:none;font-size:11px;color:var(--ink-soft)}
+  .agenda-row{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:start;gap:10px;margin-bottom:9px}
+  .agenda-time{font-size:11px;color:var(--ink-soft);padding-top:15px;font-variant-numeric:tabular-nums}
+  .agenda-lesson{min-width:0;background:#EEE5DA;border-left:3px solid #93674F;border-radius:5px}
+  .agenda-lesson.rose{background:#F0E0E1;border-color:#9F5F6B}
+  .agenda-lesson.sage{background:#E4E8DC;border-color:#7C8960}
+  .agenda-lesson-line{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 12px;min-height:46px;list-style:none}
+  .agenda-lesson-line::-webkit-details-marker{display:none}
+  summary.agenda-lesson-line{cursor:pointer}
+  .agenda-name{font-size:13px;line-height:1.5;overflow-wrap:anywhere;min-width:0}
+  .agenda-duration{font-size:11px;color:#66584B;white-space:nowrap;flex:none}
+  details .agenda-duration::after{content:"⌄";display:inline-block;margin-left:9px}
+  details[open] .agenda-duration::after{transform:rotate(180deg)}
+  .agenda-controls{padding:0 12px 13px}
+  .agenda-controls p{font-size:11px;line-height:1.5;margin:0 0 10px;color:var(--ink-soft)}
+  .agenda-controls .cancels{flex-wrap:wrap;gap:8px}
+  .agenda-controls .mini{min-height:38px;background:#FFFCF7}
+  .agenda-foot{display:flex;align-items:flex-start;gap:8px;border-top:1px solid var(--rule);margin:14px 0 0;padding:15px 0 18px;font-size:11px;line-height:1.6;color:var(--ink-soft)}
+  .agenda-dot{width:6px;height:6px;border-radius:50%;background:var(--sig);flex:none;margin-top:6px}
+  .agenda .empty{margin:0;padding:20px 0 6px}
+  .agenda-choice{display:block;margin:0 0 14px;font-size:13px;color:var(--ink-soft)}
+  .agenda-choice select{display:block;width:100%;font:inherit;font-size:16px;color:var(--ink);padding:11px 9px;margin-top:7px;border:1px solid var(--rule);border-radius:7px;background:var(--panel)}
+  @media(max-width:380px){
+    .agenda-head{padding:20px 16px}.agenda-head h2{font-size:26px}.agenda-body{padding:5px 14px 0}
+    .agenda-row{grid-template-columns:39px minmax(0,1fr);gap:7px}.agenda-lesson-line{padding:12px 9px;gap:7px}
+    .agenda-day-heading{align-items:flex-start}.agenda-day-heading span{font-size:10px}
+  }
+
   .toast{position:fixed;left:16px;right:16px;bottom:18px;background:var(--ink);color:var(--paper);
          padding:12px 14px;border-radius:7px;font-size:13.5px;z-index:50;opacity:0}
   .toast.show{animation:toastFade 2.6s ease-in-out both}
@@ -1005,6 +1048,7 @@ function blankRound(weekStart) {
 
 let S = {
   tab: "week",
+  scheduleView: "timetable",
   week: 1,
   weeksCompleted: 0,
   termRanges: DEFAULT_TERM_RANGES.map(r => ({ ...r })),
@@ -1086,6 +1130,7 @@ function serializeState() {
   });
   return JSON.stringify({
     tab: S.tab,
+    scheduleView: S.scheduleView,
     week: S.week,
     weeksCompleted: S.weeksCompleted,
     termRanges: S.termRanges,
@@ -1101,6 +1146,7 @@ function serializeState() {
 function applySavedState(saved) {
   if (!saved) return;
   S.tab = saved.tab || S.tab;
+  S.scheduleView = saved.scheduleView === "agenda" ? "agenda" : "timetable";
   S.week = saved.week || S.week;
   S.weeksCompleted = saved.weeksCompleted || 0;
   S.termRanges = Array.isArray(saved.termRanges) ? saved.termRanges : S.termRanges;
@@ -2571,6 +2617,64 @@ function renderRepliesTab() {
     "</div>";
 }
 
+function renderScheduleViewSwitch() {
+  return '<div class="schedule-view-switch" role="group" aria-label="Schedule view">' +
+    ["timetable", "agenda"].map(view => '<button type="button" data-action="setScheduleView" data-view="' + view +
+      '" aria-pressed="' + (S.scheduleView === view) + '">' + (view === "agenda" ? "Agenda" : "Timetable") + '</button>').join("") + '</div>';
+}
+
+function agendaLessonColour(lesson) {
+  // Stable across rearrangements, cancellations and weeks; independent of lesson status.
+  let hash = 0;
+  for (const character of String(lesson.id || lesson.name)) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  return ["sand", "rose", "sage"][hash % 3];
+}
+
+function renderAgenda(assignments, weekNo, weekStart, startHour, confirmed) {
+  const by = groupByDay(assignments);
+  const count = assignments.length;
+  const minutes = assignments.reduce((total, lesson) => total + lesson.lesson * SLOT_MIN, 0);
+  const duration = minutes < 60 ? minutes + " min" : Math.floor(minutes / 60) + "h" + (minutes % 60 ? " " + minutes % 60 + " min" : "");
+  const days = Object.keys(by).sort((a, b) => Number(a) - Number(b)).map(d => {
+    const lessons = by[d];
+    const rows = lessons.map(lesson => {
+      const start = slotTimeFor(startHour, lesson.start);
+      const end = slotTimeFor(startHour, lesson.start + lesson.lesson);
+      const line = '<span class="agenda-name">' + escapeHTML(lesson.name) + '</span><span class="agenda-duration">' +
+        (lesson.lesson * SLOT_MIN) + ' min</span>';
+      // Dataset keys can contain student IDs: escape quotes as well as HTML markup.
+      const lessonKey = escapeHTML(lesson.key || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      const card = confirmed
+        ? '<details class="agenda-lesson ' + agendaLessonColour(lesson) + '"><summary class="agenda-lesson-line">' + line + '</summary>' +
+          '<div class="agenda-controls"><p>' + start + '–' + end + '</p><div class="cancels">' +
+          '<button class="mini" data-action="cancelEarly" data-id="' + lessonKey + '">Cancelled, ' + (S.settings.cancellationWindowHours || 24) + 'h+ notice</button>' +
+          '<button class="mini warnb" data-action="cancelLate" data-id="' + lessonKey + '">Cancelled late</button></div></div></details>'
+        : '<div class="agenda-lesson ' + agendaLessonColour(lesson) + '"><div class="agenda-lesson-line">' + line + '</div></div>';
+      return '<div class="agenda-row"><time class="agenda-time" datetime="' + start + '">' + start + '</time>' + card + '</div>';
+    }).join("");
+    return '<section class="agenda-day"><div class="agenda-day-heading"><h3>' + escapeHTML(dayDateLong(weekStart, Number(d))) +
+      '</h3><span>' + lessons.length + ' lesson' + (lessons.length === 1 ? '' : 's') + '</span></div>' + rows + '</section>';
+  }).join("");
+  return '<section class="agenda" aria-label="Weekly lesson agenda"><div class="agenda-head">' +
+    '<div class="agenda-kicker"><span>Your teaching week</span><span>Week ' + escapeHTML(weekNo) + '</span></div>' +
+    '<h2>A week, in harmony.</h2><p>' + count + ' lesson' + (count === 1 ? '' : 's') + ' · ' + duration +
+    ' teaching · ' + (confirmed ? 'Confirmed' : 'Draft arrangement') + '</p></div><div class="agenda-body">' +
+    (days || '<p class="empty">No lessons scheduled.</p>') +
+    '<p class="agenda-foot"><span class="agenda-dot" aria-hidden="true"></span>' +
+    (confirmed ? (count ? 'Your confirmed week. Tap a lesson to manage cancellations.' : 'Cancelled lessons are listed below.') : 'A preview of your selected arrangement. Confirm when you’re ready.') +
+    '</p></div></section>';
+}
+
+function renderAgendaOptionPicker(result, rnd) {
+  const days = roundDays(rnd);
+  return '<label class="agenda-choice">Arrangement<select data-bind="agendaOption">' + result.options.map((option, index) => {
+    const dayLabel = [...new Set(option.assign.map(a => a.d))].sort((a, b) => a - b).map(d => days[d]).join(" + ");
+    const gaps = option.gaps ? (option.gaps * SLOT_MIN) + ' min idle' : 'no gaps';
+    return '<option value="' + index + '"' + (index === rnd.chosen ? ' selected' : '') + '>Option ' + (index + 1) + ' · ' +
+      escapeHTML(dayLabel) + ' · ' + gaps + '</option>';
+  }).join("") + '</select></label>';
+}
+
 function renderPreConfirmPlanTab() {
   const rnd = activeRound();
   if (!rnd.result) {
@@ -2638,7 +2742,12 @@ function renderPreConfirmPlanTab() {
     confirmBtn = '<div class="btnrow"><button class="btn sig" data-action="confirmSchedule">Confirm and log hours</button></div>';
   }
 
-  return '<div class="pad" style="padding-top:0">' + intro + optionsHTML + moreOptionsHTML + blockersHTML + sharePanel + confirmBtn + "</div>";
+  const selected = r.options[rnd.chosen];
+  const agendaMode = S.scheduleView === "agenda" && selected;
+  const arrangement = agendaMode
+    ? renderAgendaOptionPicker(r, rnd) + renderAgenda(selected.assign, S.week, rnd.weekStart, rnd.dayStartHour, false)
+    : optionsHTML + moreOptionsHTML;
+  return '<div class="pad" style="padding-top:0">' + (selected ? renderScheduleViewSwitch() : "") + intro + arrangement + blockersHTML + sharePanel + confirmBtn + "</div>";
 }
 
 function renderLivePlanTab() {
@@ -2683,7 +2792,10 @@ function renderLivePlanTab() {
   const imgBlock = S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + plan.weekNo + '.png">Save image</a></div>' : "";
   const endRow = '<div class="btnrow"><button class="btn sig" data-action="endWeek">End week and log hours</button></div>';
 
-  return '<div class="pad" style="padding-top:0">' + intro + dayPanels + emptyMsg + cancelledPanel + actionRow + fallback + imgBlock + endRow + "</div>";
+  const schedule = S.scheduleView === "agenda"
+    ? renderAgenda(live, plan.weekNo, plan.weekStart, rnd.dayStartHour, true)
+    : dayPanels + emptyMsg;
+  return '<div class="pad" style="padding-top:0">' + renderScheduleViewSwitch() + intro + schedule + cancelledPanel + actionRow + fallback + imgBlock + endRow + "</div>";
 }
 
 function renderHoursTab() {
@@ -2809,6 +2921,13 @@ document.getElementById("app").addEventListener("click", (e) => {
     S.tab = el.dataset.tab;
     animatedRender(toIdx >= fromIdx ? 1 : -1);
   }
+  else if (action === "setScheduleView") {
+    if (!["timetable", "agenda"].includes(el.dataset.view)) return;
+    S.scheduleView = el.dataset.view;
+    render();
+    const selected = document.querySelector('[data-action="setScheduleView"][aria-pressed="true"]');
+    if (selected) selected.focus({ preventScroll: true });
+  }
   else if (action === "clearOffer") clearOffer();
   else if (action === "skipWeek") skipWeek();
   else if (action === "prevWeek") prevWeek();
@@ -2908,6 +3027,16 @@ document.getElementById("app").addEventListener("change", (e) => {
   if (!el) return;
   const bind = el.dataset.bind;
   if (bind === "weekStart") { activeRound().weekStart = el.value; S.imgUrl = ""; S.fallbackText = ""; render(); }
+  else if (bind === "agendaOption") {
+    const rnd = activeRound();
+    const chosen = Number(el.value);
+    if (!Number.isInteger(chosen) || !rnd.result || !rnd.result.options[chosen]) return;
+    rnd.chosen = chosen;
+    S.imgUrl = ""; S.fallbackText = "";
+    render();
+    const picker = document.querySelector('[data-bind="agendaOption"]');
+    if (picker) picker.focus({ preventScroll: true });
+  }
   else if (bind === "week") {
     let n = parseInt(el.value, 10);
     if (!isFinite(n)) n = S.week;

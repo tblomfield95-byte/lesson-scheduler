@@ -323,6 +323,7 @@ async function handleRound(url, env) {
     includeWeekends: rnd ? !!rnd.includeWeekends : false,
     dayStartHour: rnd && rnd.dayStartHour != null ? rnd.dayStartHour : 9,
     dayEndHour: rnd && rnd.dayEndHour != null ? rnd.dayEndHour : 19,
+    accent: ["oxblood", "midnight", "forest", "plum", "slate"].includes(state?.settings?.accent) ? state.settings.accent : "oxblood",
     teacherName: teacher.name,
     instrument: teacher.instrument,
     students: ((state && state.students) || []).map((s) => {
@@ -511,3 +512,4 @@ export default {
     return env.ASSETS.fetch(request);
   },
 };
+

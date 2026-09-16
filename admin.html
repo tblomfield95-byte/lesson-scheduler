@@ -259,6 +259,11 @@
               border:1px solid var(--rule);background:var(--panel);color:var(--ink);
               cursor:pointer;font-weight:560}
   .choice-btn.sel{border-color:var(--sig);background:var(--sig-soft);color:var(--sig)}
+  @keyframes fadeInOpacity{from{opacity:0}to{opacity:1}}
+  .fade-in-row{animation:fadeInOpacity .65s ease both}
+  @media (prefers-reduced-motion:reduce){
+    .fade-in-row{animation:none}
+  }
   .tab:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
   .pad{padding:16px}
   .lede{font-size:14px;line-height:1.5;color:var(--ink-soft);margin:0 0 14px}
@@ -1512,15 +1517,104 @@ async function copyStudentLink() {
 // lock, not a navigation. The grid and this button freeze until "Edit
 // availability" is tapped, so there's no risk of quietly repainting blocks
 // after students have already been told what's on offer.
-function sendToStudents() {
+//
+// Three separate phases, played by hand against the still-live DOM from
+// the previous render (a full innerHTML re-render has no "before" state
+// for a CSS transition to animate from, so this has to happen first):
+//   1. Clear grid / Not teaching fade out in place — no shrinking yet.
+//   2. That row's now-empty height collapses, sliding Send to students up.
+//   3. Copy URL / Edit availability fades in, in the now-current render.
+async function sendToStudents() {
   const rnd = activeRound();
+  const preSendRow = document.getElementById("preSendRow");
+  const offerGrid = document.getElementById("offerGrid");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (preSendRow && !reduceMotion) {
+    // The grid dims across the whole button sequence below (phases 1+2
+    // combined), rather than snapping to greyed-out the instant the
+    // buttons finish — one continuous fade rather than a separate step.
+    if (offerGrid) {
+      offerGrid.style.transition = "opacity 1.35s ease";
+      offerGrid.style.opacity = "0.5";
+      offerGrid.style.pointerEvents = "none";
+    }
+
+    // Phase 1 — fade out in place.
+    preSendRow.style.transition = "opacity .65s ease";
+    preSendRow.style.opacity = "0";
+    await new Promise((r) => setTimeout(r, 650));
+
+    // Phase 2 — collapse the space, which is what actually slides Send
+    // to students up into it.
+    const startHeight = preSendRow.getBoundingClientRect().height;
+    preSendRow.style.overflow = "hidden";
+    preSendRow.style.maxHeight = startHeight + "px";
+    preSendRow.style.transition = "max-height .7s cubic-bezier(.22,.72,.16,1), margin .7s cubic-bezier(.22,.72,.16,1)";
+    void preSendRow.offsetHeight; // force layout so the transition starts from the explicit height above, not "auto"
+    preSendRow.style.maxHeight = "0px";
+    preSendRow.style.marginTop = "0px";
+    preSendRow.style.marginBottom = "0px";
+    await new Promise((r) => setTimeout(r, 700));
+  }
+  // Phase 3 — the new render's Copy URL/Edit availability row carries its
+  // own fade-in-row animation (declared in the markup), so it fades in on
+  // arrival without any further hand-holding here.
   rnd.sent = true;
   render();
   copyStudentLink();
 }
 
-function editAvailability() {
+// The exact reverse of sendToStudents, in reverse order:
+//   1. Copy URL / Edit availability fade out in place.
+//   2. Clear grid / Not teaching grows back in above Send to students,
+//      which is what slides it back down.
+//   3. That row fades in, in place.
+async function editAvailability() {
   const rnd = activeRound();
+  const postSendRow = document.getElementById("postSendRow");
+  const sendRowWrap = document.getElementById("sendRowWrap");
+  const offerGrid = document.getElementById("offerGrid");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (postSendRow && sendRowWrap && !reduceMotion) {
+    if (offerGrid) {
+      offerGrid.style.transition = "opacity 1.6s ease";
+      offerGrid.style.opacity = "1";
+      offerGrid.style.pointerEvents = "";
+    }
+
+    // Phase 1 — fade out in place. Clearing the animation first matters:
+    // this row still carries its fade-in-row CSS animation from when it
+    // first appeared, and that animation's fill-mode keeps forcing
+    // opacity:1 the whole time otherwise — silently overriding the
+    // opacity set just below, so nothing visibly moved until .remove()
+    // cut it instantly at the end.
+    postSendRow.style.animation = "none";
+    void postSendRow.offsetHeight;
+    postSendRow.style.transition = "opacity .9s ease";
+    postSendRow.style.opacity = "0";
+    await new Promise((r) => setTimeout(r, 900));
+    postSendRow.remove();
+
+    // Phase 2 — grow the Clear grid/Not teaching row back in above Send
+    // to students, sliding it back down as a side effect.
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = buildPreSendRowHTML(rnd);
+    const newRow = wrapper.firstElementChild;
+    newRow.style.opacity = "0";
+    newRow.style.overflow = "hidden";
+    newRow.style.maxHeight = "0px";
+    sendRowWrap.parentNode.insertBefore(newRow, sendRowWrap);
+    const targetHeight = newRow.scrollHeight;
+    newRow.style.transition = "max-height .7s cubic-bezier(.22,.72,.16,1), margin .7s cubic-bezier(.22,.72,.16,1)";
+    void newRow.offsetHeight;
+    newRow.style.maxHeight = targetHeight + "px";
+    await new Promise((r) => setTimeout(r, 700));
+
+    // Phase 3 — fade it in, in place.
+    newRow.style.transition = "opacity .65s ease";
+    newRow.style.opacity = "1";
+    await new Promise((r) => setTimeout(r, 650));
+  }
   rnd.sent = false;
   render();
 }
@@ -2154,20 +2248,28 @@ function renderWeekPicker() {
     "</div>";
 }
 
+// Shared between the normal render and editAvailability's reverse
+// animation, which needs to build this exact row by hand to grow it
+// back in before the next full render happens.
+function buildPreSendRowHTML(rnd) {
+  return '<div class="btnrow" id="preSendRow" style="margin-top:16px"><button class="btn" data-action="clearOffer">Clear grid</button>' +
+    '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
+    '</div>';
+}
+
 function renderOfferTab() {
   const rnd = activeRound();
   const hours = (rnd.offered.size * SLOT_MIN) / 60;
   const grid = buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour });
   const gridBlock = rnd.notTeaching
-    ? '<div class="grid-locked">Marked as not teaching this week.<br>Tap \u201cNot teaching this week\u201d again, or \u201cClear\u201d, to paint times.</div>'
-    : rnd.sent
-      ? '<div class="offer-locked">' + grid + '</div>'
-      : grid;
+    ? '<div class="grid-locked">Marked as not teaching this week.<br>Tap \u201cNot teaching this week\u201d again, or \u201cClear grid\u201d, to paint times.</div>'
+    : '<div id="offerGrid"' + (rnd.sent ? ' class="offer-locked"' : "") + '>' + grid + "</div>";
   const sendRow = rnd.sent
-    ? '<div class="btnrow" style="margin-top:16px"><button class="btn primary" disabled>Send to students</button></div>' +
-      '<div class="btnrow"><button class="btn" data-action="copyStudentLink">Copy URL</button>' +
+    ? '<div class="btnrow" style="margin-top:16px"><button class="btn sig" disabled>Send to students</button></div>' +
+      '<div class="btnrow fade-in-row" id="postSendRow"><button class="btn" data-action="copyStudentLink">Copy URL</button>' +
       '<button class="btn" data-action="editAvailability">Edit availability</button></div>'
-    : '<div class="btnrow" style="margin-top:16px"><button class="btn primary" data-action="sendToStudents" ' + (rnd.offered.size && !rnd.notTeaching ? "" : "disabled") + '>Send to students</button></div>';
+    : '<div class="btnrow" style="margin-top:16px"><button class="btn sig" data-action="sendToStudents" ' + (rnd.offered.size && !rnd.notTeaching ? "" : "disabled") + '>Send to students</button></div>';
+  const preSendRow = rnd.sent ? "" : buildPreSendRowHTML(rnd);
   return '<div class="pad">' +
     renderWeekPicker() +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
@@ -2183,10 +2285,8 @@ function renderOfferTab() {
     '<p style="text-align:center;font-weight:700;font-size:15px;margin:0 0 8px">' + (weekRangeLabel(rnd.weekStart) || "") + '</p>' +
     gridBlock +
     '<div class="meter"><span>Offered this week</span><b>' + hours + 'h</b></div>' +
-    '<div class="btnrow" style="margin-top:16px"><button class="btn" data-action="clearOffer">Clear grid</button>' +
-    '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
-    '</div>' +
-    sendRow +
+    preSendRow +
+    '<div id="sendRowWrap">' + sendRow + '</div>' +
     "</div>";
 }
 

@@ -98,8 +98,14 @@
   .stepper{display:flex;align-items:center;gap:10px}
   .stepper b{font-size:14px;font-weight:600;color:var(--ink);min-width:58px;text-align:center}
   .step{font:inherit;font-size:16px;line-height:1;width:30px;height:30px;border-radius:15px;
-        border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+        border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer;
+        transition:transform .12s ease, background-color .12s ease, border-color .12s ease, color .12s ease}
   .step:disabled{opacity:.32;cursor:default}
+  .step:active:not(:disabled){transform:scale(.86);background:var(--sig-soft);border-color:var(--sig);color:var(--sig)}
+  @media (prefers-reduced-motion:reduce){
+    .step{transition:background-color .12s ease, border-color .12s ease, color .12s ease}
+    .step:active:not(:disabled){transform:none}
+  }
   .button-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
   .button-group .btn{flex:1}
   .confirmation-box{background:var(--sig-soft);border:1px solid var(--sig);border-radius:8px;padding:16px;margin-bottom:16px;text-align:center}

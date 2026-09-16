@@ -219,36 +219,55 @@ let __stageDepth = 0;
 // animate a full innerHTML swap, which has repeatedly proven unreliable
 // elsewhere in this codebase.
 async function animatedRender() {
-  const app = document.getElementById("app");
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const newDepth = stageDepth();
   const direction = newDepth === __stageDepth ? 0 : (newDepth > __stageDepth ? 1 : -1);
   __stageDepth = newDepth;
 
-  if (!app || !app.firstChild || direction === 0 || reduceMotion) {
+  ensureAppSkeleton();
+  const headerEl = document.getElementById("appHeader");
+  const bodyEl = document.getElementById("appBody");
+
+  if (!bodyEl.firstChild || direction === 0 || reduceMotion) {
     render();
     return;
   }
 
+  // The ask/grid header (back-link, name, week) is identical between those
+  // two stages, so it's only included as a slide target when it's actually
+  // about to change — e.g. arriving at or leaving the list/submitted
+  // screens, which don't have this header at all.
+  const headerChanging = headerEl.innerHTML !== computeStudentHeaderHTML();
+  const targets = headerChanging ? [headerEl, bodyEl] : [bodyEl];
+
   const outX = direction > 0 ? "-22px" : "22px";
   const inX = direction > 0 ? "22px" : "-22px";
 
-  app.style.transition = "transform .2s ease, opacity .2s ease";
-  app.style.transform = "translateX(" + outX + ")";
-  app.style.opacity = "0";
+  targets.forEach((el) => {
+    el.style.transition = "transform .2s ease, opacity .2s ease";
+    el.style.transform = "translateX(" + outX + ")";
+    el.style.opacity = "0";
+  });
   await new Promise((r) => setTimeout(r, 200));
 
   render(); // swap the content while off to the side and invisible
 
-  app.style.transition = "none";
-  app.style.transform = "translateX(" + inX + ")";
-  void app.offsetHeight; // force layout so the transition below starts from this position, not "auto"
-  app.style.transition = "transform .3s cubic-bezier(.22,.72,.16,1), opacity .3s ease";
-  app.style.transform = "translateX(0)";
-  app.style.opacity = "1";
+  targets.forEach((el) => {
+    el.style.transition = "none";
+    el.style.transform = "translateX(" + inX + ")";
+  });
+  void bodyEl.offsetHeight; // force layout so the transition below starts from this position, not "auto"
+  targets.forEach((el) => {
+    el.style.transition = "transform .3s cubic-bezier(.22,.72,.16,1), opacity .3s ease";
+    el.style.transform = "translateX(0)";
+    el.style.opacity = "1";
+  });
   await new Promise((r) => setTimeout(r, 300));
-  app.style.transition = "";
-  app.style.transform = "";
+  targets.forEach((el) => {
+    el.style.transition = "";
+    el.style.transform = "";
+    el.style.opacity = "";
+  });
 }
 
 function pick(id) {
@@ -399,15 +418,39 @@ function flash(msg) {
   console.log(msg);
 }
 
-function render() {
+function ensureAppSkeleton() {
   const app = document.getElementById("app");
+  if (!document.getElementById("appBody")) {
+    app.innerHTML = '<div id="appHeader"></div><div id="appBody"></div>';
+  }
+}
+
+// The back-link, student name and week line are identical whether you're
+// on the yes/no question or the grid — this is what lets that header stay
+// completely still while only the choice buttons vs. the stepper/grid
+// slide underneath it.
+function computeStudentHeaderHTML() {
+  if (R.loading || R.error || !R.offered.size || R.submitted || !R.picked) return "";
+  const name = (R.students.find(s => s.id === R.picked) || {}).name || "";
+  const weekLabel = "Week " + R.weekNo + (R.weekStart ? " (" + weekRangeLabel(R.weekStart) + ")" : "");
+  return '<div class="pad" style="padding-bottom:0"><button class="back" onclick="back()">\u2190 Not ' + name.split(" ")[0] + "?</button>" +
+    "<h1>" + name + "</h1><p class=\"sub\">" + weekLabel + "</p></div>";
+}
+
+function render() {
+  ensureAppSkeleton();
   const heading = (R.instrument ? R.instrument + " Lessons" : "Lessons") + (R.teacherName ? " — " + R.teacherName : "");
   const weekLabel = "Week " + R.weekNo + (R.weekStart ? " (" + weekRangeLabel(R.weekStart) + ")" : "");
+  const headerEl = document.getElementById("appHeader");
+  const bodyEl = document.getElementById("appBody");
+  const headerHTML = computeStudentHeaderHTML();
+  headerEl.innerHTML = headerHTML;
+  const bodyPadStyle = headerHTML ? ' style="padding-top:0"' : "";
 
-  if (R.loading) { app.innerHTML = '<div class="pad"><p class="lede">Loading…</p></div>'; return; }
-  if (R.error) { app.innerHTML = '<div class="pad"><h1>Lessons</h1><p class="empty">' + R.error + "</p></div>"; return; }
+  if (R.loading) { bodyEl.innerHTML = '<div class="pad"><p class="lede">Loading…</p></div>'; return; }
+  if (R.error) { bodyEl.innerHTML = '<div class="pad"><h1>Lessons</h1><p class="empty">' + R.error + "</p></div>"; return; }
   if (!R.offered.size) {
-    app.innerHTML = '<div class="pad"><h1>' + heading + '</h1><p class="empty">No lesson times have been posted for this week yet — check back once your teacher sends the link round.</p></div>';
+    bodyEl.innerHTML = '<div class="pad"><h1>' + heading + '</h1><p class="empty">No lesson times have been posted for this week yet — check back once your teacher sends the link round.</p></div>';
     return;
   }
 
@@ -417,7 +460,7 @@ function render() {
     const msg = R.submittedStatus === "skip" ? "No lesson needed this week — got it."
       : R.submittedStatus === "none" ? "Thanks for letting us know — your teacher will sort something out."
       : "Got your times for " + weekLabel.toLowerCase() + ".";
-    app.innerHTML = '<div class="pad">' +
+    bodyEl.innerHTML = '<div class="pad">' +
       '<div class="confirmation-box">' +
       '<div class="tick">\u2713</div>' +
       '<div class="msg">Response recorded</div>' +
@@ -432,7 +475,7 @@ function render() {
   }
 
   if (!R.picked) {
-    app.innerHTML = '<div class="pad"><h1>' + heading + '</h1><p class="sub">' + weekLabel + ' \u2014 tap your name to give your times.</p>' +
+    bodyEl.innerHTML = '<div class="pad"><h1>' + heading + '</h1><p class="sub">' + weekLabel + ' \u2014 tap your name to give your times.</p>' +
       R.students.map(s => {
         if (s.status) {
           const label = s.status === "in" ? "Times given" : s.status === "skip" ? "Not needed this week" : "None of these worked";
@@ -445,20 +488,17 @@ function render() {
     return;
   }
 
-  const name = (R.students.find(s => s.id === R.picked) || {}).name || "";
   const prevStatus = (R.students.find(s => s.id === R.picked) || {}).status || null;
 
   if (R.stage === "ask") {
-    app.innerHTML = '<div class="pad"><button class="back" onclick="back()">← Not ' + name.split(" ")[0] + "?</button>" +
-      "<h1>" + name + "</h1><p class=\"sub\">" + weekLabel + '</p>' +
+    bodyEl.innerHTML = '<div class="pad"' + bodyPadStyle + '>' +
       '<button class="choice' + (prevStatus === "skip" ? " sel" : "") + '" onclick="submitStatus(\'skip\')">Not needed this week</button>' +
       '<button class="choice' + (prevStatus === "in" ? " sel" : "") + '" onclick="goGrid()">Yes, show me the times</button>' +
       "</div>";
     return;
   }
 
-  let body = '<div class="pad"><button class="back" onclick="back()">← Not ' + name.split(" ")[0] + "?</button>" +
-    "<h1>" + name + "</h1><p class=\"sub\">" + weekLabel + '</p>' +
+  let bodyHTML = '<div class="pad"' + bodyPadStyle + '>' +
     '<div class="lenrow"><span>Lesson length</span><div class="stepper">' +
     '<button class="step" onclick="adjustLesson(-1)" ' + (R.lesson <= 1 ? "disabled" : "") + '>\u2013</button>' +
     "<b>" + (R.lesson * SLOT_MIN) + " min</b>" +
@@ -470,7 +510,7 @@ function render() {
     '<button class="choice' + (prevStatus === "none" ? " sel" : "") + '" onclick="submitStatus(\'none\')" ' + (R.submitting ? "disabled" : "") + '>None of these times work</button>' +
     '<button class="btn" id="submitBtn" onclick="submitStatus(\'in\')" ' + (R.avail.size === 0 || R.submitting ? "disabled" : "") + '>' + (R.submitting ? "Saving…" : "Submit") + "</button></div>";
 
-  app.innerHTML = body;
+  bodyEl.innerHTML = bodyHTML;
   mountGrid();
 }
 

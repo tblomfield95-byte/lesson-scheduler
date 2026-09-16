@@ -561,6 +561,10 @@
     -webkit-font-smoothing:antialiased;
   }
   #brandFooter .brand-mark{flex:none;width:0.78em;height:0.78em;transform:translateY(0.035em)}
+  .accent-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:10px}
+  .accent-option{display:flex;align-items:center;gap:9px;min-height:52px;padding:10px;border:1px solid var(--rule);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
+  .accent-option[aria-pressed="true"]{border-color:var(--sig);background:var(--sig-soft);box-shadow:inset 0 0 0 1px var(--sig)}
+  .accent-swatch{display:flex;align-items:center;justify-content:center;flex:none;width:26px;height:26px;border-radius:50%;color:white;font-weight:700}
 </style>
 </head>
 <body>
@@ -569,7 +573,7 @@
 <div id="brandFooter">
   <div id="brandFooterInner">
     <svg class="brand-mark" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-      <rect width="40" height="40" rx="9" fill="#6E1423"/>
+      <rect width="40" height="40" rx="9" fill="var(--sig)"/>
       <rect x="8" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/>
       <rect x="20" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/>
     </svg>
@@ -580,6 +584,22 @@
 <div id="sidebarPanel" class="sidebar-panel"></div>
 <div id="toast" class="toast" hidden></div>
 <script>
+const ACCENT_THEMES = {
+  oxblood: { name: "Oxblood", ink: "#6E1423", soft: "#EDDEDD" },
+  midnight: { name: "Midnight blue", ink: "#203D64", soft: "#E0E7F0" },
+  forest: { name: "Forest green", ink: "#24513D", soft: "#DFEAE2" },
+  plum: { name: "Deep plum", ink: "#59345F", soft: "#EBE0ED" },
+  slate: { name: "Slate", ink: "#44515F", soft: "#E3E7EB" }
+};
+function accentTheme(id) {
+  return Object.prototype.hasOwnProperty.call(ACCENT_THEMES, id) ? ACCENT_THEMES[id] : ACCENT_THEMES.oxblood;
+}
+function applyAccent(id) {
+  const theme = accentTheme(id);
+  document.body.style.setProperty("--sig", theme.ink);
+  document.body.style.setProperty("--sig-soft", theme.soft);
+}
+
 // Safari on iPad doesn't move focus between text fields on Tab by
 // default — that only happens with "Full Keyboard Access" turned on in
 // Accessibility settings, which almost nobody enables. With a hardware
@@ -1360,19 +1380,19 @@ async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startH
 
   const heading = ME.instrument ? ME.instrument + " lessons" : "Lessons";
   x.fillStyle = "#F2EFE7"; x.fillRect(0, 0, W, H);
-  x.fillStyle = "#6E1423"; x.fillRect(0, 0, W, 12);
+  x.fillStyle = accentTheme(S.settings.accent).ink; x.fillRect(0, 0, W, 12);
   x.fillStyle = "#211C17"; x.font = "640 46px " + FONT; x.fillText(heading, 64, 108);
   x.fillStyle = "#6B6157"; x.font = "400 28px " + FONT;
   const weekLine = S.settings.schedulingMode === "rolling" ? "Week " + weekNoLabel : "Week " + weekNoLabel + " of " + termWeeks();
   x.fillText((ME.name ? ME.name + " · " : "") + weekLine, 64, 152);
   if (note) {
-    x.fillStyle = "#6E1423"; x.font = "600 26px " + FONT;
+    x.fillStyle = accentTheme(S.settings.accent).ink; x.font = "600 26px " + FONT;
     x.fillText(note, 64, 192);
   }
 
   let y = 240 + noteLines * 44;
   days.forEach(d => {
-    x.fillStyle = "#6E1423"; x.font = "620 32px " + FONT;
+    x.fillStyle = accentTheme(S.settings.accent).ink; x.font = "620 32px " + FONT;
     x.fillText(dayDateLong(weekStartISO, +d), 64, y); y += 46;
     x.strokeStyle = "#DCD5C6"; x.lineWidth = 2;
     x.beginPath(); x.moveTo(64, y - 16); x.lineTo(W - 64, y - 16); x.stroke();
@@ -1840,6 +1860,7 @@ function saveSettings() {
   if (!(end > start)) { flash("End time must be after start time"); return; }
   const switchingToTerms = settingsDraft.schedulingMode === "terms" && S.settings.schedulingMode === "rolling";
   S.settings = {
+    accent: Object.prototype.hasOwnProperty.call(ACCENT_THEMES, settingsDraft.accent) ? settingsDraft.accent : "oxblood",
     includeWeekends: !!settingsDraft.includeWeekends,
     dayStartHour: start,
     dayEndHour: end,
@@ -2139,6 +2160,7 @@ function computeSubbarIdentity() {
 let __subbarIdentity = "none";
 
 function render() {
+  applyAccent(currentSection === "settings" ? settingsDraft.accent : S.settings.accent);
   ensureAppSkeleton();
   document.getElementById("appHeader").innerHTML = renderHeader();
   document.getElementById("appSubbar").innerHTML = computeSubbarHTML();
@@ -2365,11 +2387,23 @@ function renderPrioritiesTab() {
     '<div class="priority-list" id="priorityList">' + rows + '</div>';
 }
 
+function renderAccentPicker() {
+  const selected = Object.prototype.hasOwnProperty.call(ACCENT_THEMES, settingsDraft.accent) ? settingsDraft.accent : "oxblood";
+  return '<div class="panel"><h3>Accent colour</h3>' +
+    '<p class="lede">Used for your studio and your students’ availability page. Choose a colour, then save changes.</p>' +
+    '<div class="accent-picker" role="group" aria-label="Accent colour">' +
+    Object.entries(ACCENT_THEMES).map(([id, theme]) =>
+      '<button type="button" class="accent-option" data-action="setAccent" data-accent="' + id +
+      '" aria-pressed="' + (id === selected) + '"><span class="accent-swatch" aria-hidden="true" style="background:' + theme.ink + '">' +
+      (id === selected ? '✓' : '') + '</span><span>' + theme.name + '</span></button>'
+    ).join('') + '</div></div>';
+}
+
 function renderGeneralSettingsTab() {
   const d = settingsDraft;
   const hourLabel = (h) => String(h).padStart(2, "0") + ":00";
   const rolling = d.schedulingMode === "rolling";
-  return '<div class="panel">' +
+  return renderAccentPicker() + '<div class="panel">' +
       '<h3>Scheduling</h3>' +
       '<div class="choice-group">' +
       '<button class="choice-btn' + (!rolling ? " sel" : "") + '" data-action="setSchedulingMode" data-mode="terms">Term dates</button>' +
@@ -2797,6 +2831,13 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "setSchedulingMode") setSchedulingMode(el.dataset.mode);
   else if (action === "adjustCancellationWindow") adjustCancellationWindow(Number(el.dataset.delta));
   else if (action === "adjustSettingsHour") adjustSettingsHour(el.dataset.which, Number(el.dataset.delta));
+  else if (action === "setAccent") {
+    if (!Object.prototype.hasOwnProperty.call(ACCENT_THEMES, el.dataset.accent)) return;
+    settingsDraft.accent = el.dataset.accent;
+    render();
+    const selected = document.querySelector('[data-action="setAccent"][aria-pressed="true"]');
+    if (selected) selected.focus({ preventScroll: true });
+  }
   else if (action === "saveSettings") saveSettings();
   else if (action === "settingsTab") {
     const order = ["general", "priorities"];

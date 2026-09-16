@@ -2178,14 +2178,14 @@ function renderOfferTab() {
       const cls = v === -1 ? " preferred" : v === 1 ? " avoid" : "";
       return '<button class="daypref' + cls + '" data-action="cycleDayPref" data-day="' + i + '"><strong>' + d + '</strong><span>' + preferenceLabel(v) + '</span></button>';
     }).join("") + '</div></div>' +
-    '<div class="btnrow"><button class="btn" data-action="clearOffer">Clear</button>' +
-    '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
-    '</div>' +
     '<div class="field"><label>Note for this week\u2019s message (optional)</label><input type="text" data-bind="weekNote" value="' + escapeHTML(rnd.note || "") + '" placeholder="e.g. half term next week"></div>' +
     '<p class="lede" style="margin-bottom:8px">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
     '<p style="text-align:center;font-weight:700;font-size:15px;margin:0 0 8px">' + (weekRangeLabel(rnd.weekStart) || "") + '</p>' +
     gridBlock +
     '<div class="meter"><span>Offered this week</span><b>' + hours + 'h</b></div>' +
+    '<div class="btnrow" style="margin-top:16px"><button class="btn" data-action="clearOffer">Clear grid</button>' +
+    '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
+    '</div>' +
     sendRow +
     "</div>";
 }

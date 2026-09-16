@@ -259,11 +259,6 @@
               border:1px solid var(--rule);background:var(--panel);color:var(--ink);
               cursor:pointer;font-weight:560}
   .choice-btn.sel{border-color:var(--sig);background:var(--sig-soft);color:var(--sig)}
-  @keyframes fadeInOpacity{from{opacity:0}to{opacity:1}}
-  .fade-in-row{animation:fadeInOpacity .65s ease both}
-  @media (prefers-reduced-motion:reduce){
-    .fade-in-row{animation:none}
-  }
   .tab:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
   .pad{padding:16px}
   .lede{font-size:14px;line-height:1.5;color:var(--ink-soft);margin:0 0 14px}
@@ -1556,12 +1551,28 @@ async function sendToStudents() {
     preSendRow.style.marginBottom = "0px";
     await new Promise((r) => setTimeout(r, 700));
   }
-  // Phase 3 — the new render's Copy URL/Edit availability row carries its
-  // own fade-in-row animation (declared in the markup), so it fades in on
-  // arrival without any further hand-holding here.
+  // Phase 3 — fade in the new Copy URL/Edit availability row explicitly,
+  // the same hand-driven way as every other phase here. A passive CSS
+  // "animation" class on the freshly-rendered row turned out unreliable
+  // (the same class of issue as elsewhere in this sequence), so this
+  // sets it to invisible, forces a layout pass, then transitions it to
+  // opaque on the next frame — guaranteed to actually play.
   rnd.sent = true;
   render();
   copyStudentLink();
+  const postSendRow = document.getElementById("postSendRow");
+  if (postSendRow) {
+    if (reduceMotion) {
+      postSendRow.style.opacity = "1";
+    } else {
+      postSendRow.style.opacity = "0";
+      void postSendRow.offsetHeight;
+      requestAnimationFrame(() => {
+        postSendRow.style.transition = "opacity .65s ease";
+        postSendRow.style.opacity = "1";
+      });
+    }
+  }
 }
 
 // The exact reverse of sendToStudents, in reverse order:
@@ -2266,7 +2277,7 @@ function renderOfferTab() {
     : '<div id="offerGrid"' + (rnd.sent ? ' class="offer-locked"' : "") + '>' + grid + "</div>";
   const sendRow = rnd.sent
     ? '<div class="btnrow" style="margin-top:16px"><button class="btn sig" disabled>Send to students</button></div>' +
-      '<div class="btnrow fade-in-row" id="postSendRow"><button class="btn" data-action="copyStudentLink">Copy URL</button>' +
+      '<div class="btnrow" id="postSendRow"><button class="btn" data-action="copyStudentLink">Copy URL</button>' +
       '<button class="btn" data-action="editAvailability">Edit availability</button></div>'
     : '<div class="btnrow" style="margin-top:16px"><button class="btn sig" data-action="sendToStudents" ' + (rnd.offered.size && !rnd.notTeaching ? "" : "disabled") + '>Send to students</button></div>';
   const preSendRow = rnd.sent ? "" : buildPreSendRowHTML(rnd);

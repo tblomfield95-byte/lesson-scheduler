@@ -379,32 +379,38 @@ function mountGrid() {
   const end = () => {
     if (painting !== null) { painting = null; last = ""; updateAfterPaint(); }
   };
-  el.addEventListener("touchstart", (e) => {
-    const t = e.touches[0];
-    const c = cellAt(el, t.clientX, t.clientY);
-    if (!c) return;
-    const k = key(c.d, c.i);
-    if (!R.offered.has(k)) return;
-    painting = !R.avail.has(k); last = k; apply(c, painting);
-  }, { passive: true });
-  el.addEventListener("touchmove", (e) => {
-    if (painting === null) return;
-    const t = e.touches[0];
-    move(t.clientX, t.clientY);
-  }, { passive: true });
-  el.addEventListener("touchend", end);
-  el.addEventListener("touchcancel", end);
-  el.addEventListener("mousedown", (e) => {
+  // A single pointer stream prevents a touch tap being toggled again by
+  // the compatibility mouse events that mobile browsers generate.
+  let activePointer = null;
+  el.addEventListener("pointerdown", (e) => {
+    if (activePointer !== null || !e.isPrimary || e.button !== 0) return;
     const c = cellAt(el, e.clientX, e.clientY);
     if (!c) return;
     const k = key(c.d, c.i);
     if (!R.offered.has(k)) return;
-    painting = !R.avail.has(k); last = k; apply(c, painting);
-    window.__gridMouseUp = end;
+    e.preventDefault();
+    activePointer = e.pointerId;
+    el.setPointerCapture(e.pointerId);
+    painting = !R.avail.has(k);
+    last = k;
+    apply(c, painting);
+    updateAfterPaint();
   });
-  el.addEventListener("mousemove", (e) => { if (e.buttons === 1) move(e.clientX, e.clientY); });
+  el.addEventListener("pointermove", (e) => {
+    if (e.pointerId !== activePointer) return;
+    move(e.clientX, e.clientY);
+    updateAfterPaint();
+  });
+  const finishPointer = (e) => {
+    if (e.pointerId !== activePointer) return;
+    activePointer = null;
+    end();
+    if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+  };
+  el.addEventListener("pointerup", finishPointer);
+  el.addEventListener("pointercancel", finishPointer);
+  el.addEventListener("lostpointercapture", finishPointer);
 }
-window.addEventListener("mouseup", () => { if (window.__gridMouseUp) { const fn = window.__gridMouseUp; window.__gridMouseUp = null; fn(); } });
 
 function updateAfterPaint() {
   const cnt = document.getElementById("slotCount");

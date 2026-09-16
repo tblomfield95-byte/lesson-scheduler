@@ -279,6 +279,13 @@ async function playCadenceIntro() {
     await animation.finished;
   } catch (e) {}
 
+  // Release the animation's hold on transform before setting it directly
+  // below — a finished fill:forwards animation keeps actively controlling
+  // the property, and takes priority over a plain inline style on the
+  // same property, so without this the mark can visibly settle toward an
+  // intermediate point before an abrupt correction to its true resting
+  // position, rather than arriving there in one continuous motion.
+  animation.cancel();
   intro.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
 
   // Reveal the real heading underneath at the identical position/size.

@@ -306,8 +306,8 @@
      read-only "heat" overlay has no paint listener and must stay freely
      scrollable everywhere, muted or not. */
   .grid-wrap[data-role="offer"] .cell,
-  .grid-wrap[data-role="reply"] .cell{touch-action:none}
-  .grid-wrap[data-role="reply"] .cell.muted{touch-action:pan-y}
+  .grid-wrap[data-role="reply"] .cell{touch-action:pinch-zoom}
+  .grid-wrap[data-role="reply"] .cell.muted{touch-action:pan-y pinch-zoom}
   .heatnum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
            font-size:10px;color:#fff;font-weight:600;pointer-events:none}
   .grid-locked{border:1px solid var(--rule);border-radius:8px;
@@ -1934,6 +1934,7 @@ function mountPaintGrid(el) {
   const end = () => { if (painting !== null) { painting = null; last = ""; render(); } };
 
   el.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
     const t = e.touches[0];
     const c = cellAt(el, t.clientX, t.clientY);
     if (!c) return;
@@ -1948,7 +1949,7 @@ function mountPaintGrid(el) {
   }, { passive: true });
 
   el.addEventListener("touchmove", (e) => {
-    if (painting === null) return;
+    if (painting === null || e.touches.length !== 1) return;
     const t = e.touches[0];
     move(t.clientX, t.clientY);
   }, { passive: true });

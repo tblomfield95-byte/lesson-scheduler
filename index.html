@@ -237,7 +237,7 @@ async function animatedRender() {
   // two stages, so it's only included as a slide target when it's actually
   // about to change — e.g. arriving at or leaving the list/submitted
   // screens, which don't have this header at all.
-  const headerChanging = headerEl.innerHTML !== computeStudentHeaderHTML();
+  const headerChanging = headerEl.innerHTML !== normalizeHTML(computeStudentHeaderHTML());
   const targets = headerChanging ? [headerEl, bodyEl] : [bodyEl];
 
   const outX = direction > 0 ? "-22px" : "22px";
@@ -416,6 +416,19 @@ function updateAfterPaint() {
 let flashTimer = null;
 function flash(msg) {
   console.log(msg);
+}
+
+// Comparing a hand-built template string directly against element.innerHTML
+// is unreliable — the browser re-serializes HTML into its own canonical
+// form when you read .innerHTML back (dropping redundant whitespace like
+// the stray space left by an empty conditional attribute, for instance),
+// so two semantically identical strings can compare as different. Parsing
+// the fresh string through a throwaway element first puts both sides
+// through the same normalization, so the comparison is apples to apples.
+function normalizeHTML(html) {
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return div.innerHTML;
 }
 
 function ensureAppSkeleton() {

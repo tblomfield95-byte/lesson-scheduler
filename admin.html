@@ -2027,51 +2027,98 @@ let sidebarOpen = false;
 let currentSection = "scheduler"; // "scheduler" | "profile" | "students" | "termdates" | "settings"
 let sidebarCloseTimer = null;
 
-function render() {
+// #app now holds three permanent containers rather than being wiped and
+// rebuilt as one blob each render — this is what lets the header and
+// (when unchanged) the week picker/subtabs bar stay perfectly still while
+// only the content that actually differs between two screens slides.
+function ensureAppSkeleton() {
   const app = document.getElementById("app");
+  if (!document.getElementById("appBody")) {
+    app.innerHTML = '<div id="appHeader"></div><div id="appSubbar"></div><div id="appBody"></div>';
+  }
+}
+
+// The "subbar" is whatever sits directly under the header and is often
+// identical across several screens — the week picker (shared by Offer,
+// Replies and Schedule) or the General/Priorities subtabs bar (shared by
+// both Settings panels). Computed once, from current state, and reused by
+// both render() and animatedRender()'s "did this actually change" check.
+function computeSubbarHTML() {
+  if (currentSection === "scheduler") {
+    return S.tab === "hours" ? "" : '<div class="pad" style="padding-bottom:0">' + renderWeekPicker() + "</div>";
+  }
+  if (currentSection === "settings") {
+    return '<div class="pad" style="padding-bottom:0"><div class="subtabs">' +
+      '<button class="subtab' + (settingsTab === "general" ? " sel" : "") + '" data-action="settingsTab" data-tab="general">General</button>' +
+      '<button class="subtab' + (settingsTab === "priorities" ? " sel" : "") + '" data-action="settingsTab" data-tab="priorities">Priorities</button>' +
+      "</div></div>";
+  }
+  return "";
+}
+
+function render() {
+  ensureAppSkeleton();
+  document.getElementById("appHeader").innerHTML = renderHeader();
+  document.getElementById("appSubbar").innerHTML = computeSubbarHTML();
   const sections = {
     profile: renderProfileSection,
     students: renderStudentsSection,
     termdates: renderTermDatesSection,
-    settings: renderSettingsSection,
+    settings: renderSettingsBody,
   };
-  app.innerHTML = renderHeader() + (sections[currentSection] ? sections[currentSection]() : renderTabContent());
+  document.getElementById("appBody").innerHTML = sections[currentSection] ? sections[currentSection]() : renderTabContent();
   mountAllGrids();
   mountPriorityList(document.getElementById("priorityList"));
   scheduleSave();
 }
 
-// Same hand-driven slide used on the student-facing page: set the "before"
-// state, force a layout pass, then transition to "after" — reserved for
-// genuine navigation (switching sidebar section, main tab, or a Settings
-// sub-tab), never for the dozens of fine-grained render() calls elsewhere
-// (typing, painting cells, toggling chips), which stay instant.
+// The header always updates instantly (it's structurally identical across
+// every scheduler tab, and across Profile/Students/Term Dates/Settings
+// only its title text differs — not worth animating). The subbar only
+// slides along with the body when it's genuinely different content on the
+// other side of the transition; when it's the same week picker or the
+// same subtabs bar, it's left completely alone, exactly as asked.
 async function animatedRender(direction) {
-  const app = document.getElementById("app");
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!app || !app.firstChild || !direction || reduceMotion) {
+  ensureAppSkeleton();
+  const subbarEl = document.getElementById("appSubbar");
+  const bodyEl = document.getElementById("appBody");
+
+  if (!direction || reduceMotion || !bodyEl.firstChild) {
     render();
     return;
   }
+
+  const subbarChanging = subbarEl.innerHTML !== computeSubbarHTML();
+  const targets = subbarChanging ? [subbarEl, bodyEl] : [bodyEl];
   const outX = direction > 0 ? "-22px" : "22px";
   const inX = direction > 0 ? "22px" : "-22px";
 
-  app.style.transition = "transform .2s ease, opacity .2s ease";
-  app.style.transform = "translateX(" + outX + ")";
-  app.style.opacity = "0";
+  targets.forEach((el) => {
+    el.style.transition = "transform .2s ease, opacity .2s ease";
+    el.style.transform = "translateX(" + outX + ")";
+    el.style.opacity = "0";
+  });
   await new Promise((r) => setTimeout(r, 200));
 
-  render(); // swap the content while off to the side and invisible
+  render(); // swaps header/subbar/body — an unchanged subbar is rewritten with identical HTML, invisibly, since it isn't a slide target
 
-  app.style.transition = "none";
-  app.style.transform = "translateX(" + inX + ")";
-  void app.offsetHeight; // force layout so the transition below starts from this position, not "auto"
-  app.style.transition = "transform .3s cubic-bezier(.22,.72,.16,1), opacity .3s ease";
-  app.style.transform = "translateX(0)";
-  app.style.opacity = "1";
+  targets.forEach((el) => {
+    el.style.transition = "none";
+    el.style.transform = "translateX(" + inX + ")";
+  });
+  void bodyEl.offsetHeight; // force layout so the transition below starts from this position, not "auto"
+  targets.forEach((el) => {
+    el.style.transition = "transform .3s cubic-bezier(.22,.72,.16,1), opacity .3s ease";
+    el.style.transform = "translateX(0)";
+    el.style.opacity = "1";
+  });
   await new Promise((r) => setTimeout(r, 300));
-  app.style.transition = "";
-  app.style.transform = "";
+  targets.forEach((el) => {
+    el.style.transition = "";
+    el.style.transform = "";
+    el.style.opacity = "";
+  });
 }
 
 function renderHeader() {
@@ -2275,13 +2322,9 @@ function renderGeneralSettingsTab() {
     '</div>';
 }
 
-function renderSettingsSection() {
-  const tabsHTML = '<div class="subtabs">' +
-    '<button class="subtab' + (settingsTab === "general" ? " sel" : "") + '" data-action="settingsTab" data-tab="general">General</button>' +
-    '<button class="subtab' + (settingsTab === "priorities" ? " sel" : "") + '" data-action="settingsTab" data-tab="priorities">Priorities</button>' +
-    "</div>";
+function renderSettingsBody() {
   const body = settingsTab === "priorities" ? renderPrioritiesTab() : renderGeneralSettingsTab();
-  return '<div class="pad">' + tabsHTML + body +
+  return '<div class="pad" style="padding-top:0">' + body +
     '<div class="btnrow" style="margin-top:16px"><button class="btn sig" data-action="saveSettings">Save changes</button></div>' +
     "</div>";
 }
@@ -2330,8 +2373,7 @@ function renderOfferTab() {
       '<button class="btn" data-action="editAvailability">Edit availability</button></div>'
     : '<div class="btnrow" style="margin-top:16px"><button class="btn sig" data-action="sendToStudents" ' + (rnd.offered.size && !rnd.notTeaching ? "" : "disabled") + '>Send to students</button></div>';
   const preSendRow = rnd.sent ? "" : buildPreSendRowHTML(rnd);
-  return '<div class="pad">' +
-    renderWeekPicker() +
+  return '<div class="pad" style="padding-top:0">' +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
     '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + '. Check this matches the week you mean, and correct it if a reading week or anything else has thrown it off.</p>' +
     '<div class="dayprefs"><div class="dayprefs-head"><b>Teaching day preference</b><span>Tap to cycle Neutral → Preferred → Avoid</span></div>' +
@@ -2353,7 +2395,7 @@ function renderOfferTab() {
 function renderRepliesTab() {
   const rnd = activeRound();
   if (rnd.notTeaching) {
-    return '<div class="pad">' + renderWeekPicker() + '<p class="empty">This week is marked as not teaching, so there\u2019s nothing to collect. Undo it on the Offer tab if that\u2019s changed.</p></div>';
+    return '<div class="pad" style="padding-top:0"><p class="empty">This week is marked as not teaching, so there\u2019s nothing to collect. Undo it on the Offer tab if that\u2019s changed.</p></div>';
   }
   const heat = getHeat(rnd);
   let body;
@@ -2402,7 +2444,7 @@ function renderRepliesTab() {
   const lede = rnd.offered.size
     ? '<p class="lede">Each student says whether they want a lesson, then paints inside your blocks. Tap a name to edit their grid.</p>'
     : "";
-  return '<div class="pad">' + renderWeekPicker() +
+  return '<div class="pad" style="padding-top:0">' +
     lede +
     (DEV_MODE ? '<div class="btnrow"><button class="btn sig" data-action="sampleReplies" ' + (rnd.offered.size ? "" : "disabled") + ">Load sample replies</button></div>" : "") +
     body + heatPanel +
@@ -2413,7 +2455,7 @@ function renderRepliesTab() {
 function renderPreConfirmPlanTab() {
   const rnd = activeRound();
   if (!rnd.result) {
-    return '<div class="pad">' + renderWeekPicker() + '<p class="empty">Nothing solved yet. Collect replies, then tap “Work out the schedule”.</p></div>';
+    return '<div class="pad" style="padding-top:0"><p class="empty">Nothing solved yet. Collect replies, then tap “Work out the schedule”.</p></div>';
   }
   const r = rnd.result;
   let intro;
@@ -2477,7 +2519,7 @@ function renderPreConfirmPlanTab() {
     confirmBtn = '<div class="btnrow"><button class="btn sig" data-action="confirmSchedule">Confirm and log hours</button></div>';
   }
 
-  return '<div class="pad">' + renderWeekPicker() + intro + optionsHTML + moreOptionsHTML + blockersHTML + sharePanel + confirmBtn + "</div>";
+  return '<div class="pad" style="padding-top:0">' + intro + optionsHTML + moreOptionsHTML + blockersHTML + sharePanel + confirmBtn + "</div>";
 }
 
 function renderLivePlanTab() {
@@ -2522,7 +2564,7 @@ function renderLivePlanTab() {
   const imgBlock = S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + plan.weekNo + '.png">Save image</a></div>' : "";
   const endRow = '<div class="btnrow"><button class="btn sig" data-action="endWeek">End week and log hours</button></div>';
 
-  return '<div class="pad">' + renderWeekPicker() + intro + dayPanels + emptyMsg + cancelledPanel + actionRow + fallback + imgBlock + endRow + "</div>";
+  return '<div class="pad" style="padding-top:0">' + intro + dayPanels + emptyMsg + cancelledPanel + actionRow + fallback + imgBlock + endRow + "</div>";
 }
 
 function renderHoursTab() {

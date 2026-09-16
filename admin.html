@@ -539,9 +539,10 @@
     border:1px solid var(--rule);border-radius:7px;background:var(--panel);color:var(--ink-soft);cursor:pointer}
   .schedule-view-switch button[aria-pressed="true"]{background:var(--sig);border-color:var(--sig);color:#fff}
   .agenda{background:#FFFCF7;border:1px solid var(--rule);border-radius:12px;overflow:hidden;margin:0 0 18px}
-  .agenda-head{background:var(--sig);color:#fff;padding:22px 22px 21px}
-  .agenda-kicker{display:flex;justify-content:space-between;gap:16px;font-size:10px;letter-spacing:1.6px;text-transform:uppercase;line-height:1.5}
-  .agenda-head h2{font:500 29px/1.2 var(--serif);letter-spacing:-.6px;margin:16px 0 8px}
+  .agenda-head{background:var(--sig);color:#fff;padding:18px 22px}
+  .agenda-heading{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:8px}
+  .agenda-week{flex:none;font-size:10px;letter-spacing:1.6px;text-transform:uppercase;line-height:1.5}
+  .agenda-head h2{font:500 29px/1.2 var(--serif);letter-spacing:-.6px;margin:0}
   .agenda-head p{font-size:12px;line-height:1.6;margin:0;opacity:.9}
   .agenda-body{padding:7px 22px 0}
   .agenda-day{padding:17px 0 3px}
@@ -570,7 +571,7 @@
   .agenda-choice{display:block;margin:0 0 14px;font-size:13px;color:var(--ink-soft)}
   .agenda-choice select{display:block;width:100%;font:inherit;font-size:16px;color:var(--ink);padding:11px 9px;margin-top:7px;border:1px solid var(--rule);border-radius:7px;background:var(--panel)}
   @media(max-width:380px){
-    .agenda-head{padding:20px 16px}.agenda-head h2{font-size:26px}.agenda-body{padding:5px 14px 0}
+    .agenda-head{padding:16px}.agenda-head h2{font-size:26px}.agenda-body{padding:5px 14px 0}
     .agenda-row{grid-template-columns:39px minmax(0,1fr);gap:7px}.agenda-lesson-line{padding:12px 9px;gap:7px}
     .agenda-day-heading{align-items:flex-start}.agenda-day-heading span{font-size:10px}
   }
@@ -2656,8 +2657,8 @@ function renderAgenda(assignments, weekNo, weekStart, startHour, confirmed) {
       '</h3><span>' + lessons.length + ' lesson' + (lessons.length === 1 ? '' : 's') + '</span></div>' + rows + '</section>';
   }).join("");
   return '<section class="agenda" aria-label="Weekly lesson agenda"><div class="agenda-head">' +
-    '<div class="agenda-kicker"><span>Your teaching week</span><span>Week ' + escapeHTML(weekNo) + '</span></div>' +
-    '<h2>Your week</h2><p>' + count + ' lesson' + (count === 1 ? '' : 's') + ' · ' + duration +
+    '<div class="agenda-heading"><h2>Your week</h2><span class="agenda-week">Week ' + escapeHTML(weekNo) + '</span></div>' +
+    '<p>' + count + ' lesson' + (count === 1 ? '' : 's') + ' · ' + duration +
     ' teaching · ' + (confirmed ? 'Confirmed' : 'Draft arrangement') + '</p></div><div class="agenda-body">' +
     (days || '<p class="empty">No lessons scheduled.</p>') +
     '<p class="agenda-foot"><span class="agenda-dot" aria-hidden="true"></span>' +

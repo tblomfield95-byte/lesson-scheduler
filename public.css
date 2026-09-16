@@ -149,18 +149,22 @@ button {
 .schedule-top {
   background:var(--wine);
   color:#fff4e9;
-  padding:22px 24px}
-.schedule-label {
+  padding:18px 24px}
+.schedule-heading {
   display:flex;
   justify-content:space-between;
-  align-items:center;
+  align-items:baseline;
+  gap:16px;
+  margin-bottom:8px}
+.schedule-week {
+  flex:none;
   font-size:10px;
   letter-spacing:1.5px;
   text-transform:uppercase;
   opacity:.8}
 .schedule-top h2 {
   font:500 28px/1.2 var(--serif);
-  margin:15px 0 5px;
+  margin:0;
   letter-spacing:-.6px}
 .schedule-top p {
   margin:0;
@@ -532,7 +536,7 @@ to {
 .preview-wrap:before {
   inset:0 0 12px}
 .schedule-top {
-  padding:20px}
+  padding:16px 20px}
 .schedule-top h2 {
   font-size:25px}
 .schedule-tabs {

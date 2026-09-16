@@ -2620,7 +2620,7 @@ function renderRepliesTab() {
 function renderScheduleViewSwitch() {
   return '<div class="schedule-view-switch" role="group" aria-label="Schedule view">' +
     ["timetable", "agenda"].map(view => '<button type="button" data-action="setScheduleView" data-view="' + view +
-      '" aria-pressed="' + (S.scheduleView === view) + '">' + (view === "agenda" ? "Agenda" : "Timetable") + '</button>').join("") + '</div>';
+      '" aria-pressed="' + (S.scheduleView === view) + '">' + (view === "agenda" ? "Agenda" : "Options") + '</button>').join("") + '</div>';
 }
 
 function agendaLessonColour(lesson) {
@@ -2657,7 +2657,7 @@ function renderAgenda(assignments, weekNo, weekStart, startHour, confirmed) {
   }).join("");
   return '<section class="agenda" aria-label="Weekly lesson agenda"><div class="agenda-head">' +
     '<div class="agenda-kicker"><span>Your teaching week</span><span>Week ' + escapeHTML(weekNo) + '</span></div>' +
-    '<h2>A week, in harmony.</h2><p>' + count + ' lesson' + (count === 1 ? '' : 's') + ' · ' + duration +
+    '<h2>Your week</h2><p>' + count + ' lesson' + (count === 1 ? '' : 's') + ' · ' + duration +
     ' teaching · ' + (confirmed ? 'Confirmed' : 'Draft arrangement') + '</p></div><div class="agenda-body">' +
     (days || '<p class="empty">No lessons scheduled.</p>') +
     '<p class="agenda-foot"><span class="agenda-dot" aria-hidden="true"></span>' +

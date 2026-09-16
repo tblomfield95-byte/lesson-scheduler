@@ -440,15 +440,27 @@ export default {
 
     // Protected pages — the Worker checks the session before deciding
     // whether to hand back the real page or send them to log in.
+    // Cache-Control: no-store on both of these matters specifically for
+    // sign-out — it's what stops the browser from serving a frozen
+    // bfcache snapshot of the logged-in page when someone hits Back
+    // after signing out. Without it, requireSession above still runs
+    // correctly on every real navigation, but the browser can skip that
+    // navigation entirely and show the old page from memory instead.
     if (path === "/admin.html" || path === "/admin") {
       const teacherId = await requireSession(request, env);
       if (!teacherId) return Response.redirect(url.origin + "/login.html", 302);
-      return env.ASSETS.fetch(new Request(new URL("/admin.html", url), request));
+      const res = await env.ASSETS.fetch(new Request(new URL("/admin.html", url), request));
+      const headers = new Headers(res.headers);
+      headers.set("Cache-Control", "no-store");
+      return new Response(res.body, { status: res.status, headers });
     }
     if (path === "/onboarding.html" || path === "/onboarding") {
       const teacherId = await requireSession(request, env);
       if (!teacherId) return Response.redirect(url.origin + "/login.html", 302);
-      return env.ASSETS.fetch(new Request(new URL("/onboarding.html", url), request));
+      const res = await env.ASSETS.fetch(new Request(new URL("/onboarding.html", url), request));
+      const headers = new Headers(res.headers);
+      headers.set("Cache-Control", "no-store");
+      return new Response(res.body, { status: res.status, headers });
     }
 
     // Student links: /s/<slug>/<week> — always the same page underneath

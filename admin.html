@@ -2172,7 +2172,6 @@ function renderOfferTab() {
     renderWeekPicker() +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
     '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + '. Check this matches the week you mean, and correct it if a reading week or anything else has thrown it off.</p>' +
-    '<p class="lede">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
     '<div class="dayprefs"><div class="dayprefs-head"><b>Teaching day preference</b><span>Tap to cycle Neutral → Preferred → Avoid</span></div>' +
     '<div class="dayprefs-grid" style="grid-template-columns:repeat(' + roundDays(rnd).length + ',minmax(0,1fr))">' + roundDays(rnd).map((d, i) => {
       const v = Number((rnd.dayPreferences && rnd.dayPreferences[i]) || 0);
@@ -2183,6 +2182,8 @@ function renderOfferTab() {
     '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
     '</div>' +
     '<div class="field"><label>Note for this week\u2019s message (optional)</label><input type="text" data-bind="weekNote" value="' + escapeHTML(rnd.note || "") + '" placeholder="e.g. half term next week"></div>' +
+    '<p class="lede" style="margin-bottom:8px">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
+    '<p style="text-align:center;font-weight:700;font-size:15px;margin:0 0 8px">' + (weekRangeLabel(rnd.weekStart) || "") + '</p>' +
     gridBlock +
     '<div class="meter"><span>Offered this week</span><b>' + hours + 'h</b></div>' +
     sendRow +

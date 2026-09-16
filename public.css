@@ -469,6 +469,12 @@ to {
   line-height:1.7;
   color:var(--muted)}
 
+/* Align the two signup labels with the card's 34px inset + 1px border. */
+@media(min-width:721px) {
+  body:not(.returning) .auth-main {align-items:start}
+  body:not(.returning) .auth-story {padding-top:35px}
+}
+
 @media(min-width:1400px) {
   .hero {
   padding-top:92px;
@@ -647,4 +653,3 @@ to {
 .hero h1 {
   font-size:43px}
 }
-

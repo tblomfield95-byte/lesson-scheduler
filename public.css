@@ -628,6 +628,16 @@ to {
   font-size:11px}
 }
 
+/* Phone captions sit below the card without a decorative backing behind them. */
+@media(max-width:600px) {
+  .preview-wrap:before {display:none}
+  .preview-wrap .schedule {box-shadow:0 6px 12px #422b2010}
+  .preview-caption {margin-top:36px;font-size:11px;line-height:1.6;letter-spacing:.2px}
+  .preview-caption > span {display:block}
+  .preview-caption > span:last-child {margin-top:2px}
+  .preview-caption .caption-divider {display:none}
+}
+
 @media(prefers-reduced-motion:reduce) {
   html {
   scroll-behavior:auto}

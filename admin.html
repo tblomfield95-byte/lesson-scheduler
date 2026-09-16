@@ -291,11 +291,11 @@
   .grid-head{display:flex;border-bottom:1px solid var(--rule);background:var(--paper)}
   .dayhead{flex:1;text-align:center;padding:8px 0;font-size:12px;font-weight:600;color:var(--ink-soft)}
   .gutter{width:46px;flex:none}
-  .grid-body{padding-top:8px}
   .row{display:flex;height:25px}
   .row .time{font-size:10.5px;color:var(--ink-soft);padding-right:6px;text-align:right;
              position:relative;border-right:1px solid var(--rule)}
   .row .time span{position:absolute;top:0;right:6px;line-height:1;transform:translateY(-50%);white-space:nowrap}
+  .row .time span.first{top:2px;transform:none}
   .cell{flex:1;border-right:1px solid #EFECE6;border-bottom:1px solid #EFECE6;
         position:relative;cursor:pointer}
   .cell:last-child{border-right:none}
@@ -1864,7 +1864,7 @@ function buildGridHTML(role, opts) {
       const style = h > 0 ? ' style="opacity:' + (0.25 + Math.min(h, 4) * 0.18) + '"' : "";
       cells += '<div class="' + cls + '" data-d="' + d + '" data-i="' + i + '"' + style + ">" + (h > 0 ? '<span class="heatnum">' + h + "</span>" : "") + "</div>";
     }
-    rows += '<div class="row"><div class="gutter time">' + (i % 2 === 0 ? "<span>" + slotTimeFor(startHour, i) + "</span>" : "") + "</div>" + cells + "</div>";
+    rows += '<div class="row"><div class="gutter time">' + (i % 2 === 0 ? '<span' + (i === 0 ? ' class="first"' : '') + '>' + slotTimeFor(startHour, i) + "</span>" : "") + "</div>" + cells + "</div>";
   }
   const attrs = 'data-role="' + role + '"' + (studentId ? ' data-student="' + studentId + '"' : "");
   return '<div class="grid-wrap" ' + attrs + ">" + head + '<div class="grid-body">' + rows + "</div></div>";

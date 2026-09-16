@@ -291,9 +291,11 @@
   .grid-head{display:flex;border-bottom:1px solid var(--rule);background:var(--paper)}
   .dayhead{flex:1;text-align:center;padding:8px 0;font-size:12px;font-weight:600;color:var(--ink-soft)}
   .gutter{width:46px;flex:none}
+  .grid-body{padding-top:8px}
   .row{display:flex;height:25px}
   .row .time{font-size:10.5px;color:var(--ink-soft);padding-right:6px;text-align:right;
-             line-height:25px;border-right:1px solid var(--rule)}
+             position:relative;border-right:1px solid var(--rule)}
+  .row .time span{position:absolute;top:0;right:6px;line-height:1;transform:translateY(-50%);white-space:nowrap}
   .cell{flex:1;border-right:1px solid #EFECE6;border-bottom:1px solid #EFECE6;
         position:relative;cursor:pointer}
   .cell:last-child{border-right:none}
@@ -1860,7 +1862,7 @@ function buildGridHTML(role, opts) {
       const style = h > 0 ? ' style="opacity:' + (0.25 + Math.min(h, 4) * 0.18) + '"' : "";
       cells += '<div class="' + cls + '" data-d="' + d + '" data-i="' + i + '"' + style + ">" + (h > 0 ? '<span class="heatnum">' + h + "</span>" : "") + "</div>";
     }
-    rows += '<div class="row"><div class="gutter time">' + (i % 2 === 0 ? slotTimeFor(startHour, i) : "") + "</div>" + cells + "</div>";
+    rows += '<div class="row"><div class="gutter time">' + (i % 2 === 0 ? "<span>" + slotTimeFor(startHour, i) + "</span>" : "") + "</div>" + cells + "</div>";
   }
   const attrs = 'data-role="' + role + '"' + (studentId ? ' data-student="' + studentId + '"' : "");
   return '<div class="grid-wrap" ' + attrs + ">" + head + '<div class="grid-body">' + rows + "</div></div>";
@@ -2039,6 +2041,39 @@ function render() {
   scheduleSave();
 }
 
+// Same hand-driven slide used on the student-facing page: set the "before"
+// state, force a layout pass, then transition to "after" — reserved for
+// genuine navigation (switching sidebar section, main tab, or a Settings
+// sub-tab), never for the dozens of fine-grained render() calls elsewhere
+// (typing, painting cells, toggling chips), which stay instant.
+async function animatedRender(direction) {
+  const app = document.getElementById("app");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!app || !app.firstChild || !direction || reduceMotion) {
+    render();
+    return;
+  }
+  const outX = direction > 0 ? "-22px" : "22px";
+  const inX = direction > 0 ? "22px" : "-22px";
+
+  app.style.transition = "transform .2s ease, opacity .2s ease";
+  app.style.transform = "translateX(" + outX + ")";
+  app.style.opacity = "0";
+  await new Promise((r) => setTimeout(r, 200));
+
+  render(); // swap the content while off to the side and invisible
+
+  app.style.transition = "none";
+  app.style.transform = "translateX(" + inX + ")";
+  void app.offsetHeight; // force layout so the transition below starts from this position, not "auto"
+  app.style.transition = "transform .3s cubic-bezier(.22,.72,.16,1), opacity .3s ease";
+  app.style.transform = "translateX(0)";
+  app.style.opacity = "1";
+  await new Promise((r) => setTimeout(r, 300));
+  app.style.transition = "";
+  app.style.transform = "";
+}
+
 function renderHeader() {
   const tabs = [["week", "Offer"], ["replies", "Replies"], ["plan", "Schedule"], ["hours", "Hours"]];
   const title = (ME.instrument ? ME.instrument + " Lessons" : "Cadence.") + (ME.name ? " - " + ME.name : "");
@@ -2109,10 +2144,13 @@ async function signOut() {
 }
 
 function goSection(section) {
+  const fromDepth = currentSection === "scheduler" ? 0 : 1;
+  const toDepth = section === "scheduler" ? 0 : 1;
   currentSection = section;
   if (section === "termdates") openTermDatesDraft();
   if (section === "settings") { openSettingsDraft(); settingsTab = "general"; }
-  sidebarOpen = false; syncSidebarDOM(); render();
+  sidebarOpen = false; syncSidebarDOM();
+  animatedRender(toDepth >= fromDepth ? 1 : -1);
 }
 
 function renderProfileSection() {
@@ -2604,7 +2642,11 @@ document.getElementById("app").addEventListener("click", (e) => {
 
   if (action === "tab") {
     if (confirmingReset) { confirmingReset = false; clearTimeout(resetConfirmTimer); }
-    S.tab = el.dataset.tab; render();
+    const tabOrder = ["week", "replies", "plan", "hours"];
+    const fromIdx = tabOrder.indexOf(S.tab);
+    const toIdx = tabOrder.indexOf(el.dataset.tab);
+    S.tab = el.dataset.tab;
+    animatedRender(toIdx >= fromIdx ? 1 : -1);
   }
   else if (action === "clearOffer") clearOffer();
   else if (action === "skipWeek") skipWeek();
@@ -2629,7 +2671,12 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "adjustCancellationWindow") adjustCancellationWindow(Number(el.dataset.delta));
   else if (action === "adjustSettingsHour") adjustSettingsHour(el.dataset.which, Number(el.dataset.delta));
   else if (action === "saveSettings") saveSettings();
-  else if (action === "settingsTab") { settingsTab = el.dataset.tab; render(); }
+  else if (action === "settingsTab") {
+    const order = ["general", "priorities"];
+    const dir = order.indexOf(el.dataset.tab) >= order.indexOf(settingsTab) ? 1 : -1;
+    settingsTab = el.dataset.tab;
+    animatedRender(dir);
+  }
   else if (action === "sampleReplies") sampleReplies();
   else if (action === "toggleStudentOpen") {
     const r = activeRound().replies[id];

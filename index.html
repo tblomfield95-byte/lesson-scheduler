@@ -351,6 +351,35 @@ function buildGridHTML(selected, offered) {
   return '<div class="grid-wrap" id="paintGrid">' + head + '<div class="grid-body">' + rows + "</div></div>";
 }
 
+// Safari can still interpret quick taps as a zoom gesture. Cancel only
+// a completed single-finger cell tap, never a drag or multi-touch gesture.
+function suppressGridDoubleTapZoom(el) {
+  let tap = null;
+  el.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) { tap = null; return; }
+    const t = e.touches[0];
+    const cell = e.target.closest && e.target.closest(".cell");
+    tap = cell && el.contains(cell)
+      ? { id: t.identifier, x: t.clientX, y: t.clientY, time: Date.now() }
+      : null;
+  }, { passive: true, capture: true });
+  el.addEventListener("touchmove", (e) => {
+    if (!tap) return;
+    const t = e.touches[0];
+    if (e.touches.length !== 1 || t.identifier !== tap.id ||
+        Math.hypot(t.clientX - tap.x, t.clientY - tap.y) > 10) tap = null;
+  }, { passive: true, capture: true });
+  el.addEventListener("touchend", (e) => {
+    const t = Array.from(e.changedTouches).find(t => tap && t.identifier === tap.id);
+    if (tap && t && e.touches.length === 0 && Date.now() - tap.time < 500 &&
+        Math.hypot(t.clientX - tap.x, t.clientY - tap.y) <= 10 && e.cancelable) {
+      e.preventDefault();
+    }
+    tap = null;
+  }, { passive: false, capture: true });
+  el.addEventListener("touchcancel", () => { tap = null; }, { passive: true, capture: true });
+}
+
 function cellAt(el, x, y) {
   const at = document.elementFromPoint(x, y);
   const cell = at && at.closest ? at.closest("[data-d]") : null;
@@ -361,6 +390,7 @@ function cellAt(el, x, y) {
 function mountGrid() {
   const el = document.getElementById("paintGrid");
   if (!el) return;
+  suppressGridDoubleTapZoom(el);
   let painting = null, last = "";
   const apply = (c, val) => {
     const k = key(c.d, c.i);

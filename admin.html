@@ -386,6 +386,14 @@
   .chips{display:flex;gap:4px}
   .chip{font:inherit;font-size:11.5px;padding:5px 8px;border-radius:20px;border:1px solid var(--rule);
         background:var(--panel);color:var(--ink-soft);cursor:pointer}
+  /* Keep reply status and duration controls aligned as two equal-width rows. */
+  .srow-group{--reply-controls-width:8.75rem}
+  .srow-group .chips,
+  .srow-group .lenrow .stepper{width:var(--reply-controls-width);flex-shrink:0}
+  .srow-group .chips .chip{flex:1;min-width:0;padding-left:0;padding-right:0}
+  .srow-group .lenrow .stepper{justify-content:space-between;gap:6px}
+  .srow-group .lenrow .stepper .step{flex-shrink:0}
+  .srow-group .lenrow .stepper b{flex:1;min-width:0}
   .chip.sel{background:var(--sig);border-color:var(--sig);color:#fff;font-weight:560}
   .chip.sel.grey{background:var(--ink-soft);border-color:var(--ink-soft)}
   .chip.sel.warn{background:var(--warn);border-color:var(--warn)}

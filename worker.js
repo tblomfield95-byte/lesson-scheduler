@@ -68,17 +68,6 @@ function authJSON(obj, status = 200) {
 function escapeHTML(value) {
   return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
-// Link-preview crawlers (WhatsApp, iMessage, Telegram, Slack, etc.) request
-// the root URL to build a card, but they don't run JavaScript and mostly
-// don't follow redirects reliably — so the normal "/" behaviour of
-// immediately 302-ing to /login.html or /admin.html leaves them with
-// nothing to read a title or image from. Detecting them by user agent lets
-// "/" serve them real HTML with Open Graph tags while real visitors still
-// get the instant redirect straight to the right screen.
-function isSocialPreviewBot(request) {
-  const ua = (request.headers.get("User-Agent") || "").toLowerCase();
-  return /facebookexternalhit|whatsapp|twitterbot|slackbot|telegrambot|linkedinbot|discordbot|skypeuripreview|applebot|iframely|embedly|redditbot|pinterest|vkshare|w3c_validator|bot|preview/.test(ua);
-}
 async function handleLoginRequest(request, env, url) {
   let body;
   try { body = await request.json(); } catch { return authJSON({error:"Enter a valid email address."},400); }
@@ -111,14 +100,17 @@ async function handleLoginRequest(request, env, url) {
   if (!inserted.meta.changes) return authJSON({error:"Please wait a minute before requesting another link."},429);
   const link = origin + "/api/verify?token=" + encodeURIComponent(token);
   const safeLink = escapeHTML(link);
+  const isSignup = body?.intent === "signup";
+  const emailHeading = isSignup ? "Welcome to Cadence" : "Your login link";
+  const emailIntro = isSignup ? "Your teaching space starts here. Continue to set up your profile, students and teaching term." : "Ready to organise your lessons? Continue to your teaching space.";
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method:"POST",
       headers:{"Authorization":"Bearer " + env.RESEND_API_KEY,"Content-Type":"application/json"},
       signal:AbortSignal.timeout(15000),
       body:JSON.stringify({
-        from:env.EMAIL_FROM, to:[email], subject:"Your Cadence login link",
-        text:"Log in to Cadence\n\nOpen this link, then select Continue to Cadence:\n" + link +
+        from:env.EMAIL_FROM, to:[email], subject:isSignup ? "Get started with Cadence" : "Your Cadence login link",
+        text:emailHeading + "\n\n" + emailIntro + "\n\nOpen this link, then select Continue to Cadence:\n" + link +
           "\n\nThis link expires in 15 minutes and can only be used once. If you didn't request it, you can ignore this email.",
         html:'<!doctype html><html><body style="margin:0;background:#F2EFE7;color:#211C17;font-family:Arial,sans-serif;padding:32px 16px">' +
           '<div style="max-width:440px;margin:auto;background:#fff;border:1px solid #DCD5C6;border-radius:12px;padding:28px">' +
@@ -134,8 +126,8 @@ async function handleLoginRequest(request, env, url) {
 					'<td width="10" style="width:10px;font-size:0;line-height:0">&nbsp;</td>' +
 					'<td style="font-family:Georgia,serif;font-size:30px;font-weight:bold;color:#6E1423" valign="middle">Cadence.</td>' +
 					'</tr></table>' +
-          '<h1 style="font-size:21px;margin-top:28px">Your login link</h1><p style="line-height:1.6">Ready to organise your lessons? Tap below to continue.</p>' +
-          '<p style="margin:28px 0"><a href="' + safeLink + '" style="display:inline-block;background:#6E1423;color:white;text-decoration:none;padding:14px 22px;border-radius:7px;font-weight:bold">Log in to Cadence</a></p>' +
+          '<h1 style="font-size:21px;margin-top:28px">' + emailHeading + '</h1><p style="line-height:1.6">' + emailIntro + '</p>' +
+          '<p style="margin:28px 0"><a href="' + safeLink + '" style="display:inline-block;background:#6E1423;color:white;text-decoration:none;padding:14px 22px;border-radius:7px;font-weight:bold">Continue to Cadence</a></p>' +
           '<p style="font-size:13px;line-height:1.6;color:#6B6157">This link expires in 15 minutes and can only be used once. If you didn’t request it, you can ignore this email.</p>' +
           '<p style="font-size:12px;line-height:1.6;word-break:break-all">Button not working? Open this link:<br><a href="' + safeLink + '">' + safeLink + '</a></p></div></body></html>'
       })
@@ -162,7 +154,7 @@ async function handleVerify(request, url, env) {
   const row = await env.DB.prepare("SELECT teacher_id, expires_at, used FROM login_tokens WHERE token = ?").bind(token).first();
   if (!row || row.used || new Date(row.expires_at).getTime() <= Date.now()) return invalid();
   // GET previews do not consume the token: mail scanners can safely open this page.
-  if (request.method === "GET") return page('<p>Your login link is ready.</p><form method="post" action="/api/verify"><input type="hidden" name="token" value="' + token + '"><button style="background:#6E1423;color:#fff;border:0;border-radius:7px;padding:14px 20px;font:inherit;cursor:pointer">Continue to Cadence</button></form>');
+  if (request.method === "GET") return page('<p>Your secure link is ready. Continue to your teaching space.</p><form method="post" action="/api/verify"><input type="hidden" name="token" value="' + token + '"><button style="background:#6E1423;color:#fff;border:0;border-radius:7px;padding:14px 20px;font:inherit;cursor:pointer">Continue to Cadence</button></form>');
   const teacher = await env.DB.prepare("SELECT onboarded FROM teachers WHERE id = ?").bind(row.teacher_id).first();
   if (!teacher) return invalid();
   const cookieVal = await makeSessionCookie(row.teacher_id, env);
@@ -387,39 +379,25 @@ export default {
       }
     }
 
-    // Returning teachers skip login while their existing session is valid.
+    // Public entry pages share authentication, but explain each journey separately.
+    // Keep the student index and /s/... routes independent from the welcome page.
     if (["GET", "HEAD"].includes(request.method) &&
-        ["/", "/login", "/login.html"].includes(path)) {
-      if (isSocialPreviewBot(request)) {
-        const title = "Cadence.";
-        const description = "Lesson planning made simple.";
-        const ogImage = url.origin + "/og-image.png";
-        const html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">" +
-          "<title>" + escapeHTML(title) + "</title>" +
-          '<meta property="og:type" content="website">' +
-          '<meta property="og:title" content="' + escapeHTML(title) + '">' +
-          '<meta property="og:description" content="' + escapeHTML(description) + '">' +
-          '<meta property="og:image" content="' + ogImage + '">' +
-          '<meta property="og:url" content="' + escapeHTML(url.origin + "/") + '">' +
-          '<meta name="twitter:card" content="summary_large_image">' +
-          '<meta name="twitter:title" content="' + escapeHTML(title) + '">' +
-          '<meta name="twitter:description" content="' + escapeHTML(description) + '">' +
-          '<meta name="twitter:image" content="' + ogImage + '">' +
-          "</head><body>" + escapeHTML(title) + "</body></html>";
-        return new Response(html, { headers: { "content-type": "text/html;charset=UTF-8" } });
-      }
+        ["/", "/welcome", "/welcome.html", "/login", "/login.html", "/signup", "/signup/", "/signup.html"].includes(path)) {
       const teacherId = await requireSession(request, env);
       const teacher = teacherId
         ? await env.DB.prepare("SELECT onboarded FROM teachers WHERE id = ?").bind(teacherId).first()
         : null;
-      if (teacher || path === "/" || path === "/login") {
-        const destination = teacher
-          ? (teacher.onboarded ? "/admin.html" : "/onboarding.html")
-          : "/login.html";
+      if (teacher) {
+        const destination = teacher.onboarded ? "/admin.html" : "/onboarding.html";
         return new Response(null, {status:302, headers:{
           "Location":new URL(destination, url).href, "Cache-Control":"no-store"
         }});
       }
+      const asset = ["/", "/welcome", "/welcome.html"].includes(path) ? "/welcome.html" : "/login.html";
+      const res = await env.ASSETS.fetch(new Request(new URL(asset, url), request));
+      const headers = new Headers(res.headers);
+      headers.set("Cache-Control", "no-store");
+      return new Response(request.method === "HEAD" ? null : res.body, {status:res.status, headers});
     }
 
     if (path === "/api/login" && request.method === "POST") return handleLoginRequest(request, env, url);

@@ -303,6 +303,39 @@ async function playCadenceIntro() {
 
 playCadenceIntro();
 
+// iOS home-screen "web apps" run in their own standalone window, entirely
+// separate from any Safari tab. Tapping the magic link in Mail always
+// opens it in Safari — there's no way for a link tap to hand control back
+// to an already-open standalone app — so login actually succeeds in that
+// Safari tab while this window sits frozen on "check your email",
+// unaware anything happened. The session cookie itself is shared between
+// the two the moment it's set; what's missing is this window ever
+// looking again. Checking on visibility/focus is what catches it:
+// switching back to the home-screen app after finishing the email flow
+// in Safari now re-checks and moves on automatically, rather than
+// requiring a manual reload to notice the login already worked.
+let recheckingSession = false;
+async function recheckSessionOnReturn() {
+  if (document.hidden || recheckingSession) return;
+  recheckingSession = true;
+  try {
+    const res = await fetch("/api/me", { cache: "no-store" });
+    if (res.ok) {
+      // "/" already knows whether this teacher has finished onboarding —
+      // reusing that instead of guessing here, since /api/me doesn't
+      // include onboarded status.
+      window.location.href = "/";
+      return;
+    }
+  } catch (e) {
+    // Offline or unreachable — stay put, the person can still retry the form.
+  }
+  recheckingSession = false;
+}
+document.addEventListener("visibilitychange", recheckSessionOnReturn);
+window.addEventListener("pageshow", recheckSessionOnReturn);
+window.addEventListener("focus", recheckSessionOnReturn);
+
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
 

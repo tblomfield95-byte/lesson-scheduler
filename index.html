@@ -19,7 +19,8 @@
     background:var(--paper); color:var(--ink);
   }
   *{box-sizing:border-box}
-  body{overflow-x:hidden}
+  body{overflow-x:hidden;-webkit-tap-highlight-color:transparent}
+  button,a{-webkit-tap-highlight-color:transparent}
   #app{opacity:0;transition:opacity .45s ease}
   #app.revealed{opacity:1}
   .brand-mark{flex:none;width:0.78em;height:0.78em;transform:translateY(0.035em)}
@@ -197,18 +198,69 @@ async function boot() {
   render();
 }
 
+// Which "depth" of the flow a given state represents, purely to decide
+// slide direction — deeper (forward) slides the new screen in from the
+// right, shallower (back) slides it in from the left. Same-depth changes
+// (adjusting lesson length, the brief "Saving…" state) never call this
+// and so never trigger a slide.
+function stageDepth() {
+  if (R.submitted) return 3;
+  if (!R.picked) return 0;
+  if (R.stage === "ask") return 1;
+  return 2;
+}
+let __stageDepth = 0;
+
+// A hand-driven slide, the same reliable pattern used throughout the
+// admin app: explicitly set the "before" state, force a layout pass, then
+// transition to the "after" state — rather than trusting a CSS class to
+// animate a full innerHTML swap, which has repeatedly proven unreliable
+// elsewhere in this codebase.
+async function animatedRender() {
+  const app = document.getElementById("app");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const newDepth = stageDepth();
+  const direction = newDepth === __stageDepth ? 0 : (newDepth > __stageDepth ? 1 : -1);
+  __stageDepth = newDepth;
+
+  if (!app || !app.firstChild || direction === 0 || reduceMotion) {
+    render();
+    return;
+  }
+
+  const outX = direction > 0 ? "-22px" : "22px";
+  const inX = direction > 0 ? "22px" : "-22px";
+
+  app.style.transition = "transform .2s ease, opacity .2s ease";
+  app.style.transform = "translateX(" + outX + ")";
+  app.style.opacity = "0";
+  await new Promise((r) => setTimeout(r, 200));
+
+  render(); // swap the content while off to the side and invisible
+
+  app.style.transition = "none";
+  app.style.transform = "translateX(" + inX + ")";
+  void app.offsetHeight; // force layout so the transition below starts from this position, not "auto"
+  app.style.transition = "transform .3s cubic-bezier(.22,.72,.16,1), opacity .3s ease";
+  app.style.transform = "translateX(0)";
+  app.style.opacity = "1";
+  await new Promise((r) => setTimeout(r, 300));
+  app.style.transition = "";
+  app.style.transform = "";
+}
+
 function pick(id) {
   R.picked = id;
   R.stage = "ask";
   const s = R.students.find(x => x.id === id);
   R.avail = new Set((s && s.avail) || []);
   R.lesson = (s && s.lesson) || 2;
-  render();
+  animatedRender();
 }
-function editAgain() { R.submitted = false; R.stage = "ask"; render(); }
-function goGrid() { R.stage = "grid"; render(); }
-function back() { R.picked = null; R.stage = null; R.avail = new Set(); render(); }
-function done() { R.picked = null; R.stage = null; R.avail = new Set(); R.submitted = false; render(); }
+function editAgain() { R.submitted = false; R.stage = "ask"; animatedRender(); }
+function goGrid() { R.stage = "grid"; animatedRender(); }
+function back() { R.picked = null; R.stage = null; R.avail = new Set(); animatedRender(); }
+function done() { R.picked = null; R.stage = null; R.avail = new Set(); R.submitted = false; animatedRender(); }
 function adjustLesson(delta) {
   R.lesson = Math.min(4, Math.max(1, R.lesson + delta));
   render();
@@ -236,7 +288,7 @@ async function clearResponse() {
     alert("Couldn't clear that — check your connection and try again.");
     return;
   }
-  render();
+  animatedRender();
 }
 
 async function submitStatus(status) {
@@ -258,7 +310,7 @@ async function submitStatus(status) {
     alert("Couldn't save that — check your connection and try again.");
     return;
   }
-  render();
+  animatedRender();
 }
 
 function buildGridHTML(selected, offered) {

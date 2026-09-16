@@ -68,6 +68,17 @@ function authJSON(obj, status = 200) {
 function escapeHTML(value) {
   return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+// Link-preview crawlers (WhatsApp, iMessage, Telegram, Slack, etc.) request
+// the root URL to build a card, but they don't run JavaScript and mostly
+// don't follow redirects reliably — so the normal "/" behaviour of
+// immediately 302-ing to /login.html or /admin.html leaves them with
+// nothing to read a title or image from. Detecting them by user agent lets
+// "/" serve them real HTML with Open Graph tags while real visitors still
+// get the instant redirect straight to the right screen.
+function isSocialPreviewBot(request) {
+  const ua = (request.headers.get("User-Agent") || "").toLowerCase();
+  return /facebookexternalhit|whatsapp|twitterbot|slackbot|telegrambot|linkedinbot|discordbot|skypeuripreview|applebot|iframely|embedly|redditbot|pinterest|vkshare|w3c_validator|bot|preview/.test(ua);
+}
 async function handleLoginRequest(request, env, url) {
   let body;
   try { body = await request.json(); } catch { return authJSON({error:"Enter a valid email address."},400); }
@@ -378,6 +389,24 @@ export default {
     // Returning teachers skip login while their existing session is valid.
     if (["GET", "HEAD"].includes(request.method) &&
         ["/", "/login", "/login.html"].includes(path)) {
+      if (isSocialPreviewBot(request)) {
+        const title = "Cadence.";
+        const description = "Lesson planning made simple.";
+        const ogImage = url.origin + "/og-image.png";
+        const html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">" +
+          "<title>" + escapeHTML(title) + "</title>" +
+          '<meta property="og:type" content="website">' +
+          '<meta property="og:title" content="' + escapeHTML(title) + '">' +
+          '<meta property="og:description" content="' + escapeHTML(description) + '">' +
+          '<meta property="og:image" content="' + ogImage + '">' +
+          '<meta property="og:url" content="' + escapeHTML(url.origin + "/") + '">' +
+          '<meta name="twitter:card" content="summary_large_image">' +
+          '<meta name="twitter:title" content="' + escapeHTML(title) + '">' +
+          '<meta name="twitter:description" content="' + escapeHTML(description) + '">' +
+          '<meta name="twitter:image" content="' + ogImage + '">' +
+          "</head><body>" + escapeHTML(title) + "</body></html>";
+        return new Response(html, { headers: { "content-type": "text/html;charset=UTF-8" } });
+      }
       const teacherId = await requireSession(request, env);
       const teacher = teacherId
         ? await env.DB.prepare("SELECT onboarded FROM teachers WHERE id = ?").bind(teacherId).first()

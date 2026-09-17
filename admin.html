@@ -188,6 +188,16 @@
   .priority-label span{display:block;font-size:12px;color:var(--ink-soft);margin-top:2px}
   .priority-handle{flex:none;font-size:19px;line-height:1;color:var(--ink-soft);padding:6px;cursor:grab}
   .priority-row.dragging .priority-handle{cursor:grabbing}
+  .priority-toggle{flex:none;font:inherit;font-size:11.5px;padding:5px 8px;border-radius:7px;
+                   border:1px solid var(--rule);background:var(--paper);color:var(--ink-soft);cursor:pointer;
+                   touch-action:manipulation}
+  .priority-toggle.include{border-color:var(--sig);color:var(--sig);background:var(--sig-soft)}
+  .priority-section-title{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+                          margin:16px 0 7px;font-size:12px;font-weight:700;text-transform:uppercase;
+                          letter-spacing:.04em;color:var(--ink-soft)}
+  .priority-section-title:first-of-type{margin-top:0}
+  .priority-list.excluded .priority-row{background:var(--paper);touch-action:manipulation}
+  .priority-list.excluded .priority-rank{border-style:dashed;background:transparent}
   .term-card{
     width:100%;
     min-width:0;
@@ -502,6 +512,7 @@
   .fill{position:absolute;top:0;bottom:0;left:0;background:var(--sig)}
   .fill.behind{background:var(--warn)}
   .fill.scheduled{background:var(--sig);opacity:.28}
+  .fill.combined-end{border-radius:0 3px 3px 0}
   .hours-breakdown{font-size:11.5px;color:var(--ink-soft);margin-bottom:3px}
   .hnote{font-size:12px;color:var(--ink-soft)}
   .hnote.warn{color:var(--warn)}
@@ -550,6 +561,22 @@
 
   .ledger{margin-top:10px;padding:10px 12px;background:var(--paper);
           border:1px solid var(--rule);border-radius:8px}
+  .ledger-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+                  font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);
+                  font-weight:700;margin:2px 0 7px}
+  .scheduled-hours{margin:-2px -4px 12px;padding:10px;border:1px solid var(--rule);
+                   border-radius:7px;background:var(--sig-soft)}
+  .scheduled-hours .ledger-heading{color:var(--sig);margin-top:0}
+  .scheduled-note{font-size:11.5px;line-height:1.4;color:var(--ink-soft);margin:7px 0 0}
+  .scheduled-entry{display:flex;justify-content:space-between;align-items:center;gap:12px;
+                   font-size:13px;padding:7px 0;border-bottom:1px solid var(--rule)}
+  .scheduled-entry:last-of-type{border-bottom:none}
+  .scheduled-entry-main{min-width:0}
+  .scheduled-entry-main strong{display:block;font-weight:580}
+  .scheduled-entry-main span{display:block;color:var(--ink-soft);font-size:11.5px;margin-top:1px}
+  .scheduled-entry-hours{flex:none;color:var(--sig);font-weight:650}
+  .scheduled-entry .tag{border-color:var(--sig);color:var(--sig);margin-left:6px}
+  .ledger-empty{font-size:13px;color:var(--ink-soft);padding:5px 0 9px}
   .entry{display:flex;justify-content:space-between;align-items:center;
          font-size:13px;padding:6px 0;border-bottom:1px solid var(--rule)}
   .entry.faint{color:var(--ink-soft);border-bottom:none;padding-bottom:10px}
@@ -784,7 +811,30 @@ const DEFAULT_TERM_RANGES = [
 // first. A user can reorder this from Settings > Priorities; this is only
 // the default for a brand-new account or an older saved state that
 // predates the feature.
-const DEFAULT_PRIORITY_ORDER = ["days", "preference", "gaps"];
+const PRIORITY_KEYS = ["days", "preference", "gaps", "placement", "latest", "latestStart"];
+const DEFAULT_PRIORITY_ORDER = ["days", "preference", "gaps", "placement", "latest"];
+const PRIORITY_OPTIONS_VERSION = 2;
+
+function normalisePriorityOrder(order) {
+  if (!Array.isArray(order)) return DEFAULT_PRIORITY_ORDER.slice();
+  const valid = order.filter((key, i) => PRIORITY_KEYS.includes(key) && order.indexOf(key) === i);
+  return valid.length ? valid : [DEFAULT_PRIORITY_ORDER[0]];
+}
+
+function migratePrioritySettings(settings) {
+  const next = { ...(settings || {}) };
+  const previousVersion = Number(next.priorityOptionsVersion || 0);
+  const order = normalisePriorityOrder(next.priorityOrder);
+  // Versions before exclusions existed expected these two former hidden
+  // tie-breakers to remain active. The genuinely new Latest start option is
+  // intentionally left excluded until the teacher opts in.
+  if (previousVersion < 1) {
+    ["placement", "latest"].forEach(key => { if (!order.includes(key)) order.push(key); });
+  }
+  next.priorityOrder = order;
+  next.priorityOptionsVersion = PRIORITY_OPTIONS_VERSION;
+  return next;
+}
 
 // The teaching-week total is derived from S.termRanges (raw calendar weeks
 // across every term), not a fixed number — reading weeks reduce it the
@@ -927,7 +977,7 @@ function placementCost(assign, blocks = []) {
 function scoreSolution(assign, dayPreferences = {}, blockPreferences = []) {
   const byDay = {};
   assign.forEach((a) => { (byDay[a.d] = byDay[a.d] || []).push(a); });
-  let gaps = 0, latest = 0, preference = 0;
+  let gaps = 0, latest = 0, earliestStart = Infinity, preference = 0;
   Object.entries(byDay).forEach(([d, list]) => {
     list.sort((x, y) => x.start - y.start);
     const first = list[0].start;
@@ -935,21 +985,24 @@ function scoreSolution(assign, dayPreferences = {}, blockPreferences = []) {
     const busy = list.reduce((s, x) => s + x.lesson, 0);
     gaps += last - first - busy;
     latest = Math.max(latest, last);
+    earliestStart = Math.min(earliestStart, first);
     preference += Number(dayPreferences[d] || 0);
   });
-  return { days: Object.keys(byDay).length, gaps, latest, preference, placement: placementCost(assign, blockPreferences) };
+  return { days: Object.keys(byDay).length, gaps, latest, earliestStart, preference, placement: placementCost(assign, blockPreferences) };
 }
 
 // Turns the user's ranked list (Settings > Priorities) into a comparator:
 // try each dimension in the order given, falling through to the next only
-// on a tie. Block placement comes after those explicit priorities, before
-// the legacy earlier-finish tiebreaker. It never removes a feasible slot.
+// on a tie. It never removes a feasible slot.
 function buildPriorityComparator(priorityOrder) {
-  const order = (priorityOrder && priorityOrder.length) ? priorityOrder : DEFAULT_PRIORITY_ORDER;
+  const order = normalisePriorityOrder(priorityOrder);
   const diffs = {
     days: (x, y) => x.days - y.days,
     gaps: (x, y) => x.gaps - y.gaps,
     preference: (x, y) => x.preference - y.preference,
+    placement: (x, y) => (x.placement || 0) - (y.placement || 0),
+    latest: (x, y) => x.latest - y.latest,
+    latestStart: (x, y) => y.earliestStart - x.earliestStart,
   };
   return (x, y) => {
     for (const key of order) {
@@ -958,7 +1011,7 @@ function buildPriorityComparator(priorityOrder) {
       const d = fn(x, y);
       if (d !== 0) return d;
     }
-    return (x.placement || 0) - (y.placement || 0) || x.latest - y.latest;
+    return 0;
   };
 }
 
@@ -984,11 +1037,23 @@ function dayBlockers(withCands, offered, days) {
 
 function solve(participants, offered, dayPreferences = {}, days, slots, priorityOrder, blockPreferences = []) {
   const withCands = buildCandidates(participants, offered, days, slots);
-  // The search is bounded. Visit the preferred edge first so late options
-  // are generated before the solution cap is reached (not only re-ranked).
+  // The search is bounded, so visit the active placement/time preferences in
+  // their ranked order before the solution cap is reached (not only re-rank
+  // the solutions that happened to be generated first).
+  const searchOrder = normalisePriorityOrder(priorityOrder);
   for (const p of withCands) {
-    p.cands.sort((a, b) => placementCost([{ ...a, lesson: p.lesson }], blockPreferences)
-      - placementCost([{ ...b, lesson: p.lesson }], blockPreferences));
+    p.cands.sort((a, b) => {
+      for (const key of searchOrder) {
+        let diff = 0;
+        if (key === "placement") {
+          diff = placementCost([{ ...a, lesson: p.lesson }], blockPreferences)
+            - placementCost([{ ...b, lesson: p.lesson }], blockPreferences);
+        } else if (key === "latest") diff = a.start - b.start;
+        else if (key === "latestStart") diff = b.start - a.start;
+        if (diff !== 0) return diff;
+      }
+      return a.d - b.d || a.start - b.start;
+    });
   }
   const comparator = buildPriorityComparator(priorityOrder);
 
@@ -1041,22 +1106,27 @@ function solve(participants, offered, dayPreferences = {}, days, slots, priority
       unique.push(s);
     }
 
-    // Make the first choices genuinely different where possible: show
-    // different day combinations before alternate student orders on the same day(s).
-    const daySeen = new Set();
-    const diverse = [];
-    const remainder = [];
+    // Preserve the true priority ranking unless an option is effectively the
+    // same timetable with students shuffled between identical lesson slots.
+    // Keep the best-ranked version of each layout in place, then show those
+    // near-duplicate variants after the meaningfully different options.
+    const layoutSeen = new Set();
+    const distinct = [];
+    const nearDuplicates = [];
     unique.forEach(s => {
-      const daySig = [...new Set(s.assign.map(a => a.d))].sort().join(",");
-      if (!daySeen.has(daySig)) {
-        daySeen.add(daySig);
-        diverse.push(s);
+      const layoutSig = s.assign
+        .map(a => a.d + ":" + a.start + ":" + a.lesson)
+        .sort()
+        .join("|");
+      if (!layoutSeen.has(layoutSig)) {
+        layoutSeen.add(layoutSig);
+        distinct.push(s);
       } else {
-        remainder.push(s);
+        nearDuplicates.push(s);
       }
     });
 
-    return [...diverse, ...remainder].slice(0, limit);
+    return [...distinct, ...nearDuplicates].slice(0, limit);
   };
 
   const impossible = withCands.some((p) => p.cands.length === 0);
@@ -1178,7 +1248,7 @@ let S = {
   week: 1,
   weeksCompleted: 0,
   termRanges: DEFAULT_TERM_RANGES.map(r => ({ ...r })),
-  settings: { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice(), schedulingMode: "terms", cancellationWindowHours: 24 },
+  settings: { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice(), priorityOptionsVersion: PRIORITY_OPTIONS_VERSION, schedulingMode: "terms", cancellationWindowHours: 24 },
   rounds: {},
   students: [],
   openStudent: null,
@@ -1289,10 +1359,7 @@ function applySavedState(saved) {
   S.week = saved.week || S.week;
   S.weeksCompleted = saved.weeksCompleted || 0;
   S.termRanges = Array.isArray(saved.termRanges) ? saved.termRanges : S.termRanges;
-  S.settings = saved.settings || S.settings;
-  if (!S.settings.priorityOrder || !S.settings.priorityOrder.length) {
-    S.settings.priorityOrder = DEFAULT_PRIORITY_ORDER.slice();
-  }
+  S.settings = migratePrioritySettings(saved.settings || S.settings);
   if (S.settings.schedulingMode !== "rolling") {
     // Infer rolling mode for accounts whose onboarding sent an empty
     // termRanges array but predates the schedulingMode field itself —
@@ -1456,12 +1523,14 @@ window.addEventListener("beforeunload",e=>{
 });
 
 const taughtFor = (id) => S.log.filter(e => e.studentId === id).reduce((s, e) => s + e.hours, 0);
-const scheduledFor = (id) => Object.values(S.rounds || {}).reduce((total, rnd) => {
-  if (!rnd.plan || !Array.isArray(rnd.plan.lessons)) return total;
-  return total + rnd.plan.lessons
+const scheduledLessonsFor = (id) => Object.values(S.rounds || {}).flatMap(rnd => {
+  if (!rnd.plan || !Array.isArray(rnd.plan.lessons)) return [];
+  return rnd.plan.lessons
     .filter(lesson => lesson.id === id && (lesson.status === "planned" || lesson.status === "cancelled_late"))
-    .reduce((sum, lesson) => sum + (lesson.lesson * SCHEDULE_SLOT_MIN) / 60, 0);
-}, 0);
+    .map(lesson => ({ lesson, plan: rnd.plan, startHour: rnd.dayStartHour != null ? rnd.dayStartHour : 9 }));
+}).sort((a, b) => a.plan.weekStart.localeCompare(b.plan.weekStart) || a.lesson.d - b.lesson.d || a.lesson.start - b.lesson.start);
+const scheduledFor = (id) => scheduledLessonsFor(id)
+  .reduce((sum, item) => sum + (item.lesson.lesson * SCHEDULE_SLOT_MIN) / 60, 0);
 const compactHours = value => String(Number(Number(value || 0).toFixed(2)));
 const getParticipants = (rnd) => S.students
   .filter(s => rnd.replies[s.id] && rnd.replies[s.id].status === "in" && rnd.replies[s.id].avail.size > 0)
@@ -2093,11 +2162,25 @@ function switchToTermsFromTermDates() {
 /*  offered blocks keeps whatever shape it was created with.           */
 /* ================================================================== */
 
-let settingsDraft = { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice(), schedulingMode: "terms", cancellationWindowHours: 24 };
+let settingsDraft = { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice(), priorityOptionsVersion: PRIORITY_OPTIONS_VERSION, schedulingMode: "terms", cancellationWindowHours: 24 };
 // Transient — which of the two Settings sub-tabs is showing.
 let settingsTab = "general";
 function openSettingsDraft() {
-  settingsDraft = { ...S.settings, priorityOrder: (S.settings.priorityOrder || DEFAULT_PRIORITY_ORDER).slice() };
+  settingsDraft = { ...S.settings, priorityOrder: normalisePriorityOrder(S.settings.priorityOrder) };
+}
+function excludePriority(key) {
+  const order = normalisePriorityOrder(settingsDraft.priorityOrder);
+  if (!order.includes(key)) return;
+  if (order.length === 1) { flash("Keep at least one active priority"); return; }
+  settingsDraft.priorityOrder = order.filter(item => item !== key);
+  render();
+}
+function includePriority(key) {
+  if (!PRIORITY_KEYS.includes(key)) return;
+  const order = normalisePriorityOrder(settingsDraft.priorityOrder);
+  if (!order.includes(key)) order.push(key);
+  settingsDraft.priorityOrder = order;
+  render();
 }
 function toggleWeekendSetting() {
   settingsDraft.includeWeekends = !settingsDraft.includeWeekends;
@@ -2133,7 +2216,8 @@ function saveSettings() {
     includeWeekends: !!settingsDraft.includeWeekends,
     dayStartHour: start,
     dayEndHour: end,
-    priorityOrder: (settingsDraft.priorityOrder || DEFAULT_PRIORITY_ORDER).slice(),
+    priorityOrder: normalisePriorityOrder(settingsDraft.priorityOrder),
+    priorityOptionsVersion: PRIORITY_OPTIONS_VERSION,
     schedulingMode: settingsDraft.schedulingMode === "rolling" ? "rolling" : "terms",
     cancellationWindowHours: Number(settingsDraft.cancellationWindowHours) || 24,
   };
@@ -2670,21 +2754,37 @@ function priorityMeta(key) {
     days: { label: "Fewest days", desc: "Fit everyone into as few teaching days as possible" },
     gaps: { label: "No gaps", desc: "Keep each teaching day tightly packed, with no idle time between lessons" },
     preference: { label: "Preferred days", desc: "Favour the days you\u2019ve marked as preferred, and steer clear of the ones you\u2019ve marked to avoid" },
+    placement: { label: "Preferred block placement", desc: "Honour the Early or Late choices set on your offered availability blocks" },
+    latest: { label: "Earliest finish", desc: "Prefer schedules whose final lesson finishes earlier in the day" },
+    latestStart: { label: "Latest start", desc: "Prefer schedules whose first lesson begins later in the day" },
   }[key];
 }
 
 function renderPrioritiesTab() {
-  const order = (settingsDraft.priorityOrder && settingsDraft.priorityOrder.length) ? settingsDraft.priorityOrder : DEFAULT_PRIORITY_ORDER;
+  const order = normalisePriorityOrder(settingsDraft.priorityOrder);
+  const excluded = PRIORITY_KEYS.filter(key => !order.includes(key));
   const rows = order.map((k, i) => {
     const m = priorityMeta(k);
     return '<div class="priority-row" data-key="' + k + '" data-idx="' + i + '">' +
       '<span class="priority-rank">' + (i + 1) + '</span>' +
       '<span class="priority-label"><strong>' + m.label + '</strong><span>' + m.desc + '</span></span>' +
+      '<button type="button" class="priority-toggle" data-action="excludePriority" data-key="' + k + '">Exclude</button>' +
       '<span class="priority-handle" aria-hidden="true">\u2630</span>' +
       '</div>';
   }).join("");
-  return '<p class="lede">Drag to set what matters most when Cadence works out a week. It tries to satisfy whatever\u2019s nearer the top first, only falling back to the next one when there\u2019s a genuine tie.</p>' +
-    '<div class="priority-list" id="priorityList">' + rows + '</div>';
+  const excludedRows = excluded.map(k => {
+    const m = priorityMeta(k);
+    return '<div class="priority-row" data-key="' + k + '">' +
+      '<span class="priority-rank" aria-hidden="true">–</span>' +
+      '<span class="priority-label"><strong>' + m.label + '</strong><span>' + m.desc + '</span></span>' +
+      '<button type="button" class="priority-toggle include" data-action="includePriority" data-key="' + k + '">Include</button>' +
+      '</div>';
+  }).join("");
+  return '<p class="lede">Cadence only considers included priorities. Drag them into order: it satisfies whatever\u2019s nearer the top first, only falling back to the next one when there\u2019s a genuine tie.</p>' +
+    '<div class="priority-section-title"><span>Included priorities</span><span>' + order.length + '</span></div>' +
+    '<div class="priority-list" id="priorityList">' + rows + '</div>' +
+    '<div class="priority-section-title"><span>Excluded</span><span>' + excluded.length + '</span></div>' +
+    '<div class="priority-list excluded">' + (excludedRows || '<div class="priority-row"><span class="priority-label"><strong>Nothing excluded</strong><span>Use Exclude above to remove a priority from scheduling.</span></span></div>') + '</div>';
 }
 
 function renderAccentPicker() {
@@ -3099,7 +3199,8 @@ function renderHoursTab() {
 
   const rows = sortedStudents.map(s => {
     const taught = taughtFor(s.id);
-    const scheduled = scheduledFor(s.id);
+    const scheduledLessons = scheduledLessonsFor(s.id);
+    const scheduled = scheduledLessons.reduce((sum, item) => sum + (item.lesson.lesson * SCHEDULE_SLOT_MIN) / 60, 0);
     const remaining = s.allocated - taught;
     const perWeek = remaining / weeksLeft;
     const behind = !rolling && perWeek > 1.05;
@@ -3117,7 +3218,19 @@ function renderHoursTab() {
 
     let ledger = "";
     if (open) {
-      const entryRows = entries.length === 0 ? '<div class="entry faint">Nothing logged yet</div>' :
+      const scheduledRows = scheduledLessons.length === 0
+        ? '<div class="ledger-empty">No lessons currently scheduled</div>'
+        : scheduledLessons.map(item => {
+          const l = item.lesson;
+          const hours = (l.lesson * SCHEDULE_SLOT_MIN) / 60;
+          const statusTag = l.status === "cancelled_late" ? "Late cancellation" : "Scheduled";
+          return '<div class="scheduled-entry"><div class="scheduled-entry-main"><strong>' +
+            dayDateLong(item.plan.weekStart, l.d) + '</strong><span>' +
+            scheduleTimeFor(item.startHour, l.start) + '–' + scheduleTimeFor(item.startHour, l.start + l.lesson) +
+            ' · Week ' + escapeHTML(item.plan.weekNo) + '<i class="tag">' + statusTag + '</i></span></div>' +
+            '<span class="scheduled-entry-hours">' + compactHours(hours) + 'h</span></div>';
+        }).join("");
+      const entryRows = entries.length === 0 ? '<div class="ledger-empty">No completed hours yet</div>' :
         entries.map(e => {
           if (editingEntryId === e.id) {
             return '<div class="entry"><input type="date" data-bind="editDate" value="' + editDraft.date + '" style="flex:1;margin-right:6px">' +
@@ -3131,7 +3244,10 @@ function renderHoursTab() {
             '<span class="entryright">' + e.hours + 'h<button class="x" data-action="editEntry" data-id="' + e.id + '" title="Edit">\u270E</button>' +
             '<button class="x" data-action="removeEntry" data-id="' + e.id + '">×</button></span></div>';
         }).join("");
-      ledger = '<div class="ledger">' + entryRows +
+      ledger = '<div class="ledger"><section class="scheduled-hours"><div class="ledger-heading"><span>Scheduled</span><span>' +
+        compactHours(scheduled) + 'h</span></div>' + scheduledRows +
+        '<p class="scheduled-note">These hours will move to completed when you end the week.</p></section>' +
+        '<div class="ledger-heading"><span>Completed hours</span><span>' + compactHours(taught) + 'h</span></div>' + entryRows +
         '<div class="addrow"><input type="date" data-bind="draftDate" value="' + S.draft.date + '">' +
         '<select data-bind="draftHours">' + [0.5, 1, 1.5, 2, 2.5, 3].map(h =>
           '<option value="' + h + '" ' + (parseFloat(S.draft.hours) === h ? "selected" : "") + ">" + h + "h</option>").join("") + "</select>" +
@@ -3140,8 +3256,8 @@ function renderHoursTab() {
 
     return '<div class="hrow"><div class="htop" style="cursor:pointer" data-action="toggleHoursOpen" data-id="' + s.id + '">' +
       "<b>" + s.name + "</b><em>" + taught + " / " + s.allocated + "h</em></div>" +
-      '<div class="track">' + (scheduledPct > 0 ? '<div class="fill scheduled" style="left:' + pct + '%;width:' + scheduledPct + '%"></div>' : '') +
-      '<div class="fill' + (behind ? " behind" : "") + '" style="width:' + pct + '%"></div></div>' +
+      '<div class="track">' + (scheduledPct > 0 ? '<div class="fill scheduled combined-end" style="left:' + pct + '%;width:' + scheduledPct + '%"></div>' : '') +
+      '<div class="fill' + (behind ? " behind" : "") + (scheduledPct > 0 ? "" : " combined-end") + '" style="width:' + pct + '%"></div></div>' +
       '<div class="hours-breakdown">' + compactHours(taught) + 'h taught' + (scheduled > 0 ? ' · ' + compactHours(scheduled) + 'h scheduled' : '') + '</div>' +
       '<div class="hnote' + (behind ? " warn" : "") + '">' + note + "</div>" + ledger + "</div>";
   }).join("");
@@ -3164,7 +3280,7 @@ function renderHoursTab() {
 
   return '<div class="pad"><p class="lede">' + compactHours(totalTaught) + "h taught" +
     (totalScheduled > 0 ? " · " + compactHours(totalScheduled) + "h scheduled" : "") + " of " + totalAllocated + "h allocated" +
-    (rolling ? "" : ", with " + weeksLeft + " weeks left") + '. Tap a name to see or add individual lessons.</p>' +
+    (rolling ? "" : ", with " + weeksLeft + " weeks left") + '. Tap a name to see scheduled and completed lessons.</p>' +
     '<div class="hours-legend" aria-label="Hours progress legend"><span><i class="hours-key" aria-hidden="true"></i>Taught</span>' +
     '<span><i class="hours-key scheduled" aria-hidden="true"></i>Scheduled</span></div>' +
     '<div class="hours-sort"><label for="hoursSort">Sort by</label><select id="hoursSort" data-bind="hoursSort">' +
@@ -3228,6 +3344,8 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "setSchedulingMode") setSchedulingMode(el.dataset.mode);
   else if (action === "adjustCancellationWindow") adjustCancellationWindow(Number(el.dataset.delta));
   else if (action === "adjustSettingsHour") adjustSettingsHour(el.dataset.which, Number(el.dataset.delta));
+  else if (action === "excludePriority") excludePriority(el.dataset.key);
+  else if (action === "includePriority") includePriority(el.dataset.key);
   else if (action === "setAccent") {
     if (!Object.prototype.hasOwnProperty.call(ACCENT_THEMES, el.dataset.accent)) return;
     settingsDraft.accent = el.dataset.accent;

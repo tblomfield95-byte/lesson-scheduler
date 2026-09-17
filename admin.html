@@ -263,6 +263,14 @@
   .pad{padding:16px}
   .lede{font-size:14px;line-height:1.5;color:var(--ink-soft);margin:0 0 14px}
   .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .offer-actions{display:grid;margin-top:16px}
+  .offer-mode{grid-area:1 / 1;min-width:0;visibility:hidden;opacity:0;pointer-events:none}
+  .offer-mode.active{visibility:visible;opacity:1;pointer-events:auto}
+  .offer-mode .btnrow{margin:0 0 12px}
+  .offer-actions[aria-busy="true"] .offer-mode{pointer-events:none}
+  .link-feedback{min-height:2.8em;margin:0;font-size:12px;line-height:1.4;color:var(--ink-soft)}
+  .link-copy-fallback{display:block;width:100%;margin-top:5px;font:inherit;padding:7px;border:1px solid var(--rule);border-radius:6px}
+  .placement-help{font-size:12px;color:var(--ink-soft);margin:8px 0 0}
   .btn{font:inherit;font-size:13px;padding:9px 14px;border-radius:8px;border:1px solid var(--rule);
        background:var(--panel);color:var(--ink);cursor:pointer}
   .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:560}
@@ -1671,145 +1679,100 @@ function nextWeek() {
   render();
 }
 
+// Transient feedback belongs to a particular round, not to the global toast.
+let offerTransitionBusy = false;
+let linkFeedback = null;
+let linkCopyToken = 0;
+
+function linkFeedbackHTML(rnd) {
+  if (!linkFeedback || linkFeedback.round !== rnd) return "";
+  return escapeHTML(linkFeedback.message) + (linkFeedback.url
+    ? '<input class="link-copy-fallback" aria-label="Student link — select and copy" readonly value="' + escapeHTML(linkFeedback.url) + '">'
+    : "");
+}
+
+function refreshLinkFeedback() {
+  const rnd = activeRound();
+  const status = document.getElementById("linkFeedback");
+  if (status) status.innerHTML = linkFeedbackHTML(rnd);
+  const button = document.querySelector('[data-action="copyStudentLink"]');
+  if (button) button.disabled = !!(linkFeedback && linkFeedback.round === rnd && linkFeedback.pending);
+}
+
 async function copyStudentLink() {
+  const rnd = activeRound();
+  if (!rnd.sent || (linkFeedback && linkFeedback.round === rnd && linkFeedback.pending)) return;
+  const token = ++linkCopyToken;
   const url = window.location.origin + "/s/" + (ME.slug || "") + "/" + S.week;
+  linkFeedback = { round: rnd, pending: true, message: "Copying link…" };
+  refreshLinkFeedback();
   try {
+    // Called in the click turn, before waiting for any animation.
     await navigator.clipboard.writeText(url);
-    flash("Student link copied to clipboard");
+    if (token !== linkCopyToken || !rnd.sent) return;
+    linkFeedback = { round: rnd, message: "Link copied—ready to paste into your group." };
   } catch (e) {
-    flash("Couldn't copy. The link is " + url);
+    if (token !== linkCopyToken || !rnd.sent) return;
+    linkFeedback = { round: rnd, message: "Couldn't copy automatically. Select and copy this link:", url };
+  }
+  refreshLinkFeedback();
+}
+
+async function transitionOffer(locked) {
+  if (offerTransitionBusy) return;
+  const rnd = activeRound();
+  if (rnd.sent === locked || (locked && (!rnd.offered.size || rnd.notTeaching))) return;
+  offerTransitionBusy = true;
+  const focused = document.activeElement;
+  const restoreFocus = !!(focused && focused.closest && focused.closest("#offerActions"));
+  ++linkCopyToken;
+  linkFeedback = null;
+  rnd.sent = locked;
+  try {
+    // Both control panels occupy the same CSS-grid area, which reserves
+    // the larger height even when a phone wraps the secondary buttons.
+    render();
+    const actions = document.getElementById("offerActions");
+    const grid = document.getElementById("offerGrid");
+    if (actions) actions.setAttribute("aria-busy", "true");
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const animations = [];
+    const animate = (node, frames) => {
+      if (node && typeof node.animate === "function") {
+        animations.push(node.animate(frames, { duration: 340, easing: "ease-in-out" }));
+      }
+    };
+    if (!reduceMotion) {
+      if (grid) grid.querySelectorAll(".grid-head, .row").forEach(row =>
+        animate(row, [{ opacity: locked ? 1 : 0.5 }, { opacity: locked ? 0.5 : 1 }]));
+      if (actions) {
+        const incoming = actions.querySelector(locked ? '[data-mode="locked"]' : '[data-mode="editing"]');
+        const outgoing = actions.querySelector(locked ? '[data-mode="editing"]' : '[data-mode="locked"]');
+        animate(incoming, [{ opacity: 0, visibility: "visible" }, { opacity: 1, visibility: "visible" }]);
+        animate(outgoing, [{ opacity: 1, visibility: "visible" }, { opacity: 0, visibility: "visible" }]);
+      }
+      if (locked && grid) animate(grid.querySelector(".placement-layer"), [{ opacity: 0 }, { opacity: 1 }]);
+    }
+    await Promise.all(animations.map(animation => animation.finished.catch(() => {})));
+    if (actions && actions.isConnected) actions.removeAttribute("aria-busy");
+    if (restoreFocus && actions && actions.isConnected && activeRound() === rnd) {
+      const target = actions.querySelector(locked ? '[data-action="editAvailability"]' : '[data-action="sendToStudents"]');
+      if (target) target.focus({ preventScroll: true });
+    }
+  } finally {
+    offerTransitionBusy = false;
   }
 }
 
-// Stays on the Offer tab rather than jumping to Replies — sending is now a
-// lock, not a navigation. The grid and this button freeze until "Edit
-// availability" is tapped, so there's no risk of quietly repainting blocks
-// after students have already been told what's on offer.
-//
-// Three separate phases, played by hand against the still-live DOM from
-// the previous render (a full innerHTML re-render has no "before" state
-// for a CSS transition to animate from, so this has to happen first):
-//   1. Clear grid / Not teaching fade out in place — no shrinking yet.
-//   2. That row's now-empty height collapses, sliding Send to students up.
-//   3. Copy URL / Edit availability fades in, in the now-current render.
-async function sendToStudents() {
+function sendToStudents() {
   const rnd = activeRound();
-  const preSendRow = document.getElementById("preSendRow");
-  const offerGrid = document.getElementById("offerGrid");
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (preSendRow && !reduceMotion) {
-    // The grid dims across the whole button sequence below (phases 1+2
-    // combined), rather than snapping to greyed-out the instant the
-    // buttons finish — one continuous fade rather than a separate step.
-    if (offerGrid) {
-      offerGrid.querySelectorAll('.grid-head, .row').forEach(row => {
-        row.style.transition = "opacity 1.35s ease";
-        row.style.opacity = "0.5";
-      });
-      offerGrid.style.pointerEvents = "none";
-    }
-
-    // Phase 1 — fade out in place.
-    preSendRow.style.transition = "opacity .65s ease";
-    preSendRow.style.opacity = "0";
-    await new Promise((r) => setTimeout(r, 650));
-
-    // Phase 2 — collapse the space, which is what actually slides Send
-    // to students up into it.
-    const startHeight = preSendRow.getBoundingClientRect().height;
-    preSendRow.style.overflow = "hidden";
-    preSendRow.style.maxHeight = startHeight + "px";
-    preSendRow.style.transition = "max-height .7s cubic-bezier(.22,.72,.16,1), margin .7s cubic-bezier(.22,.72,.16,1)";
-    void preSendRow.offsetHeight; // force layout so the transition starts from the explicit height above, not "auto"
-    preSendRow.style.maxHeight = "0px";
-    preSendRow.style.marginTop = "0px";
-    preSendRow.style.marginBottom = "0px";
-    await new Promise((r) => setTimeout(r, 700));
-  }
-  // Phase 3 — fade in the new Copy URL/Edit availability row explicitly,
-  // the same hand-driven way as every other phase here. A passive CSS
-  // "animation" class on the freshly-rendered row turned out unreliable
-  // (the same class of issue as elsewhere in this sequence), so this
-  // sets it to invisible, forces a layout pass, then transitions it to
-  // opaque on the next frame — guaranteed to actually play.
-  rnd.sent = true;
-  render();
+  if (offerTransitionBusy || rnd.sent || !rnd.offered.size || rnd.notTeaching) return;
+  transitionOffer(true);
   copyStudentLink();
-  const postSendRow = document.getElementById("postSendRow");
-  if (postSendRow) {
-    if (reduceMotion) {
-      postSendRow.style.opacity = "1";
-    } else {
-      postSendRow.style.opacity = "0";
-      void postSendRow.offsetHeight;
-      requestAnimationFrame(() => {
-        postSendRow.style.transition = "opacity .65s ease";
-        postSendRow.style.opacity = "1";
-      });
-    }
-  }
 }
 
-// The exact reverse of sendToStudents, in reverse order:
-//   1. Copy URL / Edit availability fade out in place.
-//   2. Clear grid / Not teaching grows back in above Send to students,
-//      which is what slides it back down.
-//   3. That row fades in, in place.
-async function editAvailability() {
-  const rnd = activeRound();
-  const postSendRow = document.getElementById("postSendRow");
-  const sendRowWrap = document.getElementById("sendRowWrap");
-  const offerGrid = document.getElementById("offerGrid");
-  // Remove the control overlay before the grid brightens. Keep
-  // preferences in state; only their controls disappear while editing.
-  if (offerGrid) offerGrid.querySelectorAll('.placement-layer').forEach(layer => layer.remove());
-  const placementHelp = document.getElementById("placementHelp");
-  if (placementHelp) placementHelp.remove();
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (postSendRow && sendRowWrap && !reduceMotion) {
-    if (offerGrid) {
-      offerGrid.querySelectorAll('.grid-head, .row').forEach(row => {
-        row.style.transition = "opacity 1.6s ease";
-        row.style.opacity = "1";
-      });
-      offerGrid.style.pointerEvents = "";
-    }
-
-    // Phase 1 — fade out in place. Clearing the animation first matters:
-    // this row still carries its fade-in-row CSS animation from when it
-    // first appeared, and that animation's fill-mode keeps forcing
-    // opacity:1 the whole time otherwise — silently overriding the
-    // opacity set just below, so nothing visibly moved until .remove()
-    // cut it instantly at the end.
-    postSendRow.style.animation = "none";
-    void postSendRow.offsetHeight;
-    postSendRow.style.transition = "opacity .9s ease";
-    postSendRow.style.opacity = "0";
-    await new Promise((r) => setTimeout(r, 900));
-    postSendRow.remove();
-
-    // Phase 2 — grow the Clear grid/Not teaching row back in above Send
-    // to students, sliding it back down as a side effect.
-    const wrapper = document.createElement("div");
-    wrapper.innerHTML = buildPreSendRowHTML(rnd);
-    const newRow = wrapper.firstElementChild;
-    newRow.style.opacity = "0";
-    newRow.style.overflow = "hidden";
-    newRow.style.maxHeight = "0px";
-    sendRowWrap.parentNode.insertBefore(newRow, sendRowWrap);
-    const targetHeight = newRow.scrollHeight;
-    newRow.style.transition = "max-height .7s cubic-bezier(.22,.72,.16,1), margin .7s cubic-bezier(.22,.72,.16,1)";
-    void newRow.offsetHeight;
-    newRow.style.maxHeight = targetHeight + "px";
-    await new Promise((r) => setTimeout(r, 700));
-
-    // Phase 3 — fade it in, in place.
-    newRow.style.transition = "opacity .65s ease";
-    newRow.style.opacity = "1";
-    await new Promise((r) => setTimeout(r, 650));
-  }
-  rnd.sent = false;
-  render();
+function editAvailability() {
+  return transitionOffer(false);
 }
 
 async function saveProfile() {
@@ -2615,13 +2578,19 @@ function renderWeekPicker() {
     "</div>";
 }
 
-// Shared between the normal render and editAvailability's reverse
-// animation, which needs to build this exact row by hand to grow it
-// back in before the next full render happens.
-function buildPreSendRowHTML(rnd) {
-  return '<div class="btnrow" id="preSendRow" style="margin-top:16px"><button class="btn" data-action="clearOffer">Clear grid</button>' +
+function buildOfferActionsHTML(rnd) {
+  const editing = '<div class="btnrow"><button class="btn sig" data-action="sendToStudents" ' +
+    (rnd.offered.size && !rnd.notTeaching ? '' : 'disabled') + '>Lock &amp; copy link</button></div>' +
+    '<div class="btnrow"><button class="btn" data-action="clearOffer">Clear grid</button>' +
     '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
     '</div>';
+  const locked = '<div class="btnrow"><button class="btn sig" data-action="copyStudentLink"' +
+    (linkFeedback && linkFeedback.round === rnd && linkFeedback.pending ? ' disabled' : '') + '>Copy link</button></div>' +
+    '<div class="btnrow"><button class="btn" data-action="editAvailability">Edit availability</button></div>';
+  return '<div class="offer-actions" id="offerActions">' +
+    '<div class="offer-mode' + (!rnd.sent ? ' active' : '') + '" data-mode="editing"' + (rnd.sent ? ' inert aria-hidden="true"' : '') + '>' + editing + '</div>' +
+    '<div class="offer-mode' + (rnd.sent ? ' active' : '') + '" data-mode="locked"' + (!rnd.sent ? ' inert aria-hidden="true"' : '') + '>' + locked + '</div></div>' +
+    '<div id="linkFeedback" class="link-feedback" role="status" aria-live="polite" aria-atomic="true">' + linkFeedbackHTML(rnd) + '</div>';
 }
 
 function renderOfferTab() {
@@ -2631,12 +2600,6 @@ function renderOfferTab() {
   const gridBlock = rnd.notTeaching
     ? '<div class="grid-locked">Marked as not teaching this week.<br>Tap \u201cNot teaching this week\u201d again, or \u201cClear grid\u201d, to paint times.</div>'
     : '<div id="offerGrid"' + (rnd.sent ? ' class="offer-locked"' : "") + '>' + grid + "</div>";
-  const sendRow = rnd.sent
-    ? '<div class="btnrow" style="margin-top:16px"><button class="btn sig" disabled>Send to students</button></div>' +
-      '<div class="btnrow" id="postSendRow"><button class="btn" data-action="copyStudentLink">Copy URL</button>' +
-      '<button class="btn" data-action="editAvailability">Edit availability</button></div>'
-    : '<div class="btnrow" style="margin-top:16px"><button class="btn sig" data-action="sendToStudents" ' + (rnd.offered.size && !rnd.notTeaching ? "" : "disabled") + '>Send to students</button></div>';
-  const preSendRow = rnd.sent ? "" : buildPreSendRowHTML(rnd);
   return '<div class="pad" style="padding-top:0">' +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
     '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + '. Check this matches the week you mean, and correct it if a reading week or anything else has thrown it off.</p>' +
@@ -2650,10 +2613,9 @@ function renderOfferTab() {
     '<p class="lede" style="margin-bottom:8px">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
     '<p style="text-align:center;font-weight:700;font-size:15px;margin:0 0 8px">' + (weekRangeLabel(rnd.weekStart) || "") + '</p>' +
     gridBlock +
-    (!rnd.notTeaching && rnd.sent && rnd.offered.size ? '<p id="placementHelp" style="font-size:12px;color:var(--ink-soft);margin:8px 0 0">Placement: Any, Early or Late. A preference for each block, not a restriction on students’ availability.' + (rnd.plan ? ' Undo confirmation to change placement.' : '') + '</p>' : '') +
+    '<p id="placementHelp" class="placement-help">After locking, choose Any, Early or Late for each block. Students still see your full availability.</p>' +
     '<div class="meter"><span>Offered this week</span><b>' + hours + 'h</b></div>' +
-    preSendRow +
-    '<div id="sendRowWrap">' + sendRow + '</div>' +
+    buildOfferActionsHTML(rnd) +
     "</div>";
 }
 
@@ -3009,6 +2971,7 @@ function renderHoursTab() {
 /* ================================================================== */
 
 document.getElementById("app").addEventListener("click", (e) => {
+  if (offerTransitionBusy && e.target.closest("#offerActions")) return;
   const el = e.target.closest("[data-action]");
   if (!el) return;
   const action = el.dataset.action;

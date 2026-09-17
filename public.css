@@ -325,6 +325,253 @@ to {
   opacity:1;
   transform:translateY(0)}
 }
+.how-more {
+  margin:38px 0 0;
+  text-align:center;
+  font-size:14px}
+.how-more a {
+  color:var(--wine);
+  font-weight:500;
+  text-decoration:none}
+.how-more a:hover {
+  text-decoration:underline;
+  text-underline-offset:4px}
+
+/* ------------------------------------------------------------------ */
+/*  /how-it-works.html — detailed workflow walkthrough                 */
+/* ------------------------------------------------------------------ */
+.workflow-hero {
+  padding:60px 0 20px;
+  max-width:640px}
+.workflow-hero h1 {
+  font:500 clamp(38px,4.2vw,52px)/1.1 var(--serif);
+  letter-spacing:-1.8px;
+  margin:0 0 18px}
+.workflow-hero p {
+  font-size:16px;
+  line-height:1.75;
+  color:var(--muted);
+  margin:0}
+.workflow {
+  padding:30px 0 20px}
+.workflow-stage {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:64px;
+  align-items:center;
+  padding:64px 0;
+  border-top:1px solid var(--line)}
+.workflow-stage:first-child {
+  border-top:none}
+.workflow-stage.flip .stage-figure {
+  order:2}
+.workflow-stage.flip .stage-copy {
+  order:1}
+.stage-copy .step-number {
+  color:var(--wine);
+  font:500 15px var(--serif);
+  display:block;
+  margin-bottom:12px}
+.stage-copy h2 {
+  font:500 30px/1.2 var(--serif);
+  letter-spacing:-.7px;
+  margin:0 0 14px}
+.stage-copy p {
+  font-size:15px;
+  line-height:1.75;
+  color:var(--muted);
+  margin:0 0 14px}
+.stage-copy p:last-child {
+  margin-bottom:0}
+.stage-figure {
+  position:relative}
+.reveal {
+  opacity:0;
+  transform:translateY(22px);
+  transition:opacity .7s ease, transform .7s cubic-bezier(.22,.72,.16,1)}
+.reveal.revealed {
+  opacity:1;
+  transform:translateY(0)}
+.reveal.reveal-delay {
+  transition-delay:.12s}
+
+/* Shared mock-device card frame, reused across every stage figure */
+.mock-card {
+  position:relative;
+  background:#fffcf7;
+  border:1px solid #d4c7b8;
+  border-radius:12px;
+  overflow:hidden;
+  box-shadow:0 22px 48px #422b2018}
+.mock-top {
+  background:var(--wine);
+  color:#fff4e9;
+  padding:16px 22px;
+  font:500 17px/1.2 var(--serif)}
+.mock-top small {
+  display:block;
+  font-family:var(--sans);
+  font-size:10px;
+  letter-spacing:1.2px;
+  text-transform:uppercase;
+  opacity:.75;
+  margin-bottom:4px}
+.mock-body {
+  padding:20px 22px 24px}
+
+/* Onboarding stage */
+.setup-dots {
+  display:flex;
+  gap:6px;
+  margin-bottom:16px}
+.setup-dots span {
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--line)}
+.setup-dots span.on {
+  background:var(--wine)}
+.setup-field {
+  margin-bottom:12px}
+.setup-field label {
+  display:block;
+  font-size:10px;
+  color:var(--muted);
+  margin-bottom:5px}
+.setup-field .value {
+  border:1px solid var(--line);
+  border-radius:6px;
+  padding:10px 12px;
+  font-size:13px;
+  background:#fbf8f2}
+.setup-row {
+  display:flex;
+  gap:16px;
+  margin:16px 0 4px;
+  padding-top:14px;
+  border-top:1px solid var(--line)}
+.setup-row div {
+  flex:1;
+  text-align:center}
+.setup-row strong {
+  display:block;
+  font:600 18px var(--serif);
+  color:var(--wine)}
+.setup-row span {
+  font-size:10px;
+  color:var(--muted)}
+
+/* Offer / student-reply grid mockups */
+.mock-grid {
+  display:grid;
+  grid-template-columns:34px repeat(5,1fr);
+  font-size:9px;
+  color:var(--muted)}
+.mock-grid .head {
+  padding:0 0 8px;
+  text-align:center;
+  font-weight:600;
+  color:var(--ink)}
+.mock-grid .time {
+  padding-right:6px;
+  text-align:right;
+  align-self:center}
+.mock-grid .cell {
+  height:20px;
+  border:1px solid #efece6;
+  background:#fbf8f2}
+.mock-grid .cell.on {
+  background:var(--wine);
+  border-color:var(--wine)}
+.mock-grid .cell.soft {
+  background:#eddede}
+.mock-caption {
+  margin-top:14px;
+  font-size:11px;
+  color:var(--muted);
+  display:flex;
+  justify-content:space-between;
+  align-items:center}
+.mock-caption .pill {
+  background:var(--wine);
+  color:#fff;
+  border-radius:20px;
+  padding:6px 13px;
+  font-size:11px;
+  font-weight:500}
+
+/* Teacher's Replies-tab mockup */
+.reply-row {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:11px 0;
+  border-bottom:1px solid var(--line);
+  font-size:13px}
+.reply-row:last-child {
+  border-bottom:none}
+.reply-row .who strong {
+  display:block;
+  font-weight:600}
+.reply-row .who span {
+  font-size:11px;
+  color:var(--muted)}
+.reply-status {
+  font-size:11px;
+  padding:5px 10px;
+  border-radius:20px;
+  white-space:nowrap}
+.reply-status.given {
+  background:#e4e8dc;
+  color:#4c5a36}
+.reply-status.waiting {
+  background:#efece6;
+  color:var(--muted)}
+.reply-status.skip {
+  background:#f0e0e1;
+  color:#7c3f49}
+
+/* Hours-tab mockup */
+.hours-row {
+  margin-bottom:14px}
+.hours-row:last-child {
+  margin-bottom:0}
+.hours-row .label {
+  display:flex;
+  justify-content:space-between;
+  font-size:12px;
+  margin-bottom:6px}
+.hours-row .label span:last-child {
+  color:var(--muted)}
+.hours-bar {
+  height:7px;
+  border-radius:4px;
+  background:#efece6;
+  overflow:hidden}
+.hours-bar div {
+  height:100%;
+  background:var(--wine);
+  border-radius:4px}
+
+@media(max-width:720px) {
+  .workflow-stage {
+  grid-template-columns:1fr;
+  gap:26px;
+  padding:44px 0}
+.workflow-stage.flip .stage-figure {
+  order:1}
+.workflow-stage.flip .stage-copy {
+  order:2}
+.stage-copy h2 {
+  font-size:25px}
+}
+
+@media(prefers-reduced-motion:reduce) {
+  .reveal {
+  opacity:1;
+  transform:none;
+  transition:none}
+}
 
 .auth-main {
   display:grid;

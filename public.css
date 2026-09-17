@@ -367,7 +367,7 @@ to {
   order:2}
 .workflow-stage.flip .stage-copy {
   order:1}
-.stage-copy .step-number {
+.stage-step-number {
   color:var(--wine);
   font:500 15px var(--serif);
   display:block;

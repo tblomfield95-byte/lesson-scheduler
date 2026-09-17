@@ -405,6 +405,14 @@
   .sname{flex:1;min-width:0}
   .sname strong{display:block;font-size:14.5px;font-weight:580}
   .sname span{font-size:12px;color:var(--ink-soft)}
+  .sname-toggle{position:relative;width:100%;padding:0 24px 0 0;border:0;background:none;
+                color:inherit;font:inherit;text-align:left;cursor:pointer}
+  .reply-chevron{position:absolute;right:2px;top:50%;font-size:15px!important;line-height:1;
+                 transform:translateY(-50%) rotate(0deg);transition:transform .18s ease}
+  .sname-toggle[aria-expanded="true"] .reply-chevron{transform:translateY(-50%) rotate(180deg)}
+  .readonly-availability{padding:2px 0 14px}
+  .readonly-note{margin:0 0 8px;font-size:12px;color:var(--ink-soft);font-weight:560}
+  .grid-wrap[data-role="readonly"] .cell{pointer-events:none}
   .chips{display:flex;gap:4px}
   .chip{font:inherit;font-size:11.5px;padding:5px 8px;border-radius:20px;border:1px solid var(--rule);
         background:var(--panel);color:var(--ink-soft);cursor:pointer}
@@ -463,6 +471,14 @@
 
   .panel{border:1px solid var(--rule);border-radius:8px;background:var(--panel);padding:14px;margin-bottom:12px}
   .panel h3{margin:0 0 10px;font-family:var(--serif);font-size:15px;font-weight:600}
+  .overlay-panel{padding:0;overflow:hidden}
+  .overlay-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
+                  padding:14px;border:0;background:none;color:var(--ink);font:inherit;cursor:pointer;text-align:left}
+  .overlay-toggle strong{font-family:var(--serif);font-size:15px;font-weight:600}
+  .overlay-toggle .reply-chevron{position:static;flex:none;transform:rotate(0deg)}
+  .overlay-toggle[aria-expanded="true"] .reply-chevron{transform:rotate(180deg)}
+  .overlay-content{padding:0 14px 14px}
+  @media (prefers-reduced-motion:reduce){.reply-chevron{transition:none}}
   .opt{border:1px solid var(--rule);border-radius:7px;padding:12px;margin-bottom:8px;cursor:pointer;background:var(--panel)}
   .opt.sel{border-color:var(--sig);box-shadow:inset 0 0 0 1px var(--sig)}
   .opthead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
@@ -1169,6 +1185,9 @@ let S = {
   imgUrl: "",
 };
 S.rounds["1"] = blankRound(DEFAULT_TERM_RANGES[0].start);
+// Replies-tab disclosures are deliberately transient: each fresh visit starts
+// with the combined overlay tucked away, while an opened panel survives rerenders.
+let repliesOverlayOpen = false;
 
 function ensureRound(weekNo) {
   const k = String(weekNo);
@@ -2794,6 +2813,8 @@ function renderRepliesTab() {
       const ownerText = !r ? "" : isStudentReply ? " (from the student)" : " (you entered this)";
       const validAvailCount = r && r.avail ? [...r.avail].filter(k => rnd.offered.has(k)).length : 0;
       const statusText = (st === "in" ? (validAvailCount + " slots free") : st === "skip" ? "Not this week" : st === "none" ? "Nothing works" : "Waiting") + ownerText;
+      const canExpand = !isStudentReply || (st === "in" && validAvailCount > 0);
+      const isExpanded = canExpand && S.openStudent === s.id;
       const curLesson = lessonMinutesFor(rnd, s.id);
       let lenrow = "";
       if (st === "in") {
@@ -2806,13 +2827,21 @@ function renderRepliesTab() {
           "</div></div>";
       }
       let gridBlock = "";
-      if (!isStudentReply && S.openStudent === s.id) {
+      if (isExpanded) {
         const avail = (r && r.avail) || new Set();
-        gridBlock = '<div style="padding:4px 0 14px">' + buildGridHTML("reply", { selected: avail, offered: rnd.offered, studentId: s.id, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour }) + "</div>";
+        gridBlock = isStudentReply
+          ? '<div class="readonly-availability"><p class="readonly-note">Submitted availability · Read only</p>' +
+            buildGridHTML("readonly", { selected: avail, offered: rnd.offered, studentId: s.id, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour }) + "</div>"
+          : '<div style="padding:4px 0 14px">' + buildGridHTML("reply", { selected: avail, offered: rnd.offered, studentId: s.id, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour }) + "</div>";
       }
+      const nameContent = "<strong>" + s.name + "</strong><span>" + statusText + "</span>" +
+        (canExpand ? '<span class="reply-chevron" aria-hidden="true">⌄</span>' : "");
+      const nameCell = canExpand
+        ? '<button type="button" class="sname sname-toggle" data-action="toggleStudentOpen" data-id="' + s.id +
+          '" aria-expanded="' + isExpanded + '">' + nameContent + "</button>"
+        : '<div class="sname">' + nameContent + "</div>";
       return '<div class="srow-group">' +
-        '<div class="srow"><div class="sname"' + (!isStudentReply ? ' data-action="toggleStudentOpen" data-id="' + s.id + '" style="cursor:pointer"' : '') + '>' +
-        "<strong>" + s.name + "</strong><span>" + statusText + "</span></div>" +
+        '<div class="srow">' + nameCell +
         '<div class="chips">' +
         '<button class="chip' + (st === "in" ? " sel" : "") + '" data-action="setStatus" data-id="' + s.id + '" data-status="in" ' + (isStudentReply ? "disabled" : "") + '>In</button>' +
         '<button class="chip' + (st === "skip" ? " sel grey" : "") + '" data-action="setStatus" data-id="' + s.id + '" data-status="skip" ' + (isStudentReply ? "disabled" : "") + '>Skip</button>' +
@@ -2823,12 +2852,14 @@ function renderRepliesTab() {
 
   let heatPanel = "";
   if (rnd.offered.size > 0 && Object.keys(heat).length > 0) {
-    heatPanel = '<div class="panel"><h3>Everyone, overlaid</h3>' + buildGridHTML("heat", { selected: new Set(), offered: rnd.offered, heat, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour }) + "</div>";
+    heatPanel = '<div class="panel overlay-panel"><button type="button" class="overlay-toggle" data-action="toggleRepliesOverlay" aria-expanded="' + repliesOverlayOpen + '">' +
+      '<strong>Everyone, overlaid</strong><span class="reply-chevron" aria-hidden="true">⌄</span></button>' +
+      (repliesOverlayOpen ? '<div class="overlay-content">' + buildGridHTML("heat", { selected: new Set(), offered: rnd.offered, heat, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour }) + "</div>" : "") + "</div>";
   }
 
   const participants = getParticipants(rnd);
   const lede = rnd.offered.size
-    ? '<p class="lede">Each student says whether they want a lesson, then paints inside your blocks. Tap a name to edit their grid.</p>'
+    ? '<p class="lede">Each student says whether they want a lesson, then paints inside your blocks. Tap a name to view their times; replies entered by you remain editable.</p>'
     : "";
   return '<div class="pad" style="padding-top:0">' +
     lede +
@@ -3189,9 +3220,11 @@ document.getElementById("app").addEventListener("click", (e) => {
   }
   else if (action === "sampleReplies") sampleReplies();
   else if (action === "toggleStudentOpen") {
-    const r = activeRound().replies[id];
-    if (r && r.source !== "admin") return;
     S.openStudent = S.openStudent === id ? null : id;
+    render();
+  }
+  else if (action === "toggleRepliesOverlay") {
+    repliesOverlayOpen = !repliesOverlayOpen;
     render();
   }
   else if (action === "setStatus") {

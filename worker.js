@@ -24,6 +24,23 @@ function getCookie(request, name) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+const MIN_LESSON_MINUTES = 30;
+const MAX_LESSON_MINUTES = 90;
+const LESSON_STEP_MINUTES = 15;
+function validLessonMinutes(value) {
+  const minutes = Number(value);
+  return Number.isInteger(minutes) && minutes >= MIN_LESSON_MINUTES &&
+    minutes <= MAX_LESSON_MINUTES && minutes % LESSON_STEP_MINUTES === 0;
+}
+function replyLessonMinutes(reply) {
+  if (validLessonMinutes(reply?.lessonMinutes)) return Number(reply.lessonMinutes);
+  const legacy = Number(reply?.lesson);
+  if (Number.isInteger(legacy) && legacy >= 1) {
+    return Math.min(MAX_LESSON_MINUTES, Math.max(MIN_LESSON_MINUTES, legacy * 30));
+  }
+  return 60;
+}
+
 /* ==================================================================
    Sessions — a signed cookie, not a database-backed session table.
    Needs a SESSION_SECRET set as an encrypted variable on the Worker
@@ -326,9 +343,10 @@ async function handleState(request, env, teacherId) {
         if (reply.status === "clear" && rnd.replies[id]?.source === "admin") continue;
         rnd.replies[id] = reply;
         // Teachers can still adjust lesson duration, but not student availability.
-        const lesson = Number(incoming[id]?.lesson);
-        if (reply.status !== "clear" && Number.isInteger(lesson) && lesson >= 1 && lesson <= 4 && lesson !== reply.lesson) {
-          rnd.replies[id] = {...reply, lesson};
+        const lessonMinutes = Number(incoming[id]?.lessonMinutes);
+        if (reply.status !== "clear" && validLessonMinutes(lessonMinutes) && lessonMinutes !== replyLessonMinutes(reply)) {
+          rnd.replies[id] = {...reply, lessonMinutes};
+          delete rnd.replies[id].lesson;
           history.push({week,studentId:id,action:"teacher-duration",at:new Date().toISOString(),previous:reply,reply:rnd.replies[id]});
         }
       }
@@ -379,7 +397,7 @@ async function handleRound(url, env) {
     instrument: teacher.instrument,
     students: ((state && state.students) || []).map((s) => {
       const r = replies[s.id]?.status === "clear" ? null : replies[s.id];
-      return { id: s.id, name: s.name, status: r ? r.status : null, avail: r ? r.avail : [], lesson: r ? (r.lesson || 2) : 2 };
+      return { id: s.id, name: s.name, status: r ? r.status : null, avail: r ? r.avail : [], lessonMinutes: replyLessonMinutes(r) };
     }),
   });
 }
@@ -387,7 +405,7 @@ async function handleRound(url, env) {
 async function handleReply(request, env) {
   let body;
   try { body = await request.json(); } catch { return json({error:"Invalid JSON"},400); }
-  const {slug,week,studentId,status,avail,lesson} = body || {};
+  const {slug,week,studentId,status,avail,lessonMinutes,lesson} = body || {};
   if (typeof slug !== "string" || typeof studentId !== "string" ||
       !Number.isSafeInteger(Number(week)) || Number(week) < 1 ||
       !["in","skip","none","clear"].includes(status) || !Array.isArray(avail)) return json({error:"Invalid reply"},400);
@@ -407,11 +425,13 @@ async function handleReply(request, env) {
       return json({error:"The offered times have changed. Reload before submitting."},409);
     }
     const previous = rnd.replies?.[studentId] || null;
-    const requested = Number(lesson);
-    const duration = Number.isInteger(requested) && requested >= 1 && requested <= 4 ? requested : (previous?.lesson || 2);
+    const requestedMinutes = validLessonMinutes(lessonMinutes)
+      ? Number(lessonMinutes)
+      : (Number.isInteger(Number(lesson)) ? Math.min(MAX_LESSON_MINUTES, Number(lesson) * 30) : null);
+    const durationMinutes = validLessonMinutes(requestedMinutes) ? requestedMinutes : replyLessonMinutes(previous);
     const at = new Date().toISOString();
     // Clear is a server-side tombstone, so an older admin cannot resurrect it.
-    const reply = {status,avail:status === "in" ? [...new Set(avail)] : [],lesson:duration,source:"student",updatedAt:at};
+    const reply = {status,avail:status === "in" ? [...new Set(avail)] : [],lessonMinutes:durationMinutes,source:"student",updatedAt:at};
     const event = {week:wk,weekStart:rnd.weekStart,studentId,action:status,at,previous,reply};
     // Bind JSON paths; never interpolate user data into SQL.
     const path = '$.rounds.' + JSON.stringify(wk) + '.replies.' + JSON.stringify(studentId);

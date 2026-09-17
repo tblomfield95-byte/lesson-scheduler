@@ -1757,6 +1757,11 @@ async function editAvailability() {
   const postSendRow = document.getElementById("postSendRow");
   const sendRowWrap = document.getElementById("sendRowWrap");
   const offerGrid = document.getElementById("offerGrid");
+  // Remove the non-time-bearing rows before the grid brightens. Keep
+  // preferences in state; only their controls disappear while editing.
+  if (offerGrid) offerGrid.querySelectorAll('.placement-row').forEach(row => row.remove());
+  const placementHelp = document.getElementById("placementHelp");
+  if (placementHelp) placementHelp.remove();
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (postSendRow && sendRowWrap && !reduceMotion) {
     if (offerGrid) {
@@ -2006,7 +2011,7 @@ async function deleteAccount() {
 
 function buildGridHTML(role, opts) {
   const { selected, offered, heat, studentId, days, slots, startHour } = opts;
-  const blocks = role === "offer" ? reconcileBlockPreferences(activeRound()) : [];
+  const blocks = role === "offer" && activeRound().sent ? reconcileBlockPreferences(activeRound()) : [];
   let head = '<div class="grid-head"><div class="gutter"></div>' + days.map(d => '<div class="dayhead">' + d + '</div>').join("") + "</div>";
   let rows = "";
   for (let i = 0; i < slots; i++) {
@@ -2640,7 +2645,7 @@ function renderOfferTab() {
     '<p class="lede" style="margin-bottom:8px">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
     '<p style="text-align:center;font-weight:700;font-size:15px;margin:0 0 8px">' + (weekRangeLabel(rnd.weekStart) || "") + '</p>' +
     gridBlock +
-    (!rnd.notTeaching && rnd.offered.size ? '<p style="font-size:12px;color:var(--ink-soft);margin:8px 0 0">Placement: Any, Early or Late. A preference for each block, not a restriction on students’ availability.' + (rnd.plan ? ' Undo confirmation to change placement.' : '') + '</p>' : '') +
+    (!rnd.notTeaching && rnd.sent && rnd.offered.size ? '<p id="placementHelp" style="font-size:12px;color:var(--ink-soft);margin:8px 0 0">Placement: Any, Early or Late. A preference for each block, not a restriction on students’ availability.' + (rnd.plan ? ' Undo confirmation to change placement.' : '') + '</p>' : '') +
     '<div class="meter"><span>Offered this week</span><b>' + hours + 'h</b></div>' +
     preSendRow +
     '<div id="sendRowWrap">' + sendRow + '</div>' +
@@ -3119,7 +3124,7 @@ document.getElementById("app").addEventListener("change", (e) => {
   const bind = el.dataset.bind;
   if (bind === "blockPlacement") {
     const rnd = activeRound();
-    if (rnd.plan || !["any", "early", "late"].includes(el.value)) return;
+    if (!rnd.sent || rnd.plan || !["any", "early", "late"].includes(el.value)) return;
     const block = reconcileBlockPreferences(rnd).find(b => b.d === Number(el.dataset.blockDay) && b.start === Number(el.dataset.blockStart));
     if (!block) return;
     block.placement = el.value;

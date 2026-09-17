@@ -394,6 +394,41 @@ to {
   transform:translateY(0)}
 .reveal.reveal-delay {
   transition-delay:.12s}
+.reveal.reveal-delay-2 {
+  transition-delay:.24s}
+
+.mini-features {
+  padding:30px 0 50px;
+  border-top:1px solid var(--line)}
+.mini-features .section-heading {
+  margin-bottom:34px}
+.mini-grid {
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:22px}
+.mini-card {
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:26px 24px;
+  background:#fffcf7}
+.mini-card .icon {
+  width:34px;
+  height:34px;
+  border-radius:9px;
+  background:#f0e0e1;
+  color:var(--wine);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin-bottom:16px}
+.mini-card h3 {
+  font:600 17px var(--serif);
+  margin:0 0 8px}
+.mini-card p {
+  font-size:13px;
+  line-height:1.65;
+  color:var(--muted);
+  margin:0}
 
 /* Shared mock-device card frame, reused across every stage figure */
 .mock-card {
@@ -564,6 +599,9 @@ to {
   order:2}
 .stage-copy h2 {
   font-size:25px}
+.mini-grid {
+  grid-template-columns:1fr;
+  gap:16px}
 }
 
 @media(prefers-reduced-motion:reduce) {

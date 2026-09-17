@@ -313,7 +313,11 @@
   .grid-locked{border:1px solid var(--rule);border-radius:8px;
                background:repeating-linear-gradient(45deg,#E7E1D2,#E7E1D2 8px,#F2EFE7 8px,#F2EFE7 16px);
                padding:36px 16px;text-align:center;color:var(--ink-soft);font-size:13.5px;line-height:1.5}
-  .offer-locked{opacity:.5;pointer-events:none}
+  .offer-locked{pointer-events:none}
+  /* Dim only the locked timetable, never the editable placement controls. */
+  .offer-locked .grid-head,
+  .offer-locked .row,
+  .offer-locked .placement-slot.continues{opacity:.5}
   .placement-row{display:flex;min-height:34px;background:var(--panel)}
   .placement-slot{flex:1;min-width:0;border-right:1px solid #EFECE6;display:flex;align-items:center;justify-content:center}
   .placement-slot:last-child{border-right:0}
@@ -1701,8 +1705,10 @@ async function sendToStudents() {
     // combined), rather than snapping to greyed-out the instant the
     // buttons finish — one continuous fade rather than a separate step.
     if (offerGrid) {
-      offerGrid.style.transition = "opacity 1.35s ease";
-      offerGrid.style.opacity = "0.5";
+      offerGrid.querySelectorAll('.grid-head, .row, .placement-slot.continues').forEach(row => {
+        row.style.transition = "opacity 1.35s ease";
+        row.style.opacity = "0.5";
+      });
       offerGrid.style.pointerEvents = "none";
     }
 
@@ -1765,8 +1771,10 @@ async function editAvailability() {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (postSendRow && sendRowWrap && !reduceMotion) {
     if (offerGrid) {
-      offerGrid.style.transition = "opacity 1.6s ease";
-      offerGrid.style.opacity = "1";
+      offerGrid.querySelectorAll('.grid-head, .row, .placement-slot.continues').forEach(row => {
+        row.style.transition = "opacity 1.6s ease";
+        row.style.opacity = "1";
+      });
       offerGrid.style.pointerEvents = "";
     }
 

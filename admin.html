@@ -314,6 +314,19 @@
                background:repeating-linear-gradient(45deg,#E7E1D2,#E7E1D2 8px,#F2EFE7 8px,#F2EFE7 16px);
                padding:36px 16px;text-align:center;color:var(--ink-soft);font-size:13.5px;line-height:1.5}
   .offer-locked{opacity:.5;pointer-events:none}
+  .placement-row{display:flex;min-height:34px;background:var(--panel)}
+  .placement-slot{flex:1;min-width:0;border-right:1px solid #EFECE6;display:flex;align-items:center;justify-content:center}
+  .placement-slot:last-child{border-right:0}
+  .placement-slot.continues{background:var(--sig)}
+  .placement-pill{position:relative;display:flex;align-items:center;justify-content:center;gap:3px;
+    width:calc(100% - 4px);min-height:30px;margin:2px;border:1px solid var(--rule);border-radius:14px;
+    background:var(--paper);color:var(--ink-soft);font-size:11px;white-space:nowrap;line-height:1.1}
+  .placement-pill.chosen{color:var(--sig);border-color:var(--sig);background:var(--sig-soft)}
+  .placement-pill select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px;touch-action:manipulation}
+  .placement-pill:focus-within{outline:auto;outline-offset:2px}
+  .offer-locked .placement-pill{pointer-events:auto}
+  .placement-prefix{display:none}
+  @media(min-width:900px){.placement-prefix{display:inline}}
 
   .meter{display:flex;justify-content:space-between;align-items:baseline;margin:12px 0 0;
          font-size:13px;color:var(--ink-soft)}
@@ -807,7 +820,46 @@ function buildCandidates(participants, offered, days, slots) {
   });
 }
 
-function scoreSolution(assign, dayPreferences = {}) {
+// Contiguous offered slots are independent blocks. Stored ranges let a
+// preference follow resizing/splitting without leaking into a new block.
+function availabilityBlocks(offered, days, slots) {
+  const blocks = [];
+  for (let d = 0; d < days.length; d++) {
+    let start = null;
+    for (let i = 0; i <= slots; i++) {
+      const on = i < slots && offered.has(key(d, i));
+      if (on && start === null) start = i;
+      if (!on && start !== null) { blocks.push({ d, start, end: i }); start = null; }
+    }
+  }
+  return blocks;
+}
+
+function reconcileBlockPreferences(rnd) {
+  const previous = Array.isArray(rnd.blockPreferences) ? rnd.blockPreferences : [];
+  rnd.blockPreferences = availabilityBlocks(rnd.offered, roundDays(rnd), roundSlots(rnd)).map(block => {
+    const overlapping = previous.filter(p => p.d === block.d && p.start < block.end && p.end > block.start);
+    const values = new Set(overlapping.map(p => p.placement === "early" || p.placement === "late" ? p.placement : "any"));
+    // Splits inherit; merging conflicting preferences safely resets to Any.
+    return { ...block, placement: values.size === 1 ? [...values][0] : "any" };
+  });
+  return rnd.blockPreferences;
+}
+
+function placementCost(assign, blocks = []) {
+  let cost = 0;
+  for (const block of blocks) {
+    if (block.placement !== "early" && block.placement !== "late") continue;
+    const lessons = assign.filter(a => a.d === block.d && a.start >= block.start && a.start + a.lesson <= block.end);
+    if (!lessons.length) continue;
+    cost += block.placement === "early"
+      ? Math.min(...lessons.map(a => a.start)) - block.start
+      : block.end - Math.max(...lessons.map(a => a.start + a.lesson));
+  }
+  return cost;
+}
+
+function scoreSolution(assign, dayPreferences = {}, blockPreferences = []) {
   const byDay = {};
   assign.forEach((a) => { (byDay[a.d] = byDay[a.d] || []).push(a); });
   let gaps = 0, latest = 0, preference = 0;
@@ -820,13 +872,13 @@ function scoreSolution(assign, dayPreferences = {}) {
     latest = Math.max(latest, last);
     preference += Number(dayPreferences[d] || 0);
   });
-  return { days: Object.keys(byDay).length, gaps, latest, preference };
+  return { days: Object.keys(byDay).length, gaps, latest, preference, placement: placementCost(assign, blockPreferences) };
 }
 
 // Turns the user's ranked list (Settings > Priorities) into a comparator:
 // try each dimension in the order given, falling through to the next only
-// on a tie, with "latest finish" as a final, unexposed tiebreaker so a
-// genuinely equal pair still resolves to the earlier-finishing option.
+// on a tie. Block placement comes after those explicit priorities, before
+// the legacy earlier-finish tiebreaker. It never removes a feasible slot.
 function buildPriorityComparator(priorityOrder) {
   const order = (priorityOrder && priorityOrder.length) ? priorityOrder : DEFAULT_PRIORITY_ORDER;
   const diffs = {
@@ -841,7 +893,7 @@ function buildPriorityComparator(priorityOrder) {
       const d = fn(x, y);
       if (d !== 0) return d;
     }
-    return x.latest - y.latest;
+    return (x.placement || 0) - (y.placement || 0) || x.latest - y.latest;
   };
 }
 
@@ -865,8 +917,14 @@ function dayBlockers(withCands, offered, days) {
   }).filter(Boolean).sort((a, b) => a.blocked.length - b.blocked.length);
 }
 
-function solve(participants, offered, dayPreferences = {}, days, slots, priorityOrder) {
+function solve(participants, offered, dayPreferences = {}, days, slots, priorityOrder, blockPreferences = []) {
   const withCands = buildCandidates(participants, offered, days, slots);
+  // The search is bounded. Visit the preferred edge first so late options
+  // are generated before the solution cap is reached (not only re-ranked).
+  for (const p of withCands) {
+    p.cands.sort((a, b) => placementCost([{ ...a, lesson: p.lesson }], blockPreferences)
+      - placementCost([{ ...b, lesson: p.lesson }], blockPreferences));
+  }
   const comparator = buildPriorityComparator(priorityOrder);
 
   const masks = [];
@@ -906,7 +964,7 @@ function solve(participants, offered, dayPreferences = {}, days, slots, priority
   };
 
   const rankAndDedupe = (found, limit = 12) => {
-    const scored = found.map((a) => ({ assign: a, ...scoreSolution(a, dayPreferences) }))
+    const scored = found.map((a) => ({ assign: a, ...scoreSolution(a, dayPreferences, blockPreferences) }))
       .sort(comparator);
 
     const assignmentSeen = new Set();
@@ -1032,6 +1090,7 @@ function blankRound(weekStart) {
   return {
     weekStart,
     offered: new Set(),
+    blockPreferences: [],
     replies: {},
     plan: null,
     result: null,
@@ -1111,6 +1170,7 @@ function serializeState() {
     rounds[k] = {
       weekStart: rr.weekStart,
       offered: [...rr.offered],
+      blockPreferences: reconcileBlockPreferences(rr),
       replies: Object.fromEntries(Object.entries(rr.replies).map(([id, rep]) => [id, {
         status: rep.status,
         avail: [...rep.avail],
@@ -1171,6 +1231,7 @@ function applySavedState(saved) {
     S.rounds[k] = {
       weekStart: rr.weekStart,
       offered: new Set(rr.offered || []),
+      blockPreferences: Array.isArray(rr.blockPreferences) ? rr.blockPreferences : [],
       replies: Object.fromEntries(Object.entries(rr.replies || {}).map(([id, rep]) => [id, {
         status: rep.status,
         avail: new Set(rep.avail || []),
@@ -1313,7 +1374,7 @@ function clearOffer() {
   const rnd = activeRound();
   if (rnd.notTeaching) { rnd.notTeaching = false; S.weeksCompleted = Math.max(0, S.weeksCompleted - 1); }
   rnd.sent = false;
-  rnd.offered = new Set(); rnd.result = null;
+  rnd.offered = new Set(); rnd.blockPreferences = []; rnd.result = null;
   render();
 }
 
@@ -1351,7 +1412,7 @@ function runSolver() {
   if (!rnd.offered.size) { flash("Paint some blocks first"); return; }
   const participants = getParticipants(rnd);
   if (!participants.length) { flash("No students available this week"); return; }
-  rnd.result = solve(participants, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd), S.settings.priorityOrder);
+  rnd.result = solve(participants, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd), S.settings.priorityOrder, reconcileBlockPreferences(rnd));
   rnd.chosen = 0;
   rnd.optionsExpanded = false;
   const tabOrder = ["week", "replies", "plan", "hours"];
@@ -1502,7 +1563,8 @@ function undoConfirmSchedule() {
         rnd.dayPreferences || {},
         roundDays(rnd),
         roundSlots(rnd),
-        S.settings.priorityOrder
+        S.settings.priorityOrder,
+        reconcileBlockPreferences(rnd)
       );
 
       // Try to re-select the option that most closely matches the confirmed
@@ -1545,7 +1607,7 @@ function rescheduleWeek() {
     avail: (rnd.replies[l.id] && rnd.replies[l.id].avail) || new Set(),
   }));
   if (!pool.length) { flash("Nobody left to reschedule"); return; }
-  const solved = solve(pool, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd), S.settings.priorityOrder);
+  const solved = solve(pool, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd), S.settings.priorityOrder, reconcileBlockPreferences(rnd));
   if (!solved.options.length) { flash("No tighter arrangement available"); return; }
   const fresh = solved.options[0].assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" }));
   rnd.plan.lessons = [...rnd.plan.lessons.filter(l => l.status !== "planned"), ...fresh];
@@ -1944,6 +2006,7 @@ async function deleteAccount() {
 
 function buildGridHTML(role, opts) {
   const { selected, offered, heat, studentId, days, slots, startHour } = opts;
+  const blocks = role === "offer" ? reconcileBlockPreferences(activeRound()) : [];
   let head = '<div class="grid-head"><div class="gutter"></div>' + days.map(d => '<div class="dayhead">' + d + '</div>').join("") + "</div>";
   let rows = "";
   for (let i = 0; i < slots; i++) {
@@ -1961,6 +2024,21 @@ function buildGridHTML(role, opts) {
       cells += '<div class="' + cls + '" data-d="' + d + '" data-i="' + i + '"' + style + ">" + (h > 0 ? '<span class="heatnum">' + h + "</span>" : "") + "</div>";
     }
     rows += '<div class="row"><div class="gutter time">' + (i % 2 === 0 ? '<span' + (i === 0 ? ' class="first"' : '') + '>' + slotTimeFor(startHour, i) + "</span>" : "") + "</div>" + cells + "</div>";
+    // A dedicated footer keeps even a 30-minute block paintable. Other
+    // days retain their colour through this non-time-bearing control row.
+    if (blocks.some(b => b.end === i + 1)) {
+      rows += '<div class="placement-row"><div class="gutter"></div>' + days.map((day, d) => {
+        const block = blocks.find(b => b.d === d && b.end === i + 1);
+        if (!block) return '<div class="placement-slot' + (selected.has(key(d, i)) && selected.has(key(d, i + 1)) ? ' continues' : '') + '"></div>';
+        const label = day + ' ' + slotTimeFor(startHour, block.start) + '–' + slotTimeFor(startHour, block.end);
+        const placement = block.placement;
+        return '<div class="placement-slot"><label class="placement-pill' + (placement !== 'any' ? ' chosen' : '') + '" title="Placement for ' + label + '">' +
+          '<span class="placement-prefix" aria-hidden="true">Placement:</span><span aria-hidden="true">' + ({any:'Any',early:'Early',late:'Late'})[placement] + ' ⌄</span>' +
+          '<select data-bind="blockPlacement" data-block-day="' + d + '" data-block-start="' + block.start + '" aria-label="Lesson placement for ' + label + '"' + (activeRound().plan ? ' disabled' : '') + '>' +
+          ['any','early','late'].map(value => '<option value="' + value + '"' + (placement === value ? ' selected' : '') + '>' + ({any:'Any — no preference',early:'Early — favour the start',late:'Late — favour the end'})[value] + '</option>').join('') +
+          '</select></label></div>';
+      }).join('') + '</div>';
+    }
   }
   const attrs = 'data-role="' + role + '"' + (studentId ? ' data-student="' + studentId + '"' : "");
   return '<div class="grid-wrap" ' + attrs + ">" + head + '<div class="grid-body">' + rows + "</div></div>";
@@ -1997,7 +2075,7 @@ function suppressGridDoubleTapZoom(el) {
 
 function cellAt(el, x, y) {
   const at = document.elementFromPoint(x, y);
-  const cell = at && at.closest ? at.closest("[data-d]") : null;
+  const cell = at && at.closest ? at.closest(".cell[data-d][data-i]") : null;
   if (!cell || !el.contains(cell)) return null;
   return { d: Number(cell.dataset.d), i: Number(cell.dataset.i), node: cell };
 }
@@ -2037,9 +2115,18 @@ function mountPaintGrid(el) {
     if (k === last) return;
     last = k; apply(c, painting);
   };
-  const end = () => { if (painting !== null) { painting = null; last = ""; render(); } };
+  const end = () => {
+    if (painting !== null) {
+      painting = null; last = "";
+      if (role === "offer") reconcileBlockPreferences(rnd);
+      rnd.result = null; rnd.chosen = 0; rnd.optionsExpanded = false;
+      S.imgUrl = ""; S.fallbackText = "";
+      render();
+    }
+  };
 
   el.addEventListener("touchstart", (e) => {
+    if (role === "offer" && rnd.sent) return;
     if (e.touches.length !== 1) return;
     const t = e.touches[0];
     const c = cellAt(el, t.clientX, t.clientY);
@@ -2064,6 +2151,8 @@ function mountPaintGrid(el) {
   el.addEventListener("touchcancel", end);
 
   el.addEventListener("mousedown", (e) => {
+    if (role === "offer" && rnd.sent) return;
+    if (e.button !== 0) return;
     const c = cellAt(el, e.clientX, e.clientY);
     if (!c) return;
     const k = key(c.d, c.i);
@@ -2551,6 +2640,7 @@ function renderOfferTab() {
     '<p class="lede" style="margin-bottom:8px">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
     '<p style="text-align:center;font-weight:700;font-size:15px;margin:0 0 8px">' + (weekRangeLabel(rnd.weekStart) || "") + '</p>' +
     gridBlock +
+    (!rnd.notTeaching && rnd.offered.size ? '<p style="font-size:12px;color:var(--ink-soft);margin:8px 0 0">Placement: Any, Early or Late. A preference for each block, not a restriction on students’ availability.' + (rnd.plan ? ' Undo confirmation to change placement.' : '') + '</p>' : '') +
     '<div class="meter"><span>Offered this week</span><b>' + hours + 'h</b></div>' +
     preSendRow +
     '<div id="sendRowWrap">' + sendRow + '</div>' +
@@ -3027,7 +3117,21 @@ document.getElementById("app").addEventListener("change", (e) => {
   const el = e.target.closest("[data-bind]");
   if (!el) return;
   const bind = el.dataset.bind;
-  if (bind === "weekStart") { activeRound().weekStart = el.value; S.imgUrl = ""; S.fallbackText = ""; render(); }
+  if (bind === "blockPlacement") {
+    const rnd = activeRound();
+    if (rnd.plan || !["any", "early", "late"].includes(el.value)) return;
+    const block = reconcileBlockPreferences(rnd).find(b => b.d === Number(el.dataset.blockDay) && b.start === Number(el.dataset.blockStart));
+    if (!block) return;
+    block.placement = el.value;
+    rnd.result = null; rnd.chosen = 0; rnd.optionsExpanded = false;
+    S.imgUrl = ""; S.fallbackText = "";
+    // Update in place so keyboard focus and the native mobile picker survive.
+    const pill = el.closest('.placement-pill');
+    pill.classList.toggle('chosen', el.value !== 'any');
+    pill.querySelector('span:not(.placement-prefix)').textContent = ({any:'Any',early:'Early',late:'Late'})[el.value] + ' ⌄';
+    scheduleSave();
+  }
+  else if (bind === "weekStart") { activeRound().weekStart = el.value; S.imgUrl = ""; S.fallbackText = ""; render(); }
   else if (bind === "agendaOption") {
     const rnd = activeRound();
     const chosen = Number(el.value);

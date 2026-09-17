@@ -439,6 +439,7 @@
         font:inherit;
         font-size:16px;
         line-height:1;
+        touch-action:manipulation;
         width:28px;
         height:28px;
         padding:0 0 1px;
@@ -497,11 +498,17 @@
   .htop{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
   .htop b{font-weight:580}
   .htop em{font-style:normal;font-size:12.5px;color:var(--ink-soft)}
-  .track{height:6px;background:#EDEAE4;border-radius:3px;margin:7px 0 5px;overflow:hidden}
-  .fill{height:100%;background:var(--sig)}
+  .track{position:relative;height:6px;background:#EDEAE4;border-radius:3px;margin:7px 0 5px;overflow:hidden}
+  .fill{position:absolute;top:0;bottom:0;left:0;background:var(--sig)}
   .fill.behind{background:var(--warn)}
+  .fill.scheduled{background:var(--sig);opacity:.28}
+  .hours-breakdown{font-size:11.5px;color:var(--ink-soft);margin-bottom:3px}
   .hnote{font-size:12px;color:var(--ink-soft)}
   .hnote.warn{color:var(--warn)}
+  .hours-legend{display:flex;align-items:center;gap:16px;margin:0 0 12px;font-size:12px;color:var(--ink-soft)}
+  .hours-legend span{display:inline-flex;align-items:center;gap:6px}
+  .hours-key{display:inline-block;width:20px;height:6px;border-radius:3px;background:var(--sig)}
+  .hours-key.scheduled{opacity:.28}
   .hours-sort{
     display:flex;
     align-items:center;
@@ -1449,6 +1456,13 @@ window.addEventListener("beforeunload",e=>{
 });
 
 const taughtFor = (id) => S.log.filter(e => e.studentId === id).reduce((s, e) => s + e.hours, 0);
+const scheduledFor = (id) => Object.values(S.rounds || {}).reduce((total, rnd) => {
+  if (!rnd.plan || !Array.isArray(rnd.plan.lessons)) return total;
+  return total + rnd.plan.lessons
+    .filter(lesson => lesson.id === id && (lesson.status === "planned" || lesson.status === "cancelled_late"))
+    .reduce((sum, lesson) => sum + (lesson.lesson * SCHEDULE_SLOT_MIN) / 60, 0);
+}, 0);
+const compactHours = value => String(Number(Number(value || 0).toFixed(2)));
 const getParticipants = (rnd) => S.students
   .filter(s => rnd.replies[s.id] && rnd.replies[s.id].status === "in" && rnd.replies[s.id].avail.size > 0)
   .map(s => ({ id: s.id, name: s.name, lesson: lessonFor(rnd, s.id), avail: rnd.replies[s.id].avail }));
@@ -2991,7 +3005,7 @@ function renderPreConfirmPlanTab() {
       (S.fallbackText ? '<textarea class="fallback" readonly rows="' + (S.fallbackText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.fallbackText) + "</textarea>" : "") +
       (S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + S.week + '.png">Save image</a></div>' : "") +
       "</div>";
-    confirmBtn = '<div class="btnrow"><button class="btn sig" data-action="confirmSchedule">Confirm and log hours</button></div>';
+    confirmBtn = '<div class="btnrow"><button class="btn sig" data-action="confirmSchedule">Confirm schedule</button></div>';
   }
 
   const selected = r.options[rnd.chosen];
@@ -3054,6 +3068,7 @@ function renderHoursTab() {
   const rolling = S.settings.schedulingMode === "rolling";
   const weeksLeft = Math.max(1, termWeeks() - S.weeksCompleted);
   const totalTaught = S.students.reduce((s, x) => s + taughtFor(x.id), 0);
+  const totalScheduled = S.students.reduce((s, x) => s + scheduledFor(x.id), 0);
   const totalAllocated = S.students.reduce((s, x) => s + x.allocated, 0);
 
   const firstName = (name) => (name || "").trim().split(/\s+/)[0] || "";
@@ -3084,10 +3099,14 @@ function renderHoursTab() {
 
   const rows = sortedStudents.map(s => {
     const taught = taughtFor(s.id);
+    const scheduled = scheduledFor(s.id);
     const remaining = s.allocated - taught;
     const perWeek = remaining / weeksLeft;
     const behind = !rolling && perWeek > 1.05;
-    const pct = Math.min(100, (taught / s.allocated) * 100);
+    const allocation = Number(s.allocated) || 0;
+    const pct = allocation > 0 ? Math.min(100, Math.max(0, (taught / allocation) * 100)) : 0;
+    const scheduledEndPct = allocation > 0 ? Math.min(100, Math.max(pct, ((taught + scheduled) / allocation) * 100)) : 0;
+    const scheduledPct = Math.max(0, scheduledEndPct - pct);
     const lessonsLeft = Math.max(1, Math.round(remaining));
     const entries = S.log.filter(e => e.studentId === s.id).sort((a, b) => (a.date < b.date ? 1 : -1));
     const open = S.openHours === s.id;
@@ -3121,7 +3140,9 @@ function renderHoursTab() {
 
     return '<div class="hrow"><div class="htop" style="cursor:pointer" data-action="toggleHoursOpen" data-id="' + s.id + '">' +
       "<b>" + s.name + "</b><em>" + taught + " / " + s.allocated + "h</em></div>" +
-      '<div class="track"><div class="fill' + (behind ? " behind" : "") + '" style="width:' + pct + '%"></div></div>' +
+      '<div class="track">' + (scheduledPct > 0 ? '<div class="fill scheduled" style="left:' + pct + '%;width:' + scheduledPct + '%"></div>' : '') +
+      '<div class="fill' + (behind ? " behind" : "") + '" style="width:' + pct + '%"></div></div>' +
+      '<div class="hours-breakdown">' + compactHours(taught) + 'h taught' + (scheduled > 0 ? ' · ' + compactHours(scheduled) + 'h scheduled' : '') + '</div>' +
       '<div class="hnote' + (behind ? " warn" : "") + '">' + note + "</div>" + ledger + "</div>";
   }).join("");
 
@@ -3141,8 +3162,11 @@ function renderHoursTab() {
     (S.hoursExportText ? '<textarea class="fallback" readonly rows="' + (S.hoursExportText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.hoursExportText) + "</textarea>" : "") +
     "</div>";
 
-  return '<div class="pad"><p class="lede">' + totalTaught + "h taught of " + totalAllocated + "h allocated" +
+  return '<div class="pad"><p class="lede">' + compactHours(totalTaught) + "h taught" +
+    (totalScheduled > 0 ? " · " + compactHours(totalScheduled) + "h scheduled" : "") + " of " + totalAllocated + "h allocated" +
     (rolling ? "" : ", with " + weeksLeft + " weeks left") + '. Tap a name to see or add individual lessons.</p>' +
+    '<div class="hours-legend" aria-label="Hours progress legend"><span><i class="hours-key" aria-hidden="true"></i>Taught</span>' +
+    '<span><i class="hours-key scheduled" aria-hidden="true"></i>Scheduled</span></div>' +
     '<div class="hours-sort"><label for="hoursSort">Sort by</label><select id="hoursSort" data-bind="hoursSort">' +
       '<option value="first" ' + ((S.hoursSort || "first") === "first" ? "selected" : "") + '>First name</option>' +
       '<option value="surname" ' + (S.hoursSort === "surname" ? "selected" : "") + '>Surname</option>' +

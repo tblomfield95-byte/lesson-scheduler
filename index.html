@@ -157,6 +157,9 @@ function applyAccent(id) {
 }
 
 const SLOT_MIN = 30;
+const LESSON_STEP_MIN = 15;
+const MIN_LESSON_MINUTES = 30;
+const MAX_LESSON_MINUTES = 90;
 const slotTime = (i) => {
   const total = R.startHour * 60 + i * SLOT_MIN;
   const h = Math.floor(total / 60), m = total % 60;
@@ -184,7 +187,7 @@ function weekRangeLabel(iso) {
     : mon.getUTCDate() + " " + monMonth + " \u2013 " + fri.getUTCDate() + " " + friMonth + " " + fri.getUTCFullYear();
 }
 
-let R = { loading: true, error: null, weekNo: null, weekStart: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), lesson: 2, submitted: false, submittedStatus: null, submitting: false, days: ["Mon", "Tue", "Wed", "Thu", "Fri"], startHour: 9, slots: 20 };
+let R = { loading: true, error: null, weekNo: null, weekStart: null, offered: new Set(), students: [], picked: null, stage: null, avail: new Set(), lessonMinutes: 60, submitted: false, submittedStatus: null, submitting: false, days: ["Mon", "Tue", "Wed", "Thu", "Fri"], startHour: 9, slots: 20 };
 
 async function boot() {
   if (!SLUG || !WEEK) {
@@ -294,7 +297,7 @@ function pick(id) {
   R.stage = "ask";
   const s = R.students.find(x => x.id === id);
   R.avail = new Set((s && s.avail) || []);
-  R.lesson = (s && s.lesson) || 2;
+  R.lessonMinutes = (s && Number.isInteger(s.lessonMinutes)) ? s.lessonMinutes : ((s && s.lesson) ? s.lesson * SLOT_MIN : 60);
   animatedRender();
 }
 function editAgain() { if (R.submitting) return; R.submitted = false; R.stage = "ask"; animatedRender(); }
@@ -303,7 +306,7 @@ function back() { if (R.submitting) return; R.picked = null; R.stage = null; R.a
 function done() { if (R.submitting) return; R.picked = null; R.stage = null; R.avail = new Set(); R.submitted = false; animatedRender(); }
 function adjustLesson(delta) {
   if (R.submitting) return;
-  R.lesson = Math.min(4, Math.max(1, R.lesson + delta));
+  R.lessonMinutes = Math.min(MAX_LESSON_MINUTES, Math.max(MIN_LESSON_MINUTES, R.lessonMinutes + delta * LESSON_STEP_MIN));
   render();
 }
 
@@ -342,14 +345,14 @@ async function submitStatus(status) {
     const response = await fetch("/api/reply", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ slug: SLUG, week: WEEK, studentId: R.picked, status, avail: status === "in" ? [...R.avail] : [], lesson: R.lesson }),
+      body: JSON.stringify({ slug: SLUG, week: WEEK, studentId: R.picked, status, avail: status === "in" ? [...R.avail] : [], lessonMinutes: R.lessonMinutes }),
     });
     const result = await response.json();
     if (!response.ok || !result.ok) throw new Error(result.error || "Save failed");
     R.submitted = true;
     R.submittedStatus = status;
     const s = R.students.find(x => x.id === R.picked);
-    if (s) { s.status = status; s.avail = status === "in" ? [...R.avail] : []; s.lesson = R.lesson; }
+    if (s) { s.status = status; s.avail = status === "in" ? [...R.avail] : []; s.lessonMinutes = R.lessonMinutes; }
     R.submitting = false;
   } catch (e) {
     R.submitting = false;
@@ -575,9 +578,9 @@ function render() {
 
   let bodyHTML = '<div class="pad"' + bodyPadStyle + '>' +
     '<div class="lenrow"><span>Lesson length</span><div class="stepper">' +
-    '<button class="step" onclick="adjustLesson(-1)" ' + (R.lesson <= 1 ? "disabled" : "") + '>\u2013</button>' +
-    "<b>" + (R.lesson * SLOT_MIN) + " min</b>" +
-    '<button class="step" onclick="adjustLesson(1)" ' + (R.lesson >= 4 ? "disabled" : "") + '>+</button>' +
+    '<button class="step" onclick="adjustLesson(-1)" ' + (R.lessonMinutes <= MIN_LESSON_MINUTES ? "disabled" : "") + '>\u2013</button>' +
+    "<b>" + R.lessonMinutes + " min</b>" +
+    '<button class="step" onclick="adjustLesson(1)" ' + (R.lessonMinutes >= MAX_LESSON_MINUTES ? "disabled" : "") + '>+</button>' +
     "</div></div>" +
     '<p class="lede">Drag across the times you could do:</p>' +
     buildGridHTML(R.avail, R.offered) +

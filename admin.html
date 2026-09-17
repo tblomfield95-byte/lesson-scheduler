@@ -695,7 +695,10 @@ document.addEventListener("keydown", (e) => {
 /*  Constants                                                          */
 /* ================================================================== */
 
-const SLOT_MIN = 30;
+const GRID_SLOT_MIN = 30;
+const SCHEDULE_SLOT_MIN = 15;
+const MIN_LESSON_MINUTES = 30;
+const MAX_LESSON_MINUTES = 90;
 
 // Every round snapshots includeWeekends/dayStartHour/dayEndHour at the
 // moment it's created (see blankRound), rather than reading a live global
@@ -710,13 +713,38 @@ function roundSlots(rnd) {
   return (rnd.dayEndHour - rnd.dayStartHour) * 2;
 }
 function slotTimeFor(startHour, i) {
-  const total = startHour * 60 + i * SLOT_MIN;
+  const total = startHour * 60 + i * GRID_SLOT_MIN;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+}
+function scheduleTimeFor(startHour, i) {
+  const total = startHour * 60 + i * SCHEDULE_SLOT_MIN;
   const h = Math.floor(total / 60);
   const m = total % 60;
   return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
 }
 
 const key = (d, i) => d + "-" + i;
+
+function expandGridAvailability(cells) {
+  const expanded = new Set();
+  cells.forEach(value => {
+    const [d, i] = String(value).split("-").map(Number);
+    if (!Number.isInteger(d) || !Number.isInteger(i)) return;
+    expanded.add(key(d, i * 2));
+    expanded.add(key(d, i * 2 + 1));
+  });
+  return expanded;
+}
+
+function solverBlockPreferences(rnd) {
+  return reconcileBlockPreferences(rnd).map(block => ({
+    ...block,
+    start: block.start * 2,
+    end: block.end * 2,
+  }));
+}
 
 const todayISO = () => { const n = new Date(); return new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())).toISOString().slice(0, 10); };
 
@@ -1103,6 +1131,7 @@ async function loadMe() {
 function blankRound(weekStart) {
   return {
     weekStart,
+    schedulerSlotMinutes: SCHEDULE_SLOT_MIN,
     offered: new Set(),
     blockPreferences: [],
     replies: {},
@@ -1169,7 +1198,15 @@ function syncRoundShape(rnd) {
   return rnd;
 }
 function activeRound() { return ensureRound(S.week); }
-const lessonFor = (rnd, id) => (rnd.replies[id] && rnd.replies[id].lesson) || 2;
+const lessonMinutesFor = (rnd, id) => {
+  const reply = rnd.replies[id];
+  if (!reply) return 60;
+  const minutes = Number.isInteger(reply.lessonMinutes)
+    ? reply.lessonMinutes
+    : (Number.isFinite(Number(reply.lesson)) ? Number(reply.lesson) * GRID_SLOT_MIN : 60);
+  return Math.min(MAX_LESSON_MINUTES, Math.max(MIN_LESSON_MINUTES, minutes));
+};
+const lessonFor = (rnd, id) => lessonMinutesFor(rnd, id) / SCHEDULE_SLOT_MIN;
 
 /* ================================================================== */
 /*  Persistence — one JSON blob synced to D1 via a Pages Function      */
@@ -1183,12 +1220,13 @@ function serializeState() {
     const rr = S.rounds[k];
     rounds[k] = {
       weekStart: rr.weekStart,
+      schedulerSlotMinutes: SCHEDULE_SLOT_MIN,
       offered: [...rr.offered],
       blockPreferences: reconcileBlockPreferences(rr),
       replies: Object.fromEntries(Object.entries(rr.replies).map(([id, rep]) => [id, {
         status: rep.status,
         avail: [...rep.avail],
-        lesson: rep.lesson || 2,
+        lessonMinutes: Number.isInteger(rep.lessonMinutes) ? rep.lessonMinutes : lessonMinutesFor(rr, id),
         source: rep.source || null,
       }])),
       plan: rr.plan,
@@ -1242,18 +1280,29 @@ function applySavedState(saved) {
   S.draft = saved.draft || S.draft;
   S.rounds = {};
   Object.entries(saved.rounds || {}).forEach(([k, rr]) => {
+    const usesQuarterHours = rr.schedulerSlotMinutes === SCHEDULE_SLOT_MIN;
+    const migrateLesson = lesson => ({
+      ...lesson,
+      start: usesQuarterHours ? lesson.start : lesson.start * 2,
+      lesson: usesQuarterHours ? lesson.lesson : lesson.lesson * 2,
+      key: lesson.id + "-" + lesson.d + "-" + (usesQuarterHours ? lesson.start : lesson.start * 2),
+    });
     S.rounds[k] = {
       weekStart: rr.weekStart,
+      schedulerSlotMinutes: SCHEDULE_SLOT_MIN,
       offered: new Set(rr.offered || []),
       blockPreferences: Array.isArray(rr.blockPreferences) ? rr.blockPreferences : [],
       replies: Object.fromEntries(Object.entries(rr.replies || {}).map(([id, rep]) => [id, {
         status: rep.status,
         avail: new Set(rep.avail || []),
-        lesson: rep.lesson || 2,
+        lessonMinutes: Math.min(MAX_LESSON_MINUTES, Math.max(MIN_LESSON_MINUTES,
+          Number.isInteger(rep.lessonMinutes) ? rep.lessonMinutes : ((rep.lesson || 2) * GRID_SLOT_MIN))),
         source: rep.source || null,
       }])),
-      plan: rr.plan || null,
-      result: rr.result || null,
+      plan: rr.plan ? { ...rr.plan, lessons: (rr.plan.lessons || []).map(migrateLesson) } : null,
+      // Old solver results used 30-minute coordinates. They are cheap and
+      // safer to regenerate than to migrate every cached score field.
+      result: usesQuarterHours ? (rr.result || null) : null,
       chosen: rr.chosen || 0,
       notTeaching: !!rr.notTeaching,
       sent: !!rr.sent,
@@ -1384,6 +1433,21 @@ const taughtFor = (id) => S.log.filter(e => e.studentId === id).reduce((s, e) =>
 const getParticipants = (rnd) => S.students
   .filter(s => rnd.replies[s.id] && rnd.replies[s.id].status === "in" && rnd.replies[s.id].avail.size > 0)
   .map(s => ({ id: s.id, name: s.name, lesson: lessonFor(rnd, s.id), avail: rnd.replies[s.id].avail }));
+function solveRound(participants, rnd) {
+  const expandedParticipants = participants.map(person => ({
+    ...person,
+    avail: expandGridAvailability(person.avail),
+  }));
+  return solve(
+    expandedParticipants,
+    expandGridAvailability(rnd.offered),
+    rnd.dayPreferences || {},
+    roundDays(rnd),
+    roundSlots(rnd) * 2,
+    S.settings.priorityOrder,
+    solverBlockPreferences(rnd)
+  );
+}
 const getHeat = (rnd) => {
   const h = {};
   Object.values(rnd.replies).forEach(r => { if (r.status !== "in") return; r.avail.forEach(k => { h[k] = (h[k] || 0) + 1; }); });
@@ -1491,10 +1555,10 @@ function sampleReplies() {
     const rand = mulberry(hashStr(s.id + "w" + S.week));
     const need = s.allocated / termWeeks();
     const wants = rand() < Math.min(0.95, need + 0.25);
-    if (!wants) { next[s.id] = { status: "skip", avail: new Set(), lesson: 2, source: "student" }; return; }
+    if (!wants) { next[s.id] = { status: "skip", avail: new Set(), lessonMinutes: 60, source: "student" }; return; }
     const avail = new Set();
     rnd.offered.forEach(k => { if (rand() < 0.45) avail.add(k); });
-    next[s.id] = { status: avail.size ? "in" : "none", avail, lesson: 2, source: "student" };
+    next[s.id] = { status: avail.size ? "in" : "none", avail, lessonMinutes: 60, source: "student" };
   });
   rnd.replies = next; rnd.result = null;
   flash("Sample replies loaded");
@@ -1505,10 +1569,11 @@ function adjustLength(id, delta) {
   const rnd = activeRound();
   const s = S.students.find(x => x.id === id);
   if (!s || !rnd.replies[id]) return;
-  const cap = Math.max(1, Math.round((s.allocated - taughtFor(id)) * 2));
-  const cur = lessonFor(rnd, id);
-  const next = Math.min(4, Math.max(1, cur + delta));
-  rnd.replies[id].lesson = Math.min(next, cap);
+  const remainingMinutes = Math.max(0, (s.allocated - taughtFor(id)) * 60);
+  const cap = Math.max(MIN_LESSON_MINUTES, Math.floor(remainingMinutes / SCHEDULE_SLOT_MIN) * SCHEDULE_SLOT_MIN);
+  const cur = lessonMinutesFor(rnd, id);
+  const next = Math.min(MAX_LESSON_MINUTES, Math.max(MIN_LESSON_MINUTES, cur + delta * SCHEDULE_SLOT_MIN));
+  rnd.replies[id].lessonMinutes = Math.min(next, cap);
   rnd.result = null;
   render();
 }
@@ -1518,7 +1583,7 @@ function runSolver() {
   if (!rnd.offered.size) { flash("Paint some blocks first"); return; }
   const participants = getParticipants(rnd);
   if (!participants.length) { flash("No students available this week"); return; }
-  rnd.result = solve(participants, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd), S.settings.priorityOrder, reconcileBlockPreferences(rnd));
+  rnd.result = solveRound(participants, rnd);
   rnd.chosen = 0;
   rnd.optionsExpanded = false;
   const tabOrder = ["week", "replies", "plan", "hours"];
@@ -1569,7 +1634,7 @@ function buildShareText(assign, weekNoLabel, weekStartISO, startHour, note) {
   if (note) out += "\n" + note;
   Object.keys(by).sort().forEach(d => {
     out += "\n\n" + dayDateLong(weekStartISO, +d) + "\n";
-    by[d].forEach(a => { out += slotTimeFor(startHour, a.start) + "–" + slotTimeFor(startHour, a.start + a.lesson) + "  " + a.name.split(" ")[0] + "\n"; });
+    by[d].forEach(a => { out += scheduleTimeFor(startHour, a.start) + "–" + scheduleTimeFor(startHour, a.start + a.lesson) + "  " + a.name.split(" ")[0] + "\n"; });
   });
   return out.trim();
 }
@@ -1613,11 +1678,11 @@ async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startH
 
     by[d].forEach(a => {
       x.fillStyle = "#211C17"; x.font = "500 32px " + FONT;
-      x.fillText(slotTimeFor(startHour, a.start) + "–" + slotTimeFor(startHour, a.start + a.lesson), 64, y + 32);
+      x.fillText(scheduleTimeFor(startHour, a.start) + "–" + scheduleTimeFor(startHour, a.start + a.lesson), 64, y + 32);
       x.font = "600 32px " + FONT;
       x.fillText(a.name.split(" ")[0], 360, y + 32);
       x.fillStyle = "#6B6157"; x.font = "400 26px " + FONT; x.textAlign = "right";
-      x.fillText(((a.lesson * SLOT_MIN) / 60) + "h", W - 64, y + 32);
+      x.fillText(((a.lesson * SCHEDULE_SLOT_MIN) / 60) + "h", W - 64, y + 32);
       x.textAlign = "left";
       y += 78;
     });
@@ -1663,15 +1728,7 @@ function undoConfirmSchedule() {
   if (!rnd.result || !rnd.result.options || !rnd.result.options.length) {
     const participants = getParticipants(rnd);
     if (participants.length && rnd.offered.size) {
-      rnd.result = solve(
-        participants,
-        rnd.offered,
-        rnd.dayPreferences || {},
-        roundDays(rnd),
-        roundSlots(rnd),
-        S.settings.priorityOrder,
-        reconcileBlockPreferences(rnd)
-      );
+      rnd.result = solveRound(participants, rnd);
 
       // Try to re-select the option that most closely matches the confirmed
       // plan. Fall back to option 0 if no exact assignment is found.
@@ -1713,7 +1770,7 @@ function rescheduleWeek() {
     avail: (rnd.replies[l.id] && rnd.replies[l.id].avail) || new Set(),
   }));
   if (!pool.length) { flash("Nobody left to reschedule"); return; }
-  const solved = solve(pool, rnd.offered, rnd.dayPreferences || {}, roundDays(rnd), roundSlots(rnd), S.settings.priorityOrder, reconcileBlockPreferences(rnd));
+  const solved = solveRound(pool, rnd);
   if (!solved.options.length) { flash("No tighter arrangement available"); return; }
   const fresh = solved.options[0].assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" }));
   rnd.plan.lessons = [...rnd.plan.lessons.filter(l => l.status !== "planned"), ...fresh];
@@ -1731,7 +1788,7 @@ function endWeek() {
     const dateISO = new Date(Date.UTC(y, m - 1, d + l.d)).toISOString().slice(0, 10);
     return {
       id: "s" + Date.now() + "-" + l.key, studentId: l.id,
-      date: dateISO, hours: (l.lesson * SLOT_MIN) / 60,
+      date: dateISO, hours: (l.lesson * SCHEDULE_SLOT_MIN) / 60,
       manual: false, lateCancel: l.status === "cancelled_late",
     };
   });
@@ -2169,7 +2226,7 @@ function mountPaintGrid(el) {
     if (role === "offer") {
       val ? rnd.offered.add(k) : rnd.offered.delete(k);
     } else {
-      if (!rnd.replies[studentId]) rnd.replies[studentId] = { status: "in", avail: new Set(), lesson: 2, source: "admin" };
+      if (!rnd.replies[studentId]) rnd.replies[studentId] = { status: "in", avail: new Set(), lessonMinutes: 60, source: "admin" };
       rnd.replies[studentId].source = "admin";
       val ? rnd.replies[studentId].avail.add(k) : rnd.replies[studentId].avail.delete(k);
       rnd.replies[studentId].status = "in";
@@ -2696,7 +2753,7 @@ function buildOfferActionsHTML(rnd) {
 
 function renderOfferTab() {
   const rnd = activeRound();
-  const hours = (rnd.offered.size * SLOT_MIN) / 60;
+  const hours = (rnd.offered.size * GRID_SLOT_MIN) / 60;
   const grid = buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour });
   const gridBlock = rnd.notTeaching
     ? '<div class="grid-locked">Marked as not teaching this week.<br>Tap \u201cNot teaching this week\u201d again, or \u201cClear grid\u201d, to paint times.</div>'
@@ -2737,14 +2794,14 @@ function renderRepliesTab() {
       const ownerText = !r ? "" : isStudentReply ? " (from the student)" : " (you entered this)";
       const validAvailCount = r && r.avail ? [...r.avail].filter(k => rnd.offered.has(k)).length : 0;
       const statusText = (st === "in" ? (validAvailCount + " slots free") : st === "skip" ? "Not this week" : st === "none" ? "Nothing works" : "Waiting") + ownerText;
-      const curLesson = lessonFor(rnd, s.id);
+      const curLesson = lessonMinutesFor(rnd, s.id);
       let lenrow = "";
       if (st === "in") {
-        const dec = curLesson <= 1;
-        const inc = curLesson >= 4 || (curLesson + 1) * 0.5 > s.allocated - taughtFor(s.id);
+        const dec = curLesson <= MIN_LESSON_MINUTES;
+        const inc = curLesson >= MAX_LESSON_MINUTES || curLesson + SCHEDULE_SLOT_MIN > (s.allocated - taughtFor(s.id)) * 60;
         lenrow = '<div class="lenrow"><span>Lesson length</span><div class="stepper">' +
           '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="-1" ' + (dec ? "disabled" : "") + ">–</button>" +
-          "<b>" + (curLesson * SLOT_MIN) + " min</b>" +
+          "<b>" + curLesson + " min</b>" +
           '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="1" ' + (inc ? "disabled" : "") + ">+</button>" +
           "</div></div>";
       }
@@ -2797,15 +2854,15 @@ function agendaLessonColour(lesson) {
 function renderAgenda(assignments, weekNo, weekStart, startHour, confirmed) {
   const by = groupByDay(assignments);
   const count = assignments.length;
-  const minutes = assignments.reduce((total, lesson) => total + lesson.lesson * SLOT_MIN, 0);
+  const minutes = assignments.reduce((total, lesson) => total + lesson.lesson * SCHEDULE_SLOT_MIN, 0);
   const duration = minutes < 60 ? minutes + " min" : Math.floor(minutes / 60) + "h" + (minutes % 60 ? " " + minutes % 60 + " min" : "");
   const days = Object.keys(by).sort((a, b) => Number(a) - Number(b)).map(d => {
     const lessons = by[d];
     const rows = lessons.map(lesson => {
-      const start = slotTimeFor(startHour, lesson.start);
-      const end = slotTimeFor(startHour, lesson.start + lesson.lesson);
+      const start = scheduleTimeFor(startHour, lesson.start);
+      const end = scheduleTimeFor(startHour, lesson.start + lesson.lesson);
       const line = '<span class="agenda-name">' + escapeHTML(lesson.name) + '</span><span class="agenda-duration">' +
-        (lesson.lesson * SLOT_MIN) + ' min</span>';
+        (lesson.lesson * SCHEDULE_SLOT_MIN) + ' min</span>';
       // Dataset keys can contain student IDs: escape quotes as well as HTML markup.
       const lessonKey = escapeHTML(lesson.key || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
       const card = confirmed
@@ -2833,7 +2890,7 @@ function renderAgendaOptionPicker(result, rnd) {
   const days = roundDays(rnd);
   return '<label class="agenda-choice">Arrangement<select data-bind="agendaOption">' + result.options.map((option, index) => {
     const dayLabel = [...new Set(option.assign.map(a => a.d))].sort((a, b) => a - b).map(d => days[d]).join(" + ");
-    const gaps = option.gaps ? (option.gaps * SLOT_MIN) + ' min idle' : 'no gaps';
+    const gaps = option.gaps ? (option.gaps * SCHEDULE_SLOT_MIN) + ' min idle' : 'no gaps';
     return '<option value="' + index + '"' + (index === rnd.chosen ? ' selected' : '') + '>Option ' + (index + 1) + ' · ' +
       escapeHTML(dayLabel) + ' · ' + gaps + '</option>';
   }).join("") + '</select></label>';
@@ -2858,7 +2915,7 @@ function renderPreConfirmPlanTab() {
     const actualIdx = r.options.indexOf(opt);
     const dayNums = [...new Set(opt.assign.map(a => a.d))].sort();
     const daysLabel = dayNums.map(d => days[d]).join(" + ");
-    const gapsLabel = opt.gaps === 0 ? "no gaps" : ((opt.gaps * SLOT_MIN) / 60) + "h idle";
+    const gapsLabel = opt.gaps === 0 ? "no gaps" : ((opt.gaps * SCHEDULE_SLOT_MIN) / 60) + "h idle";
     const prefValues = dayNums.map(d => Number((rnd.dayPreferences && rnd.dayPreferences[d]) || 0));
     const allPreferred = prefValues.length && prefValues.every(v => v === -1);
     const hasAvoid = prefValues.some(v => v === 1);
@@ -2868,7 +2925,7 @@ function renderPreConfirmPlanTab() {
         ? '<span class="prefavoid">Includes an avoided day</span>'
         : 'Neutral day preference';
     const lines = opt.assign.slice().sort((a, b) => a.d - b.d || a.start - b.start).map(a =>
-      '<div class="line"><span>' + days[a.d] + " " + slotTimeFor(rnd.dayStartHour, a.start) + "–" + slotTimeFor(rnd.dayStartHour, a.start + a.lesson) + "</span><span>" + a.name + "</span></div>"
+      '<div class="line"><span>' + days[a.d] + " " + scheduleTimeFor(rnd.dayStartHour, a.start) + "–" + scheduleTimeFor(rnd.dayStartHour, a.start + a.lesson) + "</span><span>" + a.name + "</span></div>"
     ).join("");
     return '<div class="opt' + (actualIdx === rnd.chosen ? " sel" : "") + '" data-action="chooseOption" data-idx="' + actualIdx + '">' +
       '<div class="opthead"><b>' + daysLabel + "</b><span>" + gapsLabel + "</span></div>" + lines +
@@ -2927,7 +2984,7 @@ function renderLivePlanTab() {
 
   const dayPanels = Object.keys(by).sort().map(d => {
     const lessons = by[d].map(l =>
-      '<div class="live"><div class="livetop"><b>' + l.name.split(" ")[0] + "</b><span>" + slotTimeFor(rnd.dayStartHour, l.start) + "–" + slotTimeFor(rnd.dayStartHour, l.start + l.lesson) + "</span></div>" +
+      '<div class="live"><div class="livetop"><b>' + l.name.split(" ")[0] + "</b><span>" + scheduleTimeFor(rnd.dayStartHour, l.start) + "–" + scheduleTimeFor(rnd.dayStartHour, l.start + l.lesson) + "</span></div>" +
       '<div class="cancels"><button class="mini" data-action="cancelEarly" data-id="' + l.key + '">Cancelled, ' + (S.settings.cancellationWindowHours || 24) + 'h+ notice</button>' +
       '<button class="mini warnb" data-action="cancelLate" data-id="' + l.key + '">Cancelled late</button></div></div>'
     ).join("");
@@ -2940,7 +2997,7 @@ function renderLivePlanTab() {
   if (cancelled.length > 0) {
     const days = roundDays(rnd);
     cancelledPanel = '<div class="panel"><h3>Cancelled</h3>' + cancelled.map(l =>
-      '<div class="entry"><span class="struck">' + days[l.d] + " " + slotTimeFor(rnd.dayStartHour, l.start) + " · " + l.name.split(" ")[0] +
+      '<div class="entry"><span class="struck">' + days[l.d] + " " + scheduleTimeFor(rnd.dayStartHour, l.start) + " · " + l.name.split(" ")[0] +
       '<i class="tag">' + (l.status === "cancelled_late" ? "charged" : "slot freed") + "</i></span>" +
       '<button class="x" data-action="uncancel" data-id="' + l.key + '">↺</button></div>'
     ).join("") + "</div>";
@@ -3154,7 +3211,7 @@ document.getElementById("app").addEventListener("click", (e) => {
       rnd.replies[id] = {
         status,
         avail: (existing && existing.avail) || new Set(),
-        lesson: prevLesson,
+        lessonMinutes: prevLesson * SCHEDULE_SLOT_MIN,
         source: "admin",
       };
       if (status === "in") S.openStudent = id;

@@ -632,8 +632,13 @@
   .accent-option[aria-pressed="true"]{border-color:var(--sig);background:var(--sig-soft);box-shadow:inset 0 0 0 1px var(--sig)}
   .accent-swatch{display:flex;align-items:center;justify-content:center;flex:none;width:26px;height:26px;border-radius:50%;color:white;font-weight:700}
 </style>
+<style>
+  #syncNotice{padding:12px 16px;background:#FFF2D8;border-bottom:1px solid #D5B580;color:#503C1D}
+  #syncNotice p{margin:0 0 8px}
+</style>
 </head>
 <body>
+<div id="syncNotice" role="alert" hidden></div>
 <div id="app"></div>
 
 <div id="brandFooter">
@@ -1253,6 +1258,7 @@ function applySavedState(saved) {
       notTeaching: !!rr.notTeaching,
       sent: !!rr.sent,
       dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+      note: rr.note || "",
       // A round saved before this feature existed has none of these — default
       // to exactly what was hardcoded before, so nothing already painted shifts.
       includeWeekends: !!rr.includeWeekends,
@@ -1265,23 +1271,114 @@ function applySavedState(saved) {
 }
 
 let saveTimer = null;
-function scheduleSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    fetch("/api/state", { method: "POST", headers: { "content-type": "application/json" }, body: serializeState() })
-      .catch(() => { /* offline or backend not deployed yet — next change retries */ });
-  }, 500);
+let stateReady = false, stateBlocked = false, saveInFlight = false, refreshInFlight = false;
+let stateRevision = 0, savedFingerprint = "";
+
+function stateFingerprint(body = serializeState()) {
+  const value = JSON.parse(body);
+  // Browsing/view preferences alone must not write the database.
+  for (const field of ["tab","week","scheduleView","hoursSort","draft"]) delete value[field];
+  for (const [week,rnd] of Object.entries(value.rounds || {})) {
+    delete rnd.chosen;
+    if (!rnd.offered.length && !Object.keys(rnd.replies).length && !rnd.plan && !rnd.result &&
+        !rnd.notTeaching && !rnd.sent && !rnd.note &&
+        !Object.values(rnd.dayPreferences || {}).some(Boolean)) delete value.rounds[week];
+  }
+  return JSON.stringify(value);
 }
 
+function syncNotice(message, conflict = false) {
+  const box = document.getElementById("syncNotice");
+  if (!box) return;
+  box.hidden = !message;
+  box.innerHTML = message ? '<p>' + escapeHTML(message) + '</p>' +
+    (conflict ? '<button class="btn" onclick="downloadUnsavedState()">Download unsaved changes</button> <button class="btn" onclick="location.reload()">Reload latest</button>'
+      : '<button class="btn" onclick="' + (stateReady ? 'saveStateNow()' : 'location.reload()') + '">' + (stateReady ? 'Retry save' : 'Reload') + '</button>') : "";
+}
+function downloadUnsavedState() {
+  const url = URL.createObjectURL(new Blob([serializeState()],{type:"application/json"}));
+  const a = document.createElement("a"); a.href=url; a.download="cadence-unsaved-changes.json"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function blockStaleState() {
+  stateBlocked = true;
+  clearTimeout(saveTimer);
+  syncNotice("Newer changes were saved elsewhere. This tab has stopped saving to protect them. Download any unsaved changes before reloading.",true);
+  document.getElementById("app").inert = true;
+}
+function scheduleSave() {
+  if (!stateReady || stateBlocked) return;
+  clearTimeout(saveTimer);
+  if (stateFingerprint() === savedFingerprint) return;
+  saveTimer = setTimeout(saveStateNow,500);
+}
+async function saveStateNow() {
+  if (!stateReady || stateBlocked || saveInFlight) return;
+  clearTimeout(saveTimer);
+  const body = serializeState(), fingerprint = stateFingerprint(body);
+  if (fingerprint === savedFingerprint) return;
+  saveInFlight = true;
+  let succeeded = false;
+  try {
+    const res = await fetch("/api/state",{method:"POST",headers:{"content-type":"application/json","if-match":'"' + stateRevision + '"'},body});
+    if (res.status === 409 || res.status === 428) { blockStaleState(); return; }
+    if (!res.ok) throw new Error("Save rejected");
+    const result = await res.json();
+    if (!result.ok || !Number.isSafeInteger(result.revision)) throw new Error("Invalid save acknowledgement");
+    stateRevision = result.revision;
+    savedFingerprint = fingerprint;
+    succeeded = true;
+    syncNotice("");
+  } catch (e) {
+    syncNotice("Your latest changes haven't been saved. Keep this tab open and retry when connected.");
+  } finally {
+    saveInFlight = false;
+    if (succeeded) scheduleSave(); // Serialise edits made while the request was in flight.
+  }
+}
+async function readLatestState() {
+  const res = await fetch("/api/state",{cache:"no-store"});
+  if (res.status === 401) { window.location.href="/login.html"; throw new Error("Sign in required"); }
+  if (!res.ok || res.headers.get("x-cadence-state-protocol") !== "2") throw new Error("Safe-save backend unavailable");
+  const saved = await res.json();
+  if (!saved || !Number.isSafeInteger(saved._revision)) throw new Error("Invalid saved state");
+  return saved;
+}
 async function loadState() {
   try {
-    const res = await fetch("/api/state");
-    if (res.status === 401) { window.location.href = "/login.html"; return; }
-    if (!res.ok) return;
-    const saved = await res.json();
+    const saved = await readLatestState();
     applySavedState(saved);
-  } catch (e) { /* no backend yet, or offline — start from in-page defaults */ }
+    stateRevision = saved._revision;
+    savedFingerprint = stateFingerprint();
+    stateReady = true;
+    syncNotice("");
+  } catch (e) {
+    stateReady = false;
+    clearTimeout(saveTimer);
+    syncNotice("Couldn't load your saved data safely. Editing and saving are paused. Reload to try again.");
+  }
 }
+async function refreshSavedState() {
+  if (!stateReady || stateBlocked || saveInFlight || refreshInFlight || stateFingerprint() !== savedFingerprint) return;
+  refreshInFlight = true;
+  try {
+    const saved = await readLatestState();
+    // The user may have edited while the read was in flight.
+    if (saveInFlight || stateBlocked || stateFingerprint() !== savedFingerprint || saved._revision <= stateRevision) return;
+    const view = {tab:S.tab,week:S.week,scheduleView:S.scheduleView,hoursSort:S.hoursSort,draft:S.draft};
+    applySavedState(saved); Object.assign(S,view); ensureRound(S.week);
+    stateRevision = saved._revision;
+    savedFingerprint = stateFingerprint();
+    render();
+  } catch (e) { /* Retain the loaded copy; any future write still requires its revision. */ }
+  finally { refreshInFlight = false; }
+}
+window.addEventListener("focus",refreshSavedState);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState === "visible") refreshSavedState();});
+setInterval(()=>{if(document.visibilityState === "visible") refreshSavedState();},30000);
+window.addEventListener("beforeunload",e=>{
+  if (stateReady && stateFingerprint() !== savedFingerprint) { e.preventDefault(); e.returnValue=""; }
+});
 
 const taughtFor = (id) => S.log.filter(e => e.studentId === id).reduce((s, e) => s + e.hours, 0);
 const getParticipants = (rnd) => S.students
@@ -2269,6 +2366,10 @@ function computeSubbarIdentity() {
 let __subbarIdentity = "none";
 
 function render() {
+  if (!stateReady) {
+    document.getElementById("app").innerHTML = '<div class="pad"><p>Loading your saved schedule…</p></div>';
+    return;
+  }
   applyAccent(currentSection === "settings" ? settingsDraft.accent : S.settings.accent);
   ensureAppSkeleton();
   document.getElementById("appHeader").innerHTML = renderHeader();
@@ -2971,6 +3072,7 @@ function renderHoursTab() {
 /* ================================================================== */
 
 document.getElementById("app").addEventListener("click", (e) => {
+  if (!stateReady || stateBlocked) return;
   if (offerTransitionBusy && e.target.closest("#offerActions")) return;
   const el = e.target.closest("[data-action]");
   if (!el) return;
@@ -3087,6 +3189,7 @@ document.getElementById("app").addEventListener("click", (e) => {
 });
 
 document.getElementById("app").addEventListener("change", (e) => {
+  if (!stateReady || stateBlocked) return;
   const el = e.target.closest("[data-bind]");
   if (!el) return;
   const bind = el.dataset.bind;
@@ -3146,6 +3249,7 @@ document.getElementById("app").addEventListener("change", (e) => {
   else if (bind === "termCount") { setTermCount(parseInt(el.value, 10)); }
   else if (bind === "termStart") { termDraft.ranges[Number(el.dataset.idx)].start = el.value; }
   else if (bind === "termEnd") { termDraft.ranges[Number(el.dataset.idx)].end = el.value; }
+  scheduleSave();
 });
 
 /* ================================================================== */

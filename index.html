@@ -193,6 +193,7 @@ async function boot() {
   }
   try {
     const res = await fetch("/api/round?slug=" + encodeURIComponent(SLUG) + "&week=" + encodeURIComponent(WEEK));
+    if (!res.ok) throw new Error("Couldn't load the schedule");
     const data = await res.json();
     if (!data.teacherName) {
       R.error = "Couldn't find that studio — check the link is correct.";
@@ -288,6 +289,7 @@ async function animatedRender() {
 }
 
 function pick(id) {
+  if (R.submitting) return;
   R.picked = id;
   R.stage = "ask";
   const s = R.students.find(x => x.id === id);
@@ -295,23 +297,27 @@ function pick(id) {
   R.lesson = (s && s.lesson) || 2;
   animatedRender();
 }
-function editAgain() { R.submitted = false; R.stage = "ask"; animatedRender(); }
-function goGrid() { R.stage = "grid"; animatedRender(); }
-function back() { R.picked = null; R.stage = null; R.avail = new Set(); animatedRender(); }
-function done() { R.picked = null; R.stage = null; R.avail = new Set(); R.submitted = false; animatedRender(); }
+function editAgain() { if (R.submitting) return; R.submitted = false; R.stage = "ask"; animatedRender(); }
+function goGrid() { if (R.submitting) return; R.stage = "grid"; animatedRender(); }
+function back() { if (R.submitting) return; R.picked = null; R.stage = null; R.avail = new Set(); animatedRender(); }
+function done() { if (R.submitting) return; R.picked = null; R.stage = null; R.avail = new Set(); R.submitted = false; animatedRender(); }
 function adjustLesson(delta) {
+  if (R.submitting) return;
   R.lesson = Math.min(4, Math.max(1, R.lesson + delta));
   render();
 }
 
 async function clearResponse() {
+  if (R.submitting) return;
   R.submitting = true; render();
   try {
-    await fetch("/api/reply", {
+    const response = await fetch("/api/reply", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ slug: SLUG, week: WEEK, studentId: R.picked, status: "clear", avail: [] }),
     });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || "Clear failed");
     const s = R.students.find(x => x.id === R.picked);
     if (s) { s.status = null; s.avail = []; }
     R.submitted = false;
@@ -323,20 +329,23 @@ async function clearResponse() {
   } catch (e) {
     R.submitting = false;
     render();
-    alert("Couldn't clear that — check your connection and try again.");
+    alert("Couldn't clear that. " + (e.message || "Check your connection and try again."));
     return;
   }
   animatedRender();
 }
 
 async function submitStatus(status) {
+  if (R.submitting) return;
   R.submitting = true; render();
   try {
-    await fetch("/api/reply", {
+    const response = await fetch("/api/reply", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ slug: SLUG, week: WEEK, studentId: R.picked, status, avail: status === "in" ? [...R.avail] : [], lesson: R.lesson }),
     });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || "Save failed");
     R.submitted = true;
     R.submittedStatus = status;
     const s = R.students.find(x => x.id === R.picked);
@@ -345,7 +354,7 @@ async function submitStatus(status) {
   } catch (e) {
     R.submitting = false;
     render();
-    alert("Couldn't save that — check your connection and try again.");
+    alert("Couldn't save that. " + (e.message || "Check your connection and try again."));
     return;
   }
   animatedRender();

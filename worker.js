@@ -5,7 +5,7 @@
 function json(obj, status = 200) {
   return new Response(typeof obj === "string" ? obj : JSON.stringify(obj), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
 }
 function isValidJSON(s) {
@@ -265,7 +265,7 @@ async function handleOnboarding(request, env) {
   };
   await env.DB.prepare(
     `INSERT INTO app_state (id, data, updated_at) VALUES (?, ?, datetime('now'))
-     ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
+     ON CONFLICT(id) DO NOTHING`
   ).bind(teacherId, JSON.stringify(initialState)).run();
 
   return json({ ok: true, slug });
@@ -276,21 +276,80 @@ async function handleOnboarding(request, env) {
    logged-in teacher's id instead of a fixed row.
 ================================================================== */
 
+function revisionOf(state) {
+  return Number.isSafeInteger(state?._revision) ? state._revision : 0;
+}
+function publicAdminState(state) {
+  const copy = JSON.parse(JSON.stringify(state || {}));
+  copy._revision = revisionOf(state);
+  delete copy._replyHistory;
+  for (const rnd of Object.values(copy.rounds || {})) {
+    for (const [id, reply] of Object.entries(rnd.replies || {})) {
+      if (reply.status === "clear") delete rnd.replies[id];
+    }
+  }
+  return copy;
+}
 async function handleState(request, env, teacherId) {
+  const row = await env.DB.prepare("SELECT data FROM app_state WHERE id = ?").bind(teacherId).first();
+  const current = row ? JSON.parse(row.data) : {};
+  const revision = revisionOf(current);
   if (request.method === "GET") {
-    const row = await env.DB.prepare("SELECT data FROM app_state WHERE id = ?").bind(teacherId).first();
-    return json(row ? row.data : "null");
+    const response = json(publicAdminState(current));
+    response.headers.set("x-cadence-state-protocol", "2");
+    return response;
   }
-  if (request.method === "POST") {
-    const body = await request.text();
-    if (!isValidJSON(body)) return json({ error: "invalid json" }, 400);
-    await env.DB.prepare(
-      `INSERT INTO app_state (id, data, updated_at) VALUES (?, ?, datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
-    ).bind(teacherId, body).run();
-    return json({ ok: true });
+  if (request.method !== "POST") return json({error:"Method not allowed"},405);
+  // Old browser builds do not send this precondition: they must never write.
+  if (request.headers.get("if-match") == null) return json({error:"Reload Cadence before saving."},428);
+  if (request.headers.get("if-match") !== '"' + revision + '"') {
+    return json({error:"The saved data has changed. Reload the latest version."},409);
   }
-  return new Response("Method not allowed", { status: 405 });
+  let next;
+  try { next = await request.json(); } catch { return json({error:"Invalid JSON"},400); }
+  if (!next || Array.isArray(next) || !Array.isArray(next.students) ||
+      !next.rounds || typeof next.rounds !== "object" || Array.isArray(next.rounds)) {
+    return json({error:"Invalid state"},400);
+  }
+  const history = Array.isArray(current._replyHistory) ? current._replyHistory.slice() : [];
+  for (const [week, rnd] of Object.entries(next.rounds)) {
+    if (!rnd || !Array.isArray(rnd.offered) || !rnd.replies || typeof rnd.replies !== "object") {
+      return json({error:"Invalid round"},400);
+    }
+    // Only explicit teacher-entered replies come from the admin payload.
+    const incoming = rnd.replies;
+    rnd.replies = Object.fromEntries(Object.entries(incoming).filter(([,r]) => r && r.source === "admin"));
+    const previousRound = current.rounds?.[week];
+    if (previousRound && previousRound.weekStart === rnd.weekStart) {
+      for (const [id, reply] of Object.entries(previousRound.replies || {})) {
+        if (reply.source === "admin") continue;
+        if (reply.status === "clear" && rnd.replies[id]?.source === "admin") continue;
+        rnd.replies[id] = reply;
+        // Teachers can still adjust lesson duration, but not student availability.
+        const lesson = Number(incoming[id]?.lesson);
+        if (reply.status !== "clear" && Number.isInteger(lesson) && lesson >= 1 && lesson <= 4 && lesson !== reply.lesson) {
+          rnd.replies[id] = {...reply, lesson};
+          history.push({week,studentId:id,action:"teacher-duration",at:new Date().toISOString(),previous:reply,reply:rnd.replies[id]});
+        }
+      }
+    }
+  }
+  // Retain replies removed by an intentional week/year reset for diagnosis.
+  for (const [week, rnd] of Object.entries(current.rounds || {})) {
+    if (!next.rounds[week] || next.rounds[week].weekStart !== rnd.weekStart) {
+      for (const [id, reply] of Object.entries(rnd.replies || {})) {
+        if (reply.source !== "admin") history.push({week,weekStart:rnd.weekStart,studentId:id,action:"round-reset",at:new Date().toISOString(),previous:reply});
+      }
+    }
+  }
+  next._replyHistory = history;
+  next._revision = revision + 1;
+  const encoded = JSON.stringify(next);
+  const result = row
+    ? await env.DB.prepare("UPDATE app_state SET data = ?, updated_at = datetime('now') WHERE id = ? AND data = ?").bind(encoded,teacherId,row.data).run()
+    : await env.DB.prepare("INSERT INTO app_state (id,data,updated_at) VALUES (?,?,datetime('now')) ON CONFLICT(id) DO NOTHING").bind(teacherId,encoded).run();
+  if (result.meta.changes !== 1) return json({error:"Another save arrived first. Reload the latest version."},409);
+  return json({ok:true,revision:next._revision});
 }
 
 /* ==================================================================
@@ -319,7 +378,7 @@ async function handleRound(url, env) {
     teacherName: teacher.name,
     instrument: teacher.instrument,
     students: ((state && state.students) || []).map((s) => {
-      const r = replies[s.id];
+      const r = replies[s.id]?.status === "clear" ? null : replies[s.id];
       return { id: s.id, name: s.name, status: r ? r.status : null, avail: r ? r.avail : [], lesson: r ? (r.lesson || 2) : 2 };
     }),
   });
@@ -327,36 +386,42 @@ async function handleRound(url, env) {
 
 async function handleReply(request, env) {
   let body;
-  try { body = JSON.parse(await request.text()); } catch (e) { return json({ error: "invalid json" }, 400); }
-  const { slug, week, studentId, status, avail, lesson } = body || {};
-  if (!slug || !week || !studentId || !["in", "skip", "none", "clear"].includes(status) || !Array.isArray(avail)) {
-    return json({ error: "invalid reply" }, 400);
-  }
+  try { body = await request.json(); } catch { return json({error:"Invalid JSON"},400); }
+  const {slug,week,studentId,status,avail,lesson} = body || {};
+  if (typeof slug !== "string" || typeof studentId !== "string" ||
+      !Number.isSafeInteger(Number(week)) || Number(week) < 1 ||
+      !["in","skip","none","clear"].includes(status) || !Array.isArray(avail)) return json({error:"Invalid reply"},400);
   const teacher = await env.DB.prepare("SELECT id FROM teachers WHERE slug = ?").bind(slug).first();
-  if (!teacher) return json({ error: "unknown studio" }, 404);
-
-  const row = await env.DB.prepare("SELECT data FROM app_state WHERE id = ?").bind(teacher.id).first();
-  const state = row ? JSON.parse(row.data) : {};
-  state.rounds = state.rounds || {};
-  const wk = String(week);
-  state.rounds[wk] = state.rounds[wk] || { weekStart: null, offered: [], replies: {}, plan: null, result: null, chosen: 0 };
-  state.rounds[wk].replies = state.rounds[wk].replies || {};
-
-  // If status is "clear", delete the reply entirely instead of storing a cleared response
-  if (status === "clear") {
-    delete state.rounds[wk].replies[studentId];
-  } else {
-    const prevLesson = (state.rounds[wk].replies[studentId] && state.rounds[wk].replies[studentId].lesson) || 2;
-    const requestedLesson = Number(lesson);
-    const validLesson = Number.isInteger(requestedLesson) && requestedLesson >= 1 && requestedLesson <= 4 ? requestedLesson : prevLesson;
-    state.rounds[wk].replies[studentId] = { status, avail, lesson: validLesson };
+  if (!teacher) return json({error:"Unknown studio"},404);
+  const wk = String(Number(week));
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const row = await env.DB.prepare("SELECT data FROM app_state WHERE id = ?").bind(teacher.id).first();
+    if (!row) return json({error:"Schedule not found. Reload the page."},409);
+    const state = JSON.parse(row.data);
+    const rnd = state.rounds?.[wk];
+    if (!rnd || rnd.notTeaching || !(state.students || []).some(s => s.id === studentId)) {
+      return json({error:"This schedule has changed. Reload the page."},409);
+    }
+    const offered = new Set(rnd.offered || []);
+    if (status === "in" && (!avail.length || avail.some(k => typeof k !== "string" || !offered.has(k)))) {
+      return json({error:"The offered times have changed. Reload before submitting."},409);
+    }
+    const previous = rnd.replies?.[studentId] || null;
+    const requested = Number(lesson);
+    const duration = Number.isInteger(requested) && requested >= 1 && requested <= 4 ? requested : (previous?.lesson || 2);
+    const at = new Date().toISOString();
+    // Clear is a server-side tombstone, so an older admin cannot resurrect it.
+    const reply = {status,avail:status === "in" ? [...new Set(avail)] : [],lesson:duration,source:"student",updatedAt:at};
+    const event = {week:wk,weekStart:rnd.weekStart,studentId,action:status,at,previous,reply};
+    // Bind JSON paths; never interpolate user data into SQL.
+    const path = '$.rounds.' + JSON.stringify(wk) + '.replies.' + JSON.stringify(studentId);
+    const result = await env.DB.prepare(
+      "UPDATE app_state SET data = json_insert(json_set(data, ?, json(?), '$._revision', ?, '$._replyHistory', json(COALESCE(json_extract(data, '$._replyHistory'), '[]'))), '$._replyHistory[#]', json(?)), updated_at = datetime('now') WHERE id = ? AND data = ?"
+    ).bind(path,JSON.stringify(reply),revisionOf(state)+1,JSON.stringify(event),teacher.id,row.data).run();
+    if (result.meta.changes === 1) return json({ok:true,updatedAt:at});
+    // A concurrent reply/admin save won. Re-read and retry the individual reply.
   }
-
-  await env.DB.prepare(
-    `INSERT INTO app_state (id, data, updated_at) VALUES (?, ?, datetime('now'))
-     ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
-  ).bind(teacher.id, JSON.stringify(state)).run();
-  return json({ ok: true });
+  return json({error:"The schedule is busy. Please submit again."},409);
 }
 
 /* ==================================================================
@@ -490,4 +555,3 @@ export default {
     return env.ASSETS.fetch(request);
   },
 };
-

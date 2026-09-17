@@ -316,14 +316,11 @@
   .offer-locked{pointer-events:none}
   /* Dim only the locked timetable, never the editable placement controls. */
   .offer-locked .grid-head,
-  .offer-locked .row,
-  .offer-locked .placement-slot.continues{opacity:.5}
-  .placement-row{display:flex;min-height:34px;background:var(--panel)}
-  .placement-slot{flex:1;min-width:0;border-right:1px solid #EFECE6;display:flex;align-items:center;justify-content:center}
-  .placement-slot:last-child{border-right:0}
-  .placement-slot.continues{background:var(--sig)}
-  .placement-pill{position:relative;display:flex;align-items:center;justify-content:center;gap:3px;
-    width:calc(100% - 4px);min-height:30px;margin:2px;border:1px solid var(--rule);border-radius:14px;
+  .offer-locked .row{opacity:.5}
+  .grid-body{position:relative}
+  .placement-layer{position:absolute;top:0;bottom:0;left:46px;right:0;pointer-events:none}
+  .placement-pill{position:absolute;display:flex;align-items:center;justify-content:center;gap:3px;
+    height:23px;margin:0;border:1px solid var(--rule);border-radius:14px;
     background:var(--paper);color:var(--ink-soft);font-size:11px;white-space:nowrap;line-height:1.1}
   .placement-pill.chosen{color:var(--sig);border-color:var(--sig);background:var(--sig-soft)}
   .placement-pill select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px;touch-action:manipulation}
@@ -1705,7 +1702,7 @@ async function sendToStudents() {
     // combined), rather than snapping to greyed-out the instant the
     // buttons finish — one continuous fade rather than a separate step.
     if (offerGrid) {
-      offerGrid.querySelectorAll('.grid-head, .row, .placement-slot.continues').forEach(row => {
+      offerGrid.querySelectorAll('.grid-head, .row').forEach(row => {
         row.style.transition = "opacity 1.35s ease";
         row.style.opacity = "0.5";
       });
@@ -1763,15 +1760,15 @@ async function editAvailability() {
   const postSendRow = document.getElementById("postSendRow");
   const sendRowWrap = document.getElementById("sendRowWrap");
   const offerGrid = document.getElementById("offerGrid");
-  // Remove the non-time-bearing rows before the grid brightens. Keep
+  // Remove the control overlay before the grid brightens. Keep
   // preferences in state; only their controls disappear while editing.
-  if (offerGrid) offerGrid.querySelectorAll('.placement-row').forEach(row => row.remove());
+  if (offerGrid) offerGrid.querySelectorAll('.placement-layer').forEach(layer => layer.remove());
   const placementHelp = document.getElementById("placementHelp");
   if (placementHelp) placementHelp.remove();
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (postSendRow && sendRowWrap && !reduceMotion) {
     if (offerGrid) {
-      offerGrid.querySelectorAll('.grid-head, .row, .placement-slot.continues').forEach(row => {
+      offerGrid.querySelectorAll('.grid-head, .row').forEach(row => {
         row.style.transition = "opacity 1.6s ease";
         row.style.opacity = "1";
       });
@@ -2037,24 +2034,24 @@ function buildGridHTML(role, opts) {
       cells += '<div class="' + cls + '" data-d="' + d + '" data-i="' + i + '"' + style + ">" + (h > 0 ? '<span class="heatnum">' + h + "</span>" : "") + "</div>";
     }
     rows += '<div class="row"><div class="gutter time">' + (i % 2 === 0 ? '<span' + (i === 0 ? ' class="first"' : '') + '>' + slotTimeFor(startHour, i) + "</span>" : "") + "</div>" + cells + "</div>";
-    // A dedicated footer keeps even a 30-minute block paintable. Other
-    // days retain their colour through this non-time-bearing control row.
-    if (blocks.some(b => b.end === i + 1)) {
-      rows += '<div class="placement-row"><div class="gutter"></div>' + days.map((day, d) => {
-        const block = blocks.find(b => b.d === d && b.end === i + 1);
-        if (!block) return '<div class="placement-slot' + (selected.has(key(d, i)) && selected.has(key(d, i + 1)) ? ' continues' : '') + '"></div>';
-        const label = day + ' ' + slotTimeFor(startHour, block.start) + '–' + slotTimeFor(startHour, block.end);
+  }
+  // Controls occupy existing half-hour cells without changing row height.
+  // At the bottom edge, use the block's final cell instead. This sibling
+  // overlay stays fully opaque while the timetable rows beneath are dimmed.
+  const placementLayer = blocks.length ? '<div class="placement-layer">' + blocks.map(block => {
+        const d = block.d;
+        const label = days[d] + ' ' + slotTimeFor(startHour, block.start) + '–' + slotTimeFor(startHour, block.end);
         const placement = block.placement;
-        return '<div class="placement-slot"><label class="placement-pill' + (placement !== 'any' ? ' chosen' : '') + '" title="Placement for ' + label + '">' +
+        const slot = Math.min(block.end, slots - 1);
+        const position = 'top:' + (slot * 25 + 1) + 'px;left:calc(100% * ' + d + ' / ' + days.length + ' + 2px);width:calc(100% / ' + days.length + ' - 4px)';
+        return '<label class="placement-pill' + (placement !== 'any' ? ' chosen' : '') + '" style="' + position + '" title="Placement for ' + label + '">' +
           '<span class="placement-prefix" aria-hidden="true">Placement:</span><span aria-hidden="true">' + ({any:'Any',early:'Early',late:'Late'})[placement] + ' ⌄</span>' +
           '<select data-bind="blockPlacement" data-block-day="' + d + '" data-block-start="' + block.start + '" aria-label="Lesson placement for ' + label + '"' + (activeRound().plan ? ' disabled' : '') + '>' +
           ['any','early','late'].map(value => '<option value="' + value + '"' + (placement === value ? ' selected' : '') + '>' + ({any:'Any — no preference',early:'Early — favour the start',late:'Late — favour the end'})[value] + '</option>').join('') +
-          '</select></label></div>';
-      }).join('') + '</div>';
-    }
-  }
+          '</select></label>';
+      }).join('') + '</div>' : '';
   const attrs = 'data-role="' + role + '"' + (studentId ? ' data-student="' + studentId + '"' : "");
-  return '<div class="grid-wrap" ' + attrs + ">" + head + '<div class="grid-body">' + rows + "</div></div>";
+  return '<div class="grid-wrap" ' + attrs + ">" + head + '<div class="grid-body">' + rows + placementLayer + "</div></div>";
 }
 
 // Safari can still interpret quick taps as a zoom gesture. Cancel only

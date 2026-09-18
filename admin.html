@@ -1431,6 +1431,7 @@ function applySavedState(saved) {
 let saveTimer = null;
 let stateReady = false, stateBlocked = false, saveInFlight = false, refreshInFlight = false;
 let stateRevision = 0, savedFingerprint = "";
+let suppressStateRefreshUntil = 0;
 
 function stateFingerprint(body = serializeState()) {
   const value = JSON.parse(body);
@@ -1517,6 +1518,10 @@ async function loadState() {
   }
 }
 async function refreshSavedState() {
+  // Opening Safari's native date picker can produce a window-focus event.
+  // Never let a background state refresh replace the DOM underneath it.
+  if (Date.now() < suppressStateRefreshUntil) return;
+  if (document.activeElement && document.activeElement.matches('.manual-date-field input[type="date"]')) return;
   if (!stateReady || stateBlocked || saveInFlight || refreshInFlight || stateFingerprint() !== savedFingerprint) return;
   refreshInFlight = true;
   try {
@@ -2570,6 +2575,36 @@ let sidebarOpen = false;
 let currentSection = "scheduler"; // "scheduler" | "profile" | "students" | "termdates" | "settings"
 let sidebarCloseTimer = null;
 
+// Week/tab choices are view state, not studio data. Keep them per account in
+// this browser so a refresh resumes where the teacher was without creating a
+// database revision for every navigation tap.
+function localViewKey() {
+  return "cadence-view-v1:" + String(ME.email || ME.slug || "default").toLowerCase();
+}
+function persistLocalView() {
+  if (!stateReady) return;
+  try {
+    localStorage.setItem(localViewKey(), JSON.stringify({
+      tab: S.tab,
+      week: S.week,
+      scheduleView: S.scheduleView,
+      hoursSort: S.hoursSort,
+    }));
+  } catch (e) { /* Browser storage unavailable — server state still remains safe. */ }
+}
+function restoreLocalView() {
+  try {
+    const view = JSON.parse(localStorage.getItem(localViewKey()) || "null");
+    if (!view) return;
+    if (["week", "replies", "plan", "hours"].includes(view.tab)) S.tab = view.tab;
+    if (["timetable", "agenda"].includes(view.scheduleView)) S.scheduleView = view.scheduleView;
+    if (["first", "surname", "allocated", "remaining"].includes(view.hoursSort)) S.hoursSort = view.hoursSort;
+    const requestedWeek = Number(view.week);
+    if (Number.isInteger(requestedWeek)) S.week = Math.max(1, Math.min(termWeeks(), requestedWeek));
+    ensureRound(S.week);
+  } catch (e) { /* Ignore malformed or unavailable local view state. */ }
+}
+
 // #app now holds three permanent containers rather than being wiped and
 // rebuilt as one blob each render — this is what lets the header and
 // (when unchanged) the week picker/subtabs bar stay perfectly still while
@@ -2639,6 +2674,7 @@ function render() {
   document.getElementById("appBody").innerHTML = sections[currentSection] ? sections[currentSection]() : renderTabContent();
   mountAllGrids();
   mountPriorityList(document.getElementById("priorityList"));
+  persistLocalView();
   scheduleSave();
 }
 
@@ -3387,6 +3423,21 @@ function renderHoursTab() {
 /*  Delegated event handling                                           */
 /* ================================================================== */
 
+document.getElementById("app").addEventListener("pointerdown", (e) => {
+  const input = e.target.closest('.manual-date-field input[type="date"]');
+  if (!input || typeof input.showPicker !== "function") return;
+  try {
+    suppressStateRefreshUntil = Date.now() + 2000;
+    input.showPicker();
+    // showPicker has already handled this trusted gesture. Suppress the
+    // browser's subsequent default click so Safari cannot toggle it closed.
+    e.preventDefault();
+  } catch (err) {
+    suppressStateRefreshUntil = 0;
+    /* Fall back to the browser's ordinary input behaviour. */
+  }
+});
+
 document.getElementById("app").addEventListener("click", (e) => {
   if (!stateReady || stateBlocked) return;
   if (offerTransitionBusy && e.target.closest("#offerActions")) return;
@@ -3591,9 +3642,13 @@ document.getElementById("sidebarPanel").addEventListener("click", (e) => {
   if (btn) goSection(btn.dataset.section);
 });
 syncSidebarDOM();
+window.addEventListener("pagehide", persistLocalView);
 
 render();
-Promise.all([loadState(), loadMe()]).then(render);
+Promise.all([loadState(), loadMe()]).then(() => {
+  restoreLocalView();
+  render();
+});
 </script>
 </body>
 </html>

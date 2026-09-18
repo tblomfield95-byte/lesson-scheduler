@@ -592,12 +592,12 @@
   .addrow input{flex:1}
   .addrow .btn{padding:7px 13px}
   .manual-date-field{position:relative;display:flex;align-items:center;flex:1;min-width:0;height:34px;
-                     box-sizing:border-box;padding:0 9px;border:1px solid var(--rule);border-radius:7px;
+                     box-sizing:border-box;padding:0 14px;border:1px solid var(--rule);border-radius:7px;
                      background:var(--panel);color:var(--ink);font-size:13px;line-height:1;cursor:pointer}
   .manual-date-field.empty{color:var(--ink-soft)}
   .manual-date-field input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;
                            border:0;opacity:0;cursor:pointer}
-  .manual-date-field:focus-within{outline:2px solid var(--sig);outline-offset:2px}
+  .manual-date-field input::-webkit-clear-button{-webkit-appearance:none;display:none}
   .addrow select,.addrow .btn{height:34px;box-sizing:border-box}
   .manual-entry-toggle{margin-top:10px;color:var(--sig);border-color:var(--sig);background:transparent}
   .manual-entry-expander{display:grid;grid-template-rows:0fr;opacity:0;transform:translateY(-4px);
@@ -3334,9 +3334,9 @@ function renderHoursTab() {
         '<button type="button" class="btn manual-entry-toggle" data-action="toggleManualEntry" data-id="' + s.id +
         '" aria-expanded="' + manualEntryOpen + '">' + (manualEntryOpen ? 'Cancel manual entry' : '+ Add hours manually') + '</button>' +
         '<div class="manual-entry-expander' + (manualEntryOpen ? ' open' : '') + '" data-manual-entry="' + s.id + '">' +
-        '<div class="manual-entry-expander-inner"><div class="addrow"><label class="manual-date-field' + (manualDate ? '' : ' empty') + '"><span>' +
+        '<div class="manual-entry-expander-inner"><div class="addrow"><div class="manual-date-field' + (manualDate ? '' : ' empty') + '"><span>' +
         (manualDate ? fmtDateShort(manualDate) : 'Select date') + '</span><input type="date" data-bind="draftDate" data-id="' + s.id + '" value="' +
-        manualDate + '" aria-label="Select date for manual teaching hours"></label>' +
+        manualDate + '" aria-label="Select date for manual teaching hours" required></div>' +
         '<select data-bind="draftHours">' + [0.5, 1, 1.5, 2, 2.5, 3].map(h =>
           '<option value="' + h + '" ' + (parseFloat(S.draft.hours) === h ? "selected" : "") + ">" + h + "h</option>").join("") + "</select>" +
         '<button class="btn" data-action="addEntry" data-id="' + s.id + '">Add</button></div></div></div></div>';

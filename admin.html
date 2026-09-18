@@ -255,10 +255,14 @@
   }
   .title{font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:0;margin:0;line-height:1.15;color:var(--sig)}
   .wk{font-size:13px;color:var(--ink-soft);white-space:nowrap}
-  .tabs{display:flex;gap:2px;padding:0 12px 10px;overflow-x:auto}
-  .tab{flex:1;min-width:74px;border:none;background:none;padding:7px 6px;font:inherit;font-size:13px;
-       color:var(--ink-soft);border-radius:7px;cursor:pointer;white-space:nowrap}
-  .tab.sel{background:var(--sig);color:#fff;font-weight:560}
+  .tabs{position:relative;display:flex;gap:2px;padding:0 12px 10px;overflow-x:auto}
+  .tab-highlight{position:absolute;z-index:0;top:0;left:0;height:calc(100% - 10px);width:0;
+    border-radius:7px;background:var(--sig);opacity:0;pointer-events:none;
+    transform:translateX(0);transition:transform .44s cubic-bezier(.22,.72,.16,1),width .44s cubic-bezier(.22,.72,.16,1),opacity .14s ease}
+  .tabs.highlight-ready .tab-highlight{opacity:1}
+  .tab{position:relative;z-index:1;flex:1;min-width:74px;border:none;background:none;padding:7px 6px;font:inherit;font-size:13px;
+       color:var(--ink-soft);border-radius:7px;cursor:pointer;white-space:nowrap;transition:color .18s ease,font-weight .18s ease}
+  .tab.sel{background:none;color:#fff;font-weight:560}
   .subtabs{display:inline-flex;gap:3px;background:var(--paper);border:1px solid var(--rule);
            border-radius:9px;padding:3px;margin-bottom:18px}
   .subtab{font:inherit;font-size:13px;padding:7px 16px;border:none;background:none;
@@ -270,6 +274,7 @@
               cursor:pointer;font-weight:560}
   .choice-btn.sel{border-color:var(--sig);background:var(--sig-soft);color:var(--sig)}
   .tab:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){.tab-highlight,.tab{transition:none}}
   .pad{padding:16px}
   .lede{font-size:14px;line-height:1.5;color:var(--ink-soft);margin:0 0 14px}
   .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
@@ -605,7 +610,13 @@
     pointer-events:none;transition:grid-template-rows .38s cubic-bezier(.22,.72,.16,1),opacity .24s ease,transform .38s cubic-bezier(.22,.72,.16,1)}
   .manual-entry-expander.open{grid-template-rows:1fr;opacity:1;transform:translateY(0);pointer-events:auto}
   .manual-entry-expander-inner{min-height:0;overflow:hidden}
-  @media (prefers-reduced-motion:reduce){.manual-entry-expander{transition:none;transform:none}}
+  .hours-detail-expander{display:grid;grid-template-rows:0fr;opacity:0;transform:translateY(-6px);
+    pointer-events:none;transition:grid-template-rows .42s cubic-bezier(.22,.72,.16,1),opacity .25s ease,transform .42s cubic-bezier(.22,.72,.16,1)}
+  .hours-detail-expander.open{grid-template-rows:1fr;opacity:1;transform:translateY(0);pointer-events:auto}
+  .hours-detail-expander-inner{min-height:0;overflow:hidden}
+  @media (prefers-reduced-motion:reduce){
+    .manual-entry-expander,.hours-detail-expander{transition:none;transform:none}
+  }
 
   .live{padding:9px 0;border-bottom:1px solid var(--rule)}
   .live:last-child{border-bottom:none}
@@ -2138,6 +2149,42 @@ let editDraft = { date: "", hours: 1 };
 let manualDateDrafts = {};
 let manualEntryOpenId = null;
 
+function toggleHoursPanel(studentId, trigger) {
+  const opening = S.openHours !== studentId;
+
+  // A manual-entry draft is deliberately transient. Close it before the
+  // containing student's detail panel moves so the two animations never
+  // fight over the same height.
+  if (manualEntryOpenId) delete manualDateDrafts[manualEntryOpenId];
+  manualEntryOpenId = null;
+  document.querySelectorAll(".manual-entry-expander.open").forEach(expander => expander.classList.remove("open"));
+  document.querySelectorAll('[data-action="toggleManualEntry"][aria-expanded="true"]').forEach(button => {
+    button.textContent = "+ Add hours manually";
+    button.setAttribute("aria-expanded", "false");
+  });
+
+  document.querySelectorAll("[data-hours-detail]").forEach(panel => {
+    panel.classList.remove("open");
+    panel.setAttribute("aria-hidden", "true");
+    panel.inert = true;
+  });
+  document.querySelectorAll('[data-action="toggleHoursOpen"]').forEach(row => {
+    row.setAttribute("aria-expanded", "false");
+  });
+
+  S.openHours = opening ? studentId : null;
+  trigger.setAttribute("aria-expanded", String(opening));
+  if (opening) {
+    const panel = trigger.closest(".hrow")?.querySelector("[data-hours-detail]");
+    if (panel) {
+      panel.inert = false;
+      panel.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(() => panel.classList.add("open"));
+    }
+  }
+  scheduleSave();
+}
+
 function toggleManualEntry(studentId, trigger) {
   const expander = trigger.closest(".ledger")?.querySelector("[data-manual-entry]");
   if (!expander) return;
@@ -2656,14 +2703,48 @@ function computeSubbarIdentity() {
 }
 let __subbarIdentity = "none";
 
-function render() {
+let tabHighlightTimer = null;
+function syncTabHighlight(tabName = S.tab, animate = false) {
+  const tabs = document.querySelector("#appHeader .tabs");
+  if (!tabs) return;
+  const target = tabs.querySelector('[data-action="tab"][data-tab="' + tabName + '"]');
+  const highlight = tabs.querySelector(".tab-highlight");
+  if (!target || !highlight) return;
+
+  clearTimeout(tabHighlightTimer);
+  if (!animate) highlight.style.transition = "none";
+  highlight.style.width = target.offsetWidth + "px";
+  highlight.style.transform = "translateX(" + target.offsetLeft + "px)";
+  tabs.classList.add("highlight-ready");
+  if (!animate) {
+    void highlight.offsetWidth;
+    highlight.style.transition = "";
+  }
+
+  tabs.querySelectorAll('[data-action="tab"]').forEach(button => {
+    button.setAttribute("aria-current", button === target ? "page" : "false");
+  });
+  const updateLabels = () => {
+    tabs.querySelectorAll('[data-action="tab"]').forEach(button => button.classList.toggle("sel", button === target));
+  };
+  if (animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    tabHighlightTimer = setTimeout(updateLabels, 150);
+  } else {
+    updateLabels();
+  }
+}
+
+function render(preserveHeader = false) {
   if (!stateReady) {
     document.getElementById("app").innerHTML = '<div class="pad"><p>Loading your saved schedule…</p></div>';
     return;
   }
   applyAccent(currentSection === "settings" ? settingsDraft.accent : S.settings.accent);
   ensureAppSkeleton();
-  document.getElementById("appHeader").innerHTML = renderHeader();
+  if (!preserveHeader) {
+    document.getElementById("appHeader").innerHTML = renderHeader();
+    syncTabHighlight(S.tab, false);
+  }
   document.getElementById("appSubbar").innerHTML = computeSubbarHTML();
   __subbarIdentity = computeSubbarIdentity();
   const sections = {
@@ -2679,9 +2760,9 @@ function render() {
   scheduleSave();
 }
 
-// The header always updates instantly (it's structurally identical across
-// every scheduler tab, and across Profile/Students/Term Dates/Settings
-// only its title text differs — not worth animating). The subbar only
+// The scheduler header remains mounted during tab changes so its highlight
+// can travel continuously; other header changes still update with the body.
+// The subbar only
 // slides along with the body when it's a genuinely different KIND of
 // subbar on the other side of the transition — the same week picker or
 // the same subtabs bar (whichever item within it is active) is left
@@ -2691,6 +2772,9 @@ async function animatedRender(direction) {
   ensureAppSkeleton();
   const subbarEl = document.getElementById("appSubbar");
   const bodyEl = document.getElementById("appBody");
+  const slidingSchedulerTab = currentSection === "scheduler" && !!document.querySelector("#appHeader .tabs");
+
+  if (slidingSchedulerTab) syncTabHighlight(S.tab, true);
 
   if (!direction || reduceMotion || !bodyEl.firstChild) {
     render();
@@ -2709,7 +2793,10 @@ async function animatedRender(direction) {
   });
   await new Promise((r) => setTimeout(r, 200));
 
-  render(); // swaps header/subbar/body — an unchanged subbar is rewritten with identical HTML, invisibly, since it isn't a slide target
+  // Keep the existing scheduler header alive while its single highlight
+  // travels between tabs. Replacing it here would cut that transition off
+  // halfway through even though the body animation correctly continues.
+  render(slidingSchedulerTab);
 
   targets.forEach((el) => {
     el.style.transition = "none";
@@ -2727,6 +2814,10 @@ async function animatedRender(direction) {
     el.style.transform = "";
     el.style.opacity = "";
   });
+  if (slidingSchedulerTab) {
+    document.getElementById("appHeader").innerHTML = renderHeader();
+    syncTabHighlight(S.tab, false);
+  }
 }
 
 function renderHeader() {
@@ -2740,8 +2831,9 @@ function renderHeader() {
     (inScheduler ? '<div class="wk">' + (S.settings.schedulingMode === "rolling" ? S.weeksCompleted + " weeks taught" : S.weeksCompleted + " of " + termWeeks() + " weeks done") + '</div>' : '<span></span>') +
     '</div>';
   if (inScheduler) {
-    header += '<div class="tabs">' +
-      tabs.map(([k, label]) => '<button class="tab' + (S.tab === k ? " sel" : "") + '" data-action="tab" data-tab="' + k + '">' + label + "</button>").join("") +
+    header += '<div class="tabs"><span class="tab-highlight" aria-hidden="true"></span>' +
+      tabs.map(([k, label]) => '<button class="tab' + (S.tab === k ? " sel" : "") + '" data-action="tab" data-tab="' + k +
+        '" aria-current="' + (S.tab === k ? 'page' : 'false') + '">' + label + "</button>").join("") +
       "</div>";
   }
   return header + "</div>";
@@ -3337,7 +3429,7 @@ function renderHoursTab() {
       : remaining + "h left, roughly " + lessonsLeft + " more hour-long lesson" + (lessonsLeft === 1 ? "" : "s");
 
     let ledger = "";
-    if (open) {
+    {
       const scheduledRows = scheduledLessons.length === 0
         ? '<div class="ledger-empty">No lessons currently scheduled</div>'
         : scheduledLessons.map(item => {
@@ -3364,7 +3456,9 @@ function renderHoursTab() {
             '<span class="entryright">' + e.hours + 'h<button class="x" data-action="editEntry" data-id="' + e.id + '" title="Edit">\u270E</button>' +
             '<button class="x" data-action="removeEntry" data-id="' + e.id + '">×</button></span></div>';
         }).join("");
-      ledger = '<div class="ledger"><section class="scheduled-hours"><div class="ledger-heading"><span>Scheduled</span><span>' +
+      ledger = '<div class="hours-detail-expander' + (open ? ' open' : '') + '" data-hours-detail="' + s.id +
+        '" aria-hidden="' + (!open) + '"' + (open ? '' : ' inert') + '>' +
+        '<div class="hours-detail-expander-inner"><div class="ledger"><section class="scheduled-hours"><div class="ledger-heading"><span>Scheduled</span><span>' +
         compactHours(scheduled) + 'h</span></div>' + scheduledRows +
         '<p class="scheduled-note">These hours will move to completed when you end the week.</p></section>' +
         '<div class="ledger-heading"><span>Completed hours</span><span>' + compactHours(taught) + 'h</span></div>' + entryRows +
@@ -3376,10 +3470,11 @@ function renderHoursTab() {
         manualDate + '" aria-label="Select date for manual teaching hours" required></div>' +
         '<select data-bind="draftHours">' + [0.5, 1, 1.5, 2, 2.5, 3].map(h =>
           '<option value="' + h + '" ' + (parseFloat(S.draft.hours) === h ? "selected" : "") + ">" + h + "h</option>").join("") + "</select>" +
-        '<button class="btn" data-action="addEntry" data-id="' + s.id + '">Add</button></div></div></div></div>';
+        '<button class="btn" data-action="addEntry" data-id="' + s.id + '">Add</button></div></div></div></div></div></div>';
     }
 
-    return '<div class="hrow"><div class="htop" style="cursor:pointer" data-action="toggleHoursOpen" data-id="' + s.id + '">' +
+    return '<div class="hrow"><div class="htop" style="cursor:pointer" data-action="toggleHoursOpen" data-id="' + s.id +
+      '" role="button" tabindex="0" aria-expanded="' + open + '">' +
       "<b>" + s.name + "</b><em>" + taught + " / " + s.allocated + "h</em></div>" +
       '<div class="track">' + (scheduledPct > 0 ? '<div class="fill scheduled combined-end" style="left:' + pct + '%;width:' + scheduledPct + '%"></div>' : '') +
       '<div class="fill' + (behind ? " behind" : "") + (scheduledPct > 0 ? "" : " combined-end") + '" style="width:' + pct + '%"></div></div>' +
@@ -3544,10 +3639,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "imageLive") { const rnd = activeRound(); doImage(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.plan.weekNo, rnd.dayStartHour, rnd.note); }
   else if (action === "endWeek") endWeek();
   else if (action === "toggleHoursOpen") {
-    if (manualEntryOpenId) delete manualDateDrafts[manualEntryOpenId];
-    manualEntryOpenId = null;
-    S.openHours = S.openHours === id ? null : id;
-    render();
+    toggleHoursPanel(id, el);
   }
   else if (action === "removeEntry") removeEntry(id);
   else if (action === "editEntry") startEditEntry(id);
@@ -3557,6 +3649,14 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "addEntry") addEntry(id, el);
   else if (action === "resetYearConfirm") handleResetClick();
   else if (action === "exportHours") exportHours();
+});
+
+document.getElementById("app").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const row = e.target.closest('[data-action="toggleHoursOpen"]');
+  if (!row) return;
+  e.preventDefault();
+  toggleHoursPanel(row.dataset.id, row);
 });
 
 document.getElementById("app").addEventListener("change", (e) => {
@@ -3648,6 +3748,7 @@ document.getElementById("sidebarPanel").addEventListener("click", (e) => {
 });
 syncSidebarDOM();
 window.addEventListener("pagehide", persistLocalView);
+window.addEventListener("resize", () => syncTabHighlight(S.tab, false));
 
 render();
 Promise.all([loadState(), loadMe()]).then(() => {

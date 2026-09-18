@@ -263,18 +263,22 @@
   .tab{position:relative;z-index:1;flex:1;min-width:74px;border:none;background:none;padding:7px 6px;font:inherit;font-size:13px;
        color:var(--ink-soft);border-radius:7px;cursor:pointer;white-space:nowrap;transition:color .18s ease,font-weight .18s ease}
   .tab.sel{background:none;color:#fff;font-weight:560}
-  .subtabs{display:inline-flex;gap:3px;background:var(--paper);border:1px solid var(--rule);
+  .subtabs{position:relative;display:inline-flex;gap:3px;background:var(--paper);border:1px solid var(--rule);
            border-radius:9px;padding:3px;margin-bottom:18px}
-  .subtab{font:inherit;font-size:13px;padding:7px 16px;border:none;background:none;
-          color:var(--ink-soft);border-radius:6px;cursor:pointer}
-  .subtab.sel{background:var(--sig);color:#fff;font-weight:600}
+  .subtab-highlight{position:absolute;z-index:0;top:3px;left:0;bottom:3px;width:0;
+    border-radius:6px;background:var(--sig);opacity:0;pointer-events:none;
+    transform:translateX(0);transition:transform .44s cubic-bezier(.22,.72,.16,1),width .44s cubic-bezier(.22,.72,.16,1),opacity .14s ease}
+  .subtabs.highlight-ready .subtab-highlight{opacity:1}
+  .subtab{position:relative;z-index:1;font:inherit;font-size:13px;padding:7px 16px;border:none;background:none;
+          color:var(--ink-soft);border-radius:6px;cursor:pointer;transition:color .18s ease,font-weight .18s ease}
+  .subtab.sel{background:none;color:#fff;font-weight:600}
   .choice-group{display:flex;gap:8px}
   .choice-btn{flex:1;font:inherit;font-size:13.5px;padding:11px 8px;border-radius:8px;
               border:1px solid var(--rule);background:var(--panel);color:var(--ink);
               cursor:pointer;font-weight:560}
   .choice-btn.sel{border-color:var(--sig);background:var(--sig-soft);color:var(--sig)}
   .tab:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
-  @media (prefers-reduced-motion:reduce){.tab-highlight,.tab{transition:none}}
+  @media (prefers-reduced-motion:reduce){.tab-highlight,.tab,.subtab-highlight,.subtab{transition:none}}
   .pad{padding:16px}
   .lede{font-size:14px;line-height:1.5;color:var(--ink-soft);margin:0 0 14px}
   .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
@@ -2681,9 +2685,11 @@ function computeSubbarHTML() {
     return S.tab === "hours" ? "" : '<div class="pad" style="padding-bottom:0">' + renderWeekPicker() + "</div>";
   }
   if (currentSection === "settings") {
-    return '<div class="pad" style="padding-bottom:0"><div class="subtabs">' +
-      '<button class="subtab' + (settingsTab === "general" ? " sel" : "") + '" data-action="settingsTab" data-tab="general">General</button>' +
-      '<button class="subtab' + (settingsTab === "priorities" ? " sel" : "") + '" data-action="settingsTab" data-tab="priorities">Priorities</button>' +
+    return '<div class="pad" style="padding-bottom:0"><div class="subtabs"><span class="subtab-highlight" aria-hidden="true"></span>' +
+      '<button class="subtab' + (settingsTab === "general" ? " sel" : "") + '" data-action="settingsTab" data-tab="general" aria-current="' +
+        (settingsTab === "general" ? "page" : "false") + '">General</button>' +
+      '<button class="subtab' + (settingsTab === "priorities" ? " sel" : "") + '" data-action="settingsTab" data-tab="priorities" aria-current="' +
+        (settingsTab === "priorities" ? "page" : "false") + '">Priorities</button>' +
       "</div></div>";
   }
   return "";
@@ -2734,7 +2740,38 @@ function syncTabHighlight(tabName = S.tab, animate = false) {
   }
 }
 
-function render(preserveHeader = false) {
+let settingsHighlightTimer = null;
+function syncSettingsHighlight(tabName = settingsTab, animate = false) {
+  const tabs = document.querySelector("#appSubbar .subtabs");
+  if (!tabs) return;
+  const target = tabs.querySelector('[data-action="settingsTab"][data-tab="' + tabName + '"]');
+  const highlight = tabs.querySelector(".subtab-highlight");
+  if (!target || !highlight) return;
+
+  clearTimeout(settingsHighlightTimer);
+  if (!animate) highlight.style.transition = "none";
+  highlight.style.width = target.offsetWidth + "px";
+  highlight.style.transform = "translateX(" + target.offsetLeft + "px)";
+  tabs.classList.add("highlight-ready");
+  if (!animate) {
+    void highlight.offsetWidth;
+    highlight.style.transition = "";
+  }
+
+  tabs.querySelectorAll('[data-action="settingsTab"]').forEach(button => {
+    button.setAttribute("aria-current", button === target ? "page" : "false");
+  });
+  const updateLabels = () => {
+    tabs.querySelectorAll('[data-action="settingsTab"]').forEach(button => button.classList.toggle("sel", button === target));
+  };
+  if (animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    settingsHighlightTimer = setTimeout(updateLabels, 150);
+  } else {
+    updateLabels();
+  }
+}
+
+function render(preserveHeader = false, preserveSubbar = false) {
   if (!stateReady) {
     document.getElementById("app").innerHTML = '<div class="pad"><p>Loading your saved schedule…</p></div>';
     return;
@@ -2745,7 +2782,10 @@ function render(preserveHeader = false) {
     document.getElementById("appHeader").innerHTML = renderHeader();
     syncTabHighlight(S.tab, false);
   }
-  document.getElementById("appSubbar").innerHTML = computeSubbarHTML();
+  if (!preserveSubbar) {
+    document.getElementById("appSubbar").innerHTML = computeSubbarHTML();
+    syncSettingsHighlight(settingsTab, false);
+  }
   __subbarIdentity = computeSubbarIdentity();
   const sections = {
     profile: renderProfileSection,
@@ -2773,8 +2813,10 @@ async function animatedRender(direction) {
   const subbarEl = document.getElementById("appSubbar");
   const bodyEl = document.getElementById("appBody");
   const slidingSchedulerTab = currentSection === "scheduler" && !!document.querySelector("#appHeader .tabs");
+  const slidingSettingsTab = currentSection === "settings" && !!document.querySelector("#appSubbar .subtabs");
 
   if (slidingSchedulerTab) syncTabHighlight(S.tab, true);
+  if (slidingSettingsTab) syncSettingsHighlight(settingsTab, true);
 
   if (!direction || reduceMotion || !bodyEl.firstChild) {
     render();
@@ -2796,7 +2838,7 @@ async function animatedRender(direction) {
   // Keep the existing scheduler header alive while its single highlight
   // travels between tabs. Replacing it here would cut that transition off
   // halfway through even though the body animation correctly continues.
-  render(slidingSchedulerTab);
+  render(slidingSchedulerTab, slidingSettingsTab);
 
   targets.forEach((el) => {
     el.style.transition = "none";
@@ -2817,6 +2859,11 @@ async function animatedRender(direction) {
   if (slidingSchedulerTab) {
     document.getElementById("appHeader").innerHTML = renderHeader();
     syncTabHighlight(S.tab, false);
+  }
+  if (slidingSettingsTab) {
+    document.getElementById("appSubbar").innerHTML = computeSubbarHTML();
+    __subbarIdentity = computeSubbarIdentity();
+    syncSettingsHighlight(settingsTab, false);
   }
 }
 
@@ -3748,7 +3795,10 @@ document.getElementById("sidebarPanel").addEventListener("click", (e) => {
 });
 syncSidebarDOM();
 window.addEventListener("pagehide", persistLocalView);
-window.addEventListener("resize", () => syncTabHighlight(S.tab, false));
+window.addEventListener("resize", () => {
+  syncTabHighlight(S.tab, false);
+  syncSettingsHighlight(settingsTab, false);
+});
 
 render();
 Promise.all([loadState(), loadMe()]).then(() => {

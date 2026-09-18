@@ -587,20 +587,24 @@
      border:1px solid var(--rule);background:var(--panel);color:var(--ink-soft);cursor:pointer}
   .x:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
   .addrow{display:flex;gap:7px;align-items:center;padding-top:10px}
-  .manual-entry-heading{margin:12px 0 -3px;font-size:12px;font-weight:650;color:var(--ink-soft)}
   .addrow input,.addrow select{font:inherit;font-size:13px;padding:7px 8px;border-radius:7px;
           border:1px solid var(--rule);background:var(--panel);color:var(--ink);min-width:0}
   .addrow input{flex:1}
   .addrow .btn{padding:7px 13px}
-  .manual-date-field{position:relative;display:flex;align-items:center;flex:1;min-width:0;min-height:34px;
-                     padding:7px 28px 7px 8px;border:1px solid var(--rule);border-radius:7px;
-                     background:var(--panel);color:var(--ink);font-size:13px;cursor:pointer}
+  .manual-date-field{position:relative;display:flex;align-items:center;flex:1;min-width:0;height:34px;
+                     box-sizing:border-box;padding:0 9px;border:1px solid var(--rule);border-radius:7px;
+                     background:var(--panel);color:var(--ink);font-size:13px;line-height:1;cursor:pointer}
   .manual-date-field.empty{color:var(--ink-soft)}
-  .manual-date-field::after{content:"";position:absolute;right:9px;width:12px;height:12px;
-                            border:1.5px solid currentColor;border-radius:2px;opacity:.65;pointer-events:none}
   .manual-date-field input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;
                            border:0;opacity:0;cursor:pointer}
   .manual-date-field:focus-within{outline:2px solid var(--sig);outline-offset:2px}
+  .addrow select,.addrow .btn{height:34px;box-sizing:border-box}
+  .manual-entry-toggle{margin-top:10px;color:var(--sig);border-color:var(--sig);background:transparent}
+  .manual-entry-expander{display:grid;grid-template-rows:0fr;opacity:0;transform:translateY(-4px);
+    pointer-events:none;transition:grid-template-rows .38s cubic-bezier(.22,.72,.16,1),opacity .24s ease,transform .38s cubic-bezier(.22,.72,.16,1)}
+  .manual-entry-expander.open{grid-template-rows:1fr;opacity:1;transform:translateY(0);pointer-events:auto}
+  .manual-entry-expander-inner{min-height:0;overflow:hidden}
+  @media (prefers-reduced-motion:reduce){.manual-entry-expander{transition:none;transform:none}}
 
   .live{padding:9px 0;border-bottom:1px solid var(--rule)}
   .live:last-child{border-bottom:none}
@@ -2077,10 +2081,43 @@ function removeStudent(id) {
   render();
 }
 
-function addEntry(studentId) {
-  if (!S.draft.date || !S.draft.hours) return;
-  S.log.push({ id: "m" + Date.now(), studentId, date: S.draft.date, hours: Number(S.draft.hours), manual: true });
-  S.draft.date = "";
+async function addEntry(studentId, trigger) {
+  const date = manualDateDrafts[studentId] || "";
+  if (!date) {
+    flash("Select a date first");
+    const input = trigger && trigger.closest(".manual-entry-expander")?.querySelector('[data-bind="draftDate"]');
+    if (input) input.focus({ preventScroll: true });
+    return;
+  }
+  if (!S.draft.hours) return;
+  S.log.push({ id: "m" + Date.now(), studentId, date, hours: Number(S.draft.hours), manual: true });
+  delete manualDateDrafts[studentId];
+  manualEntryOpenId = null;
+  scheduleSave();
+
+  const expander = trigger && trigger.closest(".manual-entry-expander");
+  const toggle = expander && expander.parentElement.querySelector('[data-action="toggleManualEntry"]');
+  if (expander) expander.classList.remove("open");
+  if (toggle) {
+    toggle.textContent = "+ Add hours manually";
+    toggle.setAttribute("aria-expanded", "false");
+  }
+  if (trigger) trigger.disabled = true;
+
+  if (expander && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    await new Promise(resolve => {
+      let finished = false;
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        expander.removeEventListener("transitionend", onEnd);
+        resolve();
+      };
+      const onEnd = event => { if (event.propertyName === "grid-template-rows") done(); };
+      expander.addEventListener("transitionend", onEnd);
+      setTimeout(done, 450);
+    });
+  }
   flash("Hours added");
   render();
 }
@@ -2090,6 +2127,35 @@ function removeEntry(id) { S.log = S.log.filter(e => e.id !== id); render(); }
 // and the working copy of its date/hours while that's open.
 let editingEntryId = null;
 let editDraft = { date: "", hours: 1 };
+// Unsaved manual dates belong to the student whose row they were chosen in.
+// They are intentionally transient and never synced or reused for another row.
+let manualDateDrafts = {};
+let manualEntryOpenId = null;
+
+function toggleManualEntry(studentId, trigger) {
+  const expander = trigger.closest(".ledger")?.querySelector("[data-manual-entry]");
+  if (!expander) return;
+  const opening = manualEntryOpenId !== studentId;
+
+  if (manualEntryOpenId && manualEntryOpenId !== studentId) delete manualDateDrafts[manualEntryOpenId];
+  manualEntryOpenId = opening ? studentId : null;
+  if (!opening) {
+    delete manualDateDrafts[studentId];
+    const input = expander.querySelector('[data-bind="draftDate"]');
+    const field = input && input.closest(".manual-date-field");
+    if (input) input.value = "";
+    if (field) {
+      field.classList.add("empty");
+      const label = field.querySelector("span");
+      if (label) label.textContent = "Select date";
+    }
+  }
+
+  trigger.textContent = opening ? "Cancel manual entry" : "+ Add hours manually";
+  trigger.setAttribute("aria-expanded", String(opening));
+  if (opening) requestAnimationFrame(() => expander.classList.add("open"));
+  else expander.classList.remove("open");
+}
 function startEditEntry(id) {
   const e = S.log.find(x => x.id === id);
   if (!e) return;
@@ -2112,6 +2178,8 @@ function resetYear() {
   S.log = []; S.week = 1; S.weeksCompleted = 0;
   S.rounds = { "1": blankRound((S.termRanges && S.termRanges[0]) ? S.termRanges[0].start : todayISO()) };
   S.openHours = null;
+  manualDateDrafts = {};
+  manualEntryOpenId = null;
   flash("Year reset");
   render();
 }
@@ -3223,6 +3291,8 @@ function renderHoursTab() {
     const scheduledPct = Math.max(0, scheduledEndPct - pct);
     const lessonsLeft = Math.max(1, Math.round(remaining));
     const entries = S.log.filter(e => e.studentId === s.id).sort((a, b) => (a.date < b.date ? 1 : -1));
+    const manualDate = manualDateDrafts[s.id] || "";
+    const manualEntryOpen = manualEntryOpenId === s.id;
     const open = S.openHours === s.id;
 
     const note = remaining <= 0 ? "Allocation complete"
@@ -3261,13 +3331,15 @@ function renderHoursTab() {
         compactHours(scheduled) + 'h</span></div>' + scheduledRows +
         '<p class="scheduled-note">These hours will move to completed when you end the week.</p></section>' +
         '<div class="ledger-heading"><span>Completed hours</span><span>' + compactHours(taught) + 'h</span></div>' + entryRows +
-        '<div class="manual-entry-heading">Add completed lesson manually</div>' +
-        '<div class="addrow"><label class="manual-date-field' + (S.draft.date ? '' : ' empty') + '"><span>' +
-        (S.draft.date ? fmtDateShort(S.draft.date) : 'Select date') + '</span><input type="date" data-bind="draftDate" value="' +
-        S.draft.date + '" aria-label="Select date for manual teaching hours"></label>' +
+        '<button type="button" class="btn manual-entry-toggle" data-action="toggleManualEntry" data-id="' + s.id +
+        '" aria-expanded="' + manualEntryOpen + '">' + (manualEntryOpen ? 'Cancel manual entry' : '+ Add hours manually') + '</button>' +
+        '<div class="manual-entry-expander' + (manualEntryOpen ? ' open' : '') + '" data-manual-entry="' + s.id + '">' +
+        '<div class="manual-entry-expander-inner"><div class="addrow"><label class="manual-date-field' + (manualDate ? '' : ' empty') + '"><span>' +
+        (manualDate ? fmtDateShort(manualDate) : 'Select date') + '</span><input type="date" data-bind="draftDate" data-id="' + s.id + '" value="' +
+        manualDate + '" aria-label="Select date for manual teaching hours"></label>' +
         '<select data-bind="draftHours">' + [0.5, 1, 1.5, 2, 2.5, 3].map(h =>
           '<option value="' + h + '" ' + (parseFloat(S.draft.hours) === h ? "selected" : "") + ">" + h + "h</option>").join("") + "</select>" +
-        '<button class="btn" data-action="addEntry" data-id="' + s.id + '">Add</button></div></div>';
+        '<button class="btn" data-action="addEntry" data-id="' + s.id + '">Add</button></div></div></div></div>';
     }
 
     return '<div class="hrow"><div class="htop" style="cursor:pointer" data-action="toggleHoursOpen" data-id="' + s.id + '">' +
@@ -3426,12 +3498,18 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "copyLive") { const rnd = activeRound(); doCopy(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.dayStartHour, rnd.note); }
   else if (action === "imageLive") { const rnd = activeRound(); doImage(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.plan.weekNo, rnd.dayStartHour, rnd.note); }
   else if (action === "endWeek") endWeek();
-  else if (action === "toggleHoursOpen") { S.openHours = S.openHours === id ? null : id; render(); }
+  else if (action === "toggleHoursOpen") {
+    if (manualEntryOpenId) delete manualDateDrafts[manualEntryOpenId];
+    manualEntryOpenId = null;
+    S.openHours = S.openHours === id ? null : id;
+    render();
+  }
   else if (action === "removeEntry") removeEntry(id);
   else if (action === "editEntry") startEditEntry(id);
   else if (action === "saveEditEntry") saveEditEntry(id);
   else if (action === "cancelEditEntry") cancelEditEntry();
-  else if (action === "addEntry") addEntry(id);
+  else if (action === "toggleManualEntry") toggleManualEntry(id, el);
+  else if (action === "addEntry") addEntry(id, el);
   else if (action === "resetYearConfirm") handleResetClick();
   else if (action === "exportHours") exportHours();
 });
@@ -3478,7 +3556,7 @@ document.getElementById("app").addEventListener("change", (e) => {
   else if (bind === "hoursSort") { S.hoursSort = el.value; render(); }
   else if (bind === "hoursExportTimeframe") { S.hoursExportTimeframe = el.value; S.hoursExportText = ""; render(); }
   else if (bind === "weekNote") { activeRound().note = el.value; render(); }
-  else if (bind === "draftDate") { S.draft.date = el.value; render(); }
+  else if (bind === "draftDate") { manualDateDrafts[el.dataset.id] = el.value; render(); }
   else if (bind === "draftHours") { S.draft.hours = el.value; }
   else if (bind === "editDate") { editDraft.date = el.value; }
   else if (bind === "editHours") { editDraft.hours = el.value; }

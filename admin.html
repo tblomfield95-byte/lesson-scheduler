@@ -587,10 +587,20 @@
      border:1px solid var(--rule);background:var(--panel);color:var(--ink-soft);cursor:pointer}
   .x:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
   .addrow{display:flex;gap:7px;align-items:center;padding-top:10px}
+  .manual-entry-heading{margin:12px 0 -3px;font-size:12px;font-weight:650;color:var(--ink-soft)}
   .addrow input,.addrow select{font:inherit;font-size:13px;padding:7px 8px;border-radius:7px;
           border:1px solid var(--rule);background:var(--panel);color:var(--ink);min-width:0}
   .addrow input{flex:1}
   .addrow .btn{padding:7px 13px}
+  .manual-date-field{position:relative;display:flex;align-items:center;flex:1;min-width:0;min-height:34px;
+                     padding:7px 28px 7px 8px;border:1px solid var(--rule);border-radius:7px;
+                     background:var(--panel);color:var(--ink);font-size:13px;cursor:pointer}
+  .manual-date-field.empty{color:var(--ink-soft)}
+  .manual-date-field::after{content:"";position:absolute;right:9px;width:12px;height:12px;
+                            border:1.5px solid currentColor;border-radius:2px;opacity:.65;pointer-events:none}
+  .manual-date-field input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;
+                           border:0;opacity:0;cursor:pointer}
+  .manual-date-field:focus-within{outline:2px solid var(--sig);outline-offset:2px}
 
   .live{padding:9px 0;border-bottom:1px solid var(--rule)}
   .live:last-child{border-bottom:none}
@@ -1257,7 +1267,7 @@ let S = {
   hoursSort: "first",
   hoursExportTimeframe: "week",
   hoursExportText: "",
-  draft: { date: todayISO(), hours: 1 },
+  draft: { date: "", hours: 1 },
   fallbackText: "",
   imgUrl: "",
 };
@@ -1370,7 +1380,9 @@ function applySavedState(saved) {
   S.students = saved.students || S.students;
   S.log = saved.log || [];
   S.hoursSort = saved.hoursSort || "first";
-  S.draft = saved.draft || S.draft;
+  // A date is only meaningful for the next unsaved manual entry. Never carry
+  // an abandoned choice across a reload.
+  S.draft = { ...S.draft, ...(saved.draft || {}), date: "" };
   S.rounds = {};
   Object.entries(saved.rounds || {}).forEach(([k, rr]) => {
     const usesQuarterHours = rr.schedulerSlotMinutes === SCHEDULE_SLOT_MIN;
@@ -2068,6 +2080,7 @@ function removeStudent(id) {
 function addEntry(studentId) {
   if (!S.draft.date || !S.draft.hours) return;
   S.log.push({ id: "m" + Date.now(), studentId, date: S.draft.date, hours: Number(S.draft.hours), manual: true });
+  S.draft.date = "";
   flash("Hours added");
   render();
 }
@@ -3248,7 +3261,10 @@ function renderHoursTab() {
         compactHours(scheduled) + 'h</span></div>' + scheduledRows +
         '<p class="scheduled-note">These hours will move to completed when you end the week.</p></section>' +
         '<div class="ledger-heading"><span>Completed hours</span><span>' + compactHours(taught) + 'h</span></div>' + entryRows +
-        '<div class="addrow"><input type="date" data-bind="draftDate" value="' + S.draft.date + '">' +
+        '<div class="manual-entry-heading">Add completed lesson manually</div>' +
+        '<div class="addrow"><label class="manual-date-field' + (S.draft.date ? '' : ' empty') + '"><span>' +
+        (S.draft.date ? fmtDateShort(S.draft.date) : 'Select date') + '</span><input type="date" data-bind="draftDate" value="' +
+        S.draft.date + '" aria-label="Select date for manual teaching hours"></label>' +
         '<select data-bind="draftHours">' + [0.5, 1, 1.5, 2, 2.5, 3].map(h =>
           '<option value="' + h + '" ' + (parseFloat(S.draft.hours) === h ? "selected" : "") + ">" + h + "h</option>").join("") + "</select>" +
         '<button class="btn" data-action="addEntry" data-id="' + s.id + '">Add</button></div></div>';
@@ -3462,7 +3478,7 @@ document.getElementById("app").addEventListener("change", (e) => {
   else if (bind === "hoursSort") { S.hoursSort = el.value; render(); }
   else if (bind === "hoursExportTimeframe") { S.hoursExportTimeframe = el.value; S.hoursExportText = ""; render(); }
   else if (bind === "weekNote") { activeRound().note = el.value; render(); }
-  else if (bind === "draftDate") { S.draft.date = el.value; }
+  else if (bind === "draftDate") { S.draft.date = el.value; render(); }
   else if (bind === "draftHours") { S.draft.hours = el.value; }
   else if (bind === "editDate") { editDraft.date = el.value; }
   else if (bind === "editHours") { editDraft.hours = el.value; }

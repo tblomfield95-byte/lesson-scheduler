@@ -3,26 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Cadence.</title>
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>Lesson Scheduler</title>
 <style>
   html,body{margin:0;padding:0}
-  html{background:#F2EFE7}
   body{
-    --ink:#211C17; --ink-soft:#6B6157; --paper:#F2EFE7; --panel:#FFFFFF;
-    --rule:#DCD5C6; --sig:#6E1423; --sig-soft:#EDDEDD; --warn:#96591A; --warn-soft:#F0E2C8;
-    --serif: "Source Serif 4", Georgia, serif;
-    font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --ink:#1B2430; --ink-soft:#5A6675; --paper:#FBFAF8; --panel:#FFFFFF;
+    --rule:#DDD8CE; --sig:#832222; --sig-soft:#F0DEDE; --warn:#B45309; --warn-soft:#F7E8D2;
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
     font-feature-settings:"tnum" 1;
     background:var(--paper); color:var(--ink);
-    padding-bottom:80px;
+    min-height:100vh; padding-bottom:80px;
   }
   *{box-sizing:border-box}
   body{overflow-x:hidden}
   #app{
+    min-height:100vh;
     transform:scale(1);
     transform-origin:50% 50vh;
     border-radius:0;
@@ -41,45 +36,24 @@
   .bar{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1px solid var(--rule)}
   .bartop{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:14px 16px 8px}
   .hbrow{display:flex;align-items:center;gap:10px;min-width:0}
-  .hamburger{background:none;border:none;color:var(--sig);
-             cursor:pointer;padding:0;flex:none;width:26px;height:26px;
-             display:flex;align-items:center;justify-content:center}
-  .hamburger svg{display:block}
+  .hamburger{font-size:19px;line-height:1;background:none;border:none;color:var(--ink);
+             cursor:pointer;padding:2px 2px 2px 0;flex:none}
   .hamburger:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
   .sidebar-backdrop{position:fixed;inset:0;background:rgba(27,36,48,0);z-index:60;
                      opacity:0;pointer-events:none;transition:opacity .48s ease, background-color .48s ease}
   .sidebar-backdrop.open{opacity:1;background:rgba(27,36,48,.45);pointer-events:auto}
   .sidebar-panel{position:fixed;top:0;left:0;bottom:0;width:230px;max-width:80vw;background:var(--panel);
                  z-index:61;box-shadow:2px 0 16px rgba(0,0,0,.18);padding:18px 0;overflow-y:auto;
-                 display:flex;flex-direction:column;
                  transform:translateX(-100%);transition:transform .58s cubic-bezier(.22,.72,.16,1)}
   .sidebar-panel.open{transform:translateX(0)}
-  .sidebar-brand{display:flex;align-items:center;gap:8px;font-family:var(--serif);font-size:19px;font-weight:600;color:var(--sig);
-                 padding:2px 18px 16px;margin-bottom:8px;border-bottom:1px solid var(--rule)}
-  .sidebar-brand .brand-mark{flex:none;color:var(--sig)}
-  .sidebar-item{display:flex;align-items:center;gap:11px;width:100%;text-align:left;font:inherit;font-size:15px;padding:12px 18px;
+  .sidebar-head{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);
+                padding:2px 18px 14px}
+  .sidebar-item{display:block;width:100%;text-align:left;font:inherit;font-size:15px;padding:12px 18px;
                 border:none;background:none;color:var(--ink);cursor:pointer}
-  .sidebar-item svg{flex:none}
   .sidebar-item.sel{background:var(--sig-soft);color:var(--sig);font-weight:600}
-  .sidebar-signout{
-    display:block;
-    width:100%;
-    margin-top:auto;
-    padding:15px 18px 4px;
-    border:none;
-    border-top:1px solid var(--rule);
-    background:none;
-    color:var(--sig);
-    text-align:left;
-    font:inherit;
-    font-size:15px;
-    font-weight:700;
-    cursor:pointer;
-  }
-  .sidebar-signout:focus-visible{outline:2px solid var(--sig);outline-offset:-2px}
   .field{margin-bottom:16px}
   .field label{display:block;font-size:13px;color:var(--ink-soft);margin:0 0 5px}
-  .field input{width:100%;font:inherit;font-size:15px;padding:11px 13px;border-radius:7px;
+  .field input{width:100%;font:inherit;font-size:15px;padding:11px 13px;border-radius:9px;
                border:1px solid var(--rule);background:var(--panel);color:var(--ink)}
 
   /* Students page — roomier editing controls to match the rest of the app */
@@ -89,9 +63,11 @@
     grid-template-columns:minmax(0,1fr) 104px 38px;
     gap:10px;
     align-items:center;
-    padding:8px 0;
+    padding:12px 0;
+    border-bottom:1px solid var(--rule);
   }
   .student-edit-row:first-child{padding-top:2px}
+  .student-edit-row:last-of-type{border-bottom:none}
   .student-edit-row input,
   .student-add-row input{
     width:100%;
@@ -100,7 +76,7 @@
     font:inherit;
     font-size:15px;
     padding:10px 12px;
-    border-radius:7px;
+    border-radius:9px;
     border:1px solid var(--rule);
     background:var(--panel);
     color:var(--ink);
@@ -117,39 +93,22 @@
     font-size:13px;
     pointer-events:none;
   }
-  .x.student-delete{
+  .student-delete{
     width:38px;
     height:38px;
     border-radius:19px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:0;
-  }
-  .student-add-btn{
-    width:38px;
-    height:38px;
-    border-radius:19px;
-    flex:none;
-    padding:0;
-    line-height:1;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    background:var(--sig);
-    color:#fff;
-    border:1px solid var(--sig);
-    cursor:pointer;
+    font-size:20px;
   }
   .student-add-row{
     display:grid;
-    grid-template-columns:minmax(0,1fr) 104px 38px;
+    grid-template-columns:minmax(0,1fr) 104px auto;
     gap:10px;
     align-items:center;
-    padding:12px 0;
+    padding-top:14px;
+    margin-top:2px;
+    border-top:1px solid var(--rule);
   }
-  .student-add-row:first-child{padding-top:2px}
-  .student-edit-row + .student-add-row{margin-top:14px}
+  .student-add-row .btn{height:44px;padding:9px 16px}
 
   /* Term Dates — each term is one clear visual group */
   .term-count-card{
@@ -160,7 +119,7 @@
     padding:13px 14px;
     margin-bottom:12px;
     border:1px solid var(--rule);
-    border-radius:8px;
+    border-radius:10px;
     background:var(--panel);
   }
   .term-count-card label{font-size:14px;font-weight:580;color:var(--ink)}
@@ -175,29 +134,6 @@
     background:var(--paper);
     color:var(--ink);
   }
-  .priority-list{border:1px solid var(--rule);border-radius:8px;background:var(--panel);overflow:hidden}
-  .priority-row{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--rule);
-                background:var(--panel);touch-action:none}
-  .priority-row:last-child{border-bottom:none}
-  .priority-row.dragging{background:var(--sig-soft);box-shadow:0 6px 18px rgba(33,28,23,.14);position:relative;z-index:5}
-  .priority-rank{flex:none;width:24px;height:24px;border-radius:50%;background:var(--paper);border:1px solid var(--rule);
-                  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--ink-soft)}
-  .priority-row.dragging .priority-rank{background:var(--sig);border-color:var(--sig);color:#fff}
-  .priority-label{flex:1;min-width:0}
-  .priority-label strong{display:block;font-size:14.5px;font-weight:580}
-  .priority-label span{display:block;font-size:12px;color:var(--ink-soft);margin-top:2px}
-  .priority-handle{flex:none;font-size:19px;line-height:1;color:var(--ink-soft);padding:6px;cursor:grab}
-  .priority-row.dragging .priority-handle{cursor:grabbing}
-  .priority-toggle{flex:none;font:inherit;font-size:11.5px;padding:5px 8px;border-radius:7px;
-                   border:1px solid var(--rule);background:var(--paper);color:var(--ink-soft);cursor:pointer;
-                   touch-action:manipulation}
-  .priority-toggle.include{border-color:var(--sig);color:var(--sig);background:var(--sig-soft)}
-  .priority-section-title{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
-                          margin:16px 0 7px;font-size:12px;font-weight:700;text-transform:uppercase;
-                          letter-spacing:.04em;color:var(--ink-soft)}
-  .priority-section-title:first-of-type{margin-top:0}
-  .priority-list.excluded .priority-row{background:var(--paper);touch-action:manipulation}
-  .priority-list.excluded .priority-rank{border-style:dashed;background:transparent}
   .term-card{
     width:100%;
     min-width:0;
@@ -208,8 +144,19 @@
     padding:14px;
     margin-bottom:12px;
   }
-  .term-card-head{margin-bottom:11px}
-  .term-card-head h3{margin:0;font-family:var(--serif);font-size:16px;font-weight:600}
+  .term-card-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:11px;
+  }
+  .term-card-head h3{margin:0;font-size:14.5px;font-weight:620}
+  .term-card-head span{
+    font-size:11px;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
   .term-date-grid{
     display:grid;
     grid-template-columns:repeat(2,minmax(0,1fr));
@@ -227,9 +174,7 @@
     margin-bottom:6px;
   }
   .term-date-grid input[type="date"]{
-    display:flex;
-    align-items:center;
-    justify-content:center;
+    display:block;
     width:100%;
     max-width:100%;
     min-width:0;
@@ -240,7 +185,7 @@
     line-height:1;
     padding:10px 6px;
     text-align:center;
-    border-radius:7px;
+    border-radius:9px;
     border:1px solid var(--rule);
     background:var(--paper);
     color:var(--ink);
@@ -253,39 +198,20 @@
     .term-date-grid{gap:10px}
     .term-date-grid input[type="date"]{font-size:13px;padding-left:4px;padding-right:4px}
   }
-  .title{font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:0;margin:0;line-height:1.15;color:var(--sig)}
+  .title{font-size:15.5px;font-weight:640;letter-spacing:-0.01em;margin:0}
   .wk{font-size:13px;color:var(--ink-soft);white-space:nowrap}
   .tabs{display:flex;gap:2px;padding:0 12px 10px;overflow-x:auto}
   .tab{flex:1;min-width:74px;border:none;background:none;padding:7px 6px;font:inherit;font-size:13px;
        color:var(--ink-soft);border-radius:7px;cursor:pointer;white-space:nowrap}
-  .tab.sel{background:var(--sig);color:#fff;font-weight:560}
-  .subtabs{display:inline-flex;gap:3px;background:var(--paper);border:1px solid var(--rule);
-           border-radius:9px;padding:3px;margin-bottom:18px}
-  .subtab{font:inherit;font-size:13px;padding:7px 16px;border:none;background:none;
-          color:var(--ink-soft);border-radius:6px;cursor:pointer}
-  .subtab.sel{background:var(--sig);color:#fff;font-weight:600}
-  .choice-group{display:flex;gap:8px}
-  .choice-btn{flex:1;font:inherit;font-size:13.5px;padding:11px 8px;border-radius:8px;
-              border:1px solid var(--rule);background:var(--panel);color:var(--ink);
-              cursor:pointer;font-weight:560}
-  .choice-btn.sel{border-color:var(--sig);background:var(--sig-soft);color:var(--sig)}
+  .tab.sel{background:var(--ink);color:var(--paper);font-weight:560}
   .tab:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
   .pad{padding:16px}
   .lede{font-size:14px;line-height:1.5;color:var(--ink-soft);margin:0 0 14px}
   .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-  .offer-actions{display:grid;margin-top:16px}
-  .offer-mode{grid-area:1 / 1;min-width:0;visibility:hidden;opacity:0;pointer-events:none}
-  .offer-mode.active{visibility:visible;opacity:1;pointer-events:auto}
-  .offer-mode .btnrow{margin:0 0 12px}
-  .offer-actions[aria-busy="true"] .offer-mode{pointer-events:none}
-  .link-feedback{min-height:2.8em;margin:0;font-size:12px;line-height:1.4;color:var(--ink-soft)}
-  .link-copy-fallback{display:block;width:100%;margin-top:5px;font:inherit;padding:7px;border:1px solid var(--rule);border-radius:6px}
-  .placement-help{font-size:12px;color:var(--ink-soft);margin:8px 0 0}
   .btn{font:inherit;font-size:13px;padding:9px 14px;border-radius:8px;border:1px solid var(--rule);
        background:var(--panel);color:var(--ink);cursor:pointer}
   .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:560}
   .btn.sig{background:var(--sig);color:#fff;border-color:var(--sig);font-weight:560}
-  .btn.outline-sig{background:none;color:var(--sig);border-color:var(--sig)}
   .btn.confirm-pending{background:var(--warn);color:#fff;border-color:var(--warn);font-weight:560;
                         animation:confirmPulse 0.35s ease}
   @keyframes confirmPulse{0%{transform:scale(1)}35%{transform:scale(1.07)}65%{transform:scale(0.97)}100%{transform:scale(1)}}
@@ -294,7 +220,7 @@
   .btn:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
 
   .weekpicker{display:flex;align-items:center;justify-content:space-between;gap:10px;
-              padding:10px 12px;margin-bottom:14px;border:1px solid var(--rule);border-radius:8px;background:var(--panel)}
+              padding:10px 12px;margin-bottom:14px;border:1px solid var(--rule);border-radius:10px;background:var(--panel)}
   .weekpicker-mid{text-align:center;flex:1;min-width:0}
   .weekpicker-mid label{display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;font-weight:600}
   .weekpicker-mid input{font:inherit;font-size:14px;font-weight:600;width:36px;text-align:center;
@@ -304,48 +230,25 @@
   .weekpicker-mid input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   .weekpicker-mid span{display:block;font-size:12px;color:var(--ink-soft);margin-top:2px}
 
-  .grid-wrap{border:1px solid var(--rule);border-radius:7px;overflow:hidden;background:var(--panel);
-             touch-action:auto;user-select:none;-webkit-user-select:none}
+  .grid-wrap{border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--panel);
+             touch-action:none;user-select:none;-webkit-user-select:none}
   .grid-head{display:flex;border-bottom:1px solid var(--rule);background:var(--paper)}
   .dayhead{flex:1;text-align:center;padding:8px 0;font-size:12px;font-weight:600;color:var(--ink-soft)}
   .gutter{width:46px;flex:none}
   .row{display:flex;height:25px}
   .row .time{font-size:10.5px;color:var(--ink-soft);padding-right:6px;text-align:right;
-             position:relative;border-right:1px solid var(--rule)}
-  .row .time span{position:absolute;top:0;right:6px;line-height:1;transform:translateY(-50%);white-space:nowrap}
-  .row .time span.first{top:2px;transform:none}
+             line-height:25px;border-right:1px solid var(--rule)}
   .cell{flex:1;border-right:1px solid #EFECE6;border-bottom:1px solid #EFECE6;
         position:relative;cursor:pointer}
   .cell:last-child{border-right:none}
   .cell.on{background:var(--sig)}
-  .cell.muted{background:#EEEAE2;border-right-color:#DDD6C9;border-bottom-color:#DDD6C9;cursor:default}
+  .cell.muted{background:repeating-linear-gradient(45deg,#F6F4F0,#F6F4F0 4px,#FFF 4px,#FFF 8px);cursor:default}
   .cell.heat{background:var(--sig)}
-  /* touch-action is scoped to the two interactive grid roles only — the
-     read-only "heat" overlay has no paint listener and must stay freely
-     scrollable everywhere, muted or not. */
-  .grid-wrap[data-role="offer"] .cell,
-  .grid-wrap[data-role="reply"] .cell{touch-action:pinch-zoom}
-  .grid-wrap[data-role="reply"] .cell.muted{touch-action:pan-y pinch-zoom}
   .heatnum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
            font-size:10px;color:#fff;font-weight:600;pointer-events:none}
-  .grid-locked{border:1px solid var(--rule);border-radius:8px;
-               background:repeating-linear-gradient(45deg,#E7E1D2,#E7E1D2 8px,#F2EFE7 8px,#F2EFE7 16px);
+  .grid-locked{border:1px solid var(--rule);border-radius:10px;
+               background:repeating-linear-gradient(45deg,#F6F4F0,#F6F4F0 8px,#FBFAF8 8px,#FBFAF8 16px);
                padding:36px 16px;text-align:center;color:var(--ink-soft);font-size:13.5px;line-height:1.5}
-  .offer-locked{pointer-events:none}
-  /* Dim only the locked timetable, never the editable placement controls. */
-  .offer-locked .grid-head,
-  .offer-locked .row{opacity:.5}
-  .grid-body{position:relative}
-  .placement-layer{position:absolute;top:0;bottom:0;left:46px;right:0;pointer-events:none}
-  .placement-pill{position:absolute;display:flex;align-items:center;justify-content:center;gap:3px;
-    height:23px;margin:0;border:1px solid var(--rule);border-radius:14px;
-    background:var(--paper);color:var(--ink-soft);font-size:11px;white-space:nowrap;line-height:1.1}
-  .placement-pill.chosen{color:var(--sig);border-color:var(--sig);background:var(--sig-soft)}
-  .placement-pill select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px;touch-action:manipulation}
-  .placement-pill:focus-within{outline:auto;outline-offset:2px}
-  .offer-locked .placement-pill{pointer-events:auto}
-  .placement-prefix{display:none}
-  @media(min-width:900px){.placement-prefix{display:inline}}
 
   .meter{display:flex;justify-content:space-between;align-items:baseline;margin:12px 0 0;
          font-size:13px;color:var(--ink-soft)}
@@ -355,7 +258,7 @@
     margin:0 0 14px;
     padding:12px;
     border:1px solid var(--rule);
-    border-radius:8px;
+    border-radius:10px;
     background:var(--panel);
   }
   .dayprefs-head{
@@ -367,7 +270,7 @@
   }
   .dayprefs-head b{font-size:13.5px;font-weight:620}
   .dayprefs-head span{font-size:11.5px;color:var(--ink-soft)}
-  .dayprefs-grid{display:grid;gap:6px}
+  .dayprefs-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
   .daypref{
     min-width:0;
     font:inherit;
@@ -389,25 +292,6 @@
   .option-reason .prefgood{color:var(--sig);font-weight:560}
   .option-reason .prefavoid{color:var(--warn);font-weight:560}
   .more-options{margin-top:4px}
-  .more-options-expander{
-    display:grid;
-    grid-template-rows:0fr;
-    opacity:0;
-    transition:
-      grid-template-rows .48s cubic-bezier(.22,.72,.16,1),
-      opacity .32s ease;
-  }
-  .more-options-expander.open{
-    grid-template-rows:1fr;
-    opacity:1;
-  }
-  .more-options-expander-inner{
-    min-height:0;
-    overflow:hidden;
-  }
-  @media (prefers-reduced-motion: reduce){
-    .more-options-expander{transition:none}
-  }
 
   .srow-group{border-bottom:1px solid var(--rule)}
   .srow-group:last-child{border-bottom:none}
@@ -415,25 +299,9 @@
   .sname{flex:1;min-width:0}
   .sname strong{display:block;font-size:14.5px;font-weight:580}
   .sname span{font-size:12px;color:var(--ink-soft)}
-  .sname-toggle{position:relative;width:100%;padding:0 24px 0 0;border:0;background:none;
-                color:inherit;font:inherit;text-align:left;cursor:pointer}
-  .reply-chevron{position:absolute;right:2px;top:50%;font-size:15px!important;line-height:1;
-                 transform:translateY(-50%) rotate(0deg);transition:transform .18s ease}
-  .sname-toggle[aria-expanded="true"] .reply-chevron{transform:translateY(-50%) rotate(180deg)}
-  .readonly-availability{padding:2px 0 14px}
-  .readonly-note{margin:0 0 8px;font-size:12px;color:var(--ink-soft);font-weight:560}
-  .grid-wrap[data-role="readonly"] .cell{pointer-events:none}
   .chips{display:flex;gap:4px}
   .chip{font:inherit;font-size:11.5px;padding:5px 8px;border-radius:20px;border:1px solid var(--rule);
         background:var(--panel);color:var(--ink-soft);cursor:pointer}
-  /* Keep reply status and duration controls aligned as two equal-width rows. */
-  .srow-group{--reply-controls-width:8.75rem}
-  .srow-group .chips,
-  .srow-group .lenrow .stepper{width:var(--reply-controls-width);flex-shrink:0}
-  .srow-group .chips .chip{flex:1;min-width:0;padding-left:0;padding-right:0}
-  .srow-group .lenrow .stepper{justify-content:space-between;gap:6px}
-  .srow-group .lenrow .stepper .step{flex-shrink:0}
-  .srow-group .lenrow .stepper b{flex:1;min-width:0}
   .chip.sel{background:var(--sig);border-color:var(--sig);color:#fff;font-weight:560}
   .chip.sel.grey{background:var(--ink-soft);border-color:var(--ink-soft)}
   .chip.sel.warn{background:var(--warn);border-color:var(--warn)}
@@ -445,52 +313,14 @@
           font-size:12.5px;color:var(--ink-soft)}
   .stepper{display:flex;align-items:center;gap:10px}
   .stepper b{font-size:13px;font-weight:600;color:var(--ink);min-width:58px;text-align:center}
-  .step{
-        font:inherit;
-        font-size:16px;
-        line-height:1;
-        touch-action:manipulation;
-        width:28px;
-        height:28px;
-        padding:0 0 1px;
-        border-radius:14px;
-        border:1px solid var(--rule);
-        background:var(--panel);
-        color:var(--ink);
-        cursor:pointer;
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        text-align:center;
-        vertical-align:middle;
-        -webkit-appearance:none;
-        appearance:none;
-        transition:transform .12s ease, background-color .12s ease, border-color .12s ease, color .12s ease;
-      }
+  .step{font:inherit;font-size:16px;line-height:1;width:28px;height:28px;border-radius:14px;
+        border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
   .step:disabled{opacity:.32;cursor:default}
   .step:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
-  .step:active:not(:disabled){
-    transform:scale(.86);
-    background:var(--sig-soft);
-    border-color:var(--sig);
-    color:var(--sig);
-  }
-  @media (prefers-reduced-motion:reduce){
-    .step{transition:background-color .12s ease, border-color .12s ease, color .12s ease}
-    .step:active:not(:disabled){transform:none}
-  }
 
-  .panel{border:1px solid var(--rule);border-radius:8px;background:var(--panel);padding:14px;margin-bottom:12px}
-  .panel h3{margin:0 0 10px;font-family:var(--serif);font-size:15px;font-weight:600}
-  .overlay-panel{padding:0;overflow:hidden}
-  .overlay-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
-                  padding:14px;border:0;background:none;color:var(--ink);font:inherit;cursor:pointer;text-align:left}
-  .overlay-toggle strong{font-family:var(--serif);font-size:15px;font-weight:600}
-  .overlay-toggle .reply-chevron{position:static;flex:none;transform:rotate(0deg)}
-  .overlay-toggle[aria-expanded="true"] .reply-chevron{transform:rotate(180deg)}
-  .overlay-content{padding:0 14px 14px}
-  @media (prefers-reduced-motion:reduce){.reply-chevron{transition:none}}
-  .opt{border:1px solid var(--rule);border-radius:7px;padding:12px;margin-bottom:8px;cursor:pointer;background:var(--panel)}
+  .panel{border:1px solid var(--rule);border-radius:10px;background:var(--panel);padding:14px;margin-bottom:12px}
+  .panel h3{margin:0 0 10px;font-size:14px;font-weight:620}
+  .opt{border:1px solid var(--rule);border-radius:9px;padding:12px;margin-bottom:8px;cursor:pointer;background:var(--panel)}
   .opt.sel{border-color:var(--sig);box-shadow:inset 0 0 0 1px var(--sig)}
   .opthead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
   .opthead b{font-size:14px}
@@ -508,43 +338,11 @@
   .htop{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
   .htop b{font-weight:580}
   .htop em{font-style:normal;font-size:12.5px;color:var(--ink-soft)}
-  .track{position:relative;height:6px;background:#EDEAE4;border-radius:3px;margin:7px 0 5px;overflow:hidden}
-  .fill{position:absolute;top:0;bottom:0;left:0;background:var(--sig)}
+  .track{height:6px;background:#EDEAE4;border-radius:3px;margin:7px 0 5px;overflow:hidden}
+  .fill{height:100%;background:var(--sig)}
   .fill.behind{background:var(--warn)}
-  .fill.scheduled{background:var(--sig);opacity:.28}
-  .fill.combined-end{border-radius:0 3px 3px 0}
-  .hours-breakdown{font-size:11.5px;color:var(--ink-soft);margin-bottom:3px}
   .hnote{font-size:12px;color:var(--ink-soft)}
   .hnote.warn{color:var(--warn)}
-  .hours-legend{display:flex;align-items:center;gap:16px;margin:0 0 12px;font-size:12px;color:var(--ink-soft)}
-  .hours-legend span{display:inline-flex;align-items:center;gap:6px}
-  .hours-key{display:inline-block;width:20px;height:6px;border-radius:3px;background:var(--sig)}
-  .hours-key.scheduled{opacity:.28}
-  .hours-sort{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:12px;
-    margin:0 0 12px;
-    padding:10px 12px;
-    border:1px solid var(--rule);
-    border-radius:8px;
-    background:var(--panel);
-  }
-  .hours-sort label{
-    font-size:13px;
-    color:var(--ink-soft);
-  }
-  .hours-sort select{
-    min-width:150px;
-    font:inherit;
-    font-size:13.5px;
-    padding:8px 10px;
-    border-radius:8px;
-    border:1px solid var(--rule);
-    background:var(--paper);
-    color:var(--ink);
-  }
 
   .dateline{display:flex;align-items:center;justify-content:space-between;gap:12px;
             font-size:13px;color:var(--ink-soft)}
@@ -557,32 +355,16 @@
             padding:10px;border-radius:8px;border:1px solid var(--rule);
             background:var(--paper);color:var(--ink);resize:vertical}
   .imgwrap{margin-top:12px}
-  .imgwrap img{width:100%;border:1px solid var(--rule);border-radius:7px;display:block;margin-bottom:10px}
+  .imgwrap img{width:100%;border:1px solid var(--rule);border-radius:9px;display:block;margin-bottom:10px}
 
   .ledger{margin-top:10px;padding:10px 12px;background:var(--paper);
           border:1px solid var(--rule);border-radius:8px}
-  .ledger-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
-                  font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);
-                  font-weight:700;margin:2px 0 7px}
-  .scheduled-hours{margin:-2px -4px 12px;padding:10px;border:1px solid var(--rule);
-                   border-radius:7px;background:var(--sig-soft)}
-  .scheduled-hours .ledger-heading{color:var(--sig);margin-top:0}
-  .scheduled-note{font-size:11.5px;line-height:1.4;color:var(--ink-soft);margin:7px 0 0}
-  .scheduled-entry{display:flex;justify-content:space-between;align-items:center;gap:12px;
-                   font-size:13px;padding:7px 0;border-bottom:1px solid var(--rule)}
-  .scheduled-entry:last-of-type{border-bottom:none}
-  .scheduled-entry-main{min-width:0}
-  .scheduled-entry-main strong{display:block;font-weight:580}
-  .scheduled-entry-main span{display:block;color:var(--ink-soft);font-size:11.5px;margin-top:1px}
-  .scheduled-entry-hours{flex:none;color:var(--sig);font-weight:650}
-  .scheduled-entry .tag{border-color:var(--sig);color:var(--sig);margin-left:6px}
-  .ledger-empty{font-size:13px;color:var(--ink-soft);padding:5px 0 9px}
   .entry{display:flex;justify-content:space-between;align-items:center;
          font-size:13px;padding:6px 0;border-bottom:1px solid var(--rule)}
   .entry.faint{color:var(--ink-soft);border-bottom:none;padding-bottom:10px}
   .entryright{display:flex;align-items:center;gap:8px}
   .tag{font-style:normal;font-size:11px;color:var(--ink-soft);margin-left:8px;
-       border:1px solid var(--rule);border-radius:8px;padding:1px 6px}
+       border:1px solid var(--rule);border-radius:10px;padding:1px 6px}
   .x{font:inherit;font-size:17px;line-height:1;width:24px;height:24px;border-radius:12px;
      border:1px solid var(--rule);background:var(--panel);color:var(--ink-soft);cursor:pointer}
   .x:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
@@ -591,21 +373,6 @@
           border:1px solid var(--rule);background:var(--panel);color:var(--ink);min-width:0}
   .addrow input{flex:1}
   .addrow .btn{padding:7px 13px}
-  .manual-date-field{position:relative;display:flex;align-items:center;flex:1;min-width:0;height:34px;
-                     box-sizing:border-box;padding:0 14px;border:1px solid var(--rule);border-radius:7px;
-                     background:var(--panel);color:var(--ink);font-size:13px;line-height:1;cursor:pointer}
-  .manual-date-field>span{display:block;margin-left:8px;pointer-events:none}
-  .manual-date-field.empty{color:var(--ink-soft)}
-  .manual-date-field input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;
-                           border:0;opacity:0;cursor:pointer}
-  .manual-date-field input::-webkit-clear-button{-webkit-appearance:none;display:none}
-  .addrow select,.addrow .btn{height:34px;box-sizing:border-box}
-  .manual-entry-toggle{margin-top:10px;color:var(--sig);border-color:var(--sig);background:transparent}
-  .manual-entry-expander{display:grid;grid-template-rows:0fr;opacity:0;transform:translateY(-4px);
-    pointer-events:none;transition:grid-template-rows .38s cubic-bezier(.22,.72,.16,1),opacity .24s ease,transform .38s cubic-bezier(.22,.72,.16,1)}
-  .manual-entry-expander.open{grid-template-rows:1fr;opacity:1;transform:translateY(0);pointer-events:auto}
-  .manual-entry-expander-inner{min-height:0;overflow:hidden}
-  @media (prefers-reduced-motion:reduce){.manual-entry-expander{transition:none;transform:none}}
 
   .live{padding:9px 0;border-bottom:1px solid var(--rule)}
   .live:last-child{border-bottom:none}
@@ -619,197 +386,37 @@
   .mini:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
   .struck{text-decoration:line-through;color:var(--ink-soft)}
 
-
-  /* Agenda: the same schedule data in a compact, day-by-day view. */
-  .schedule-view-switch{display:flex;justify-content:flex-end;gap:4px;margin:0 0 16px}
-  .schedule-view-switch button{font:inherit;font-size:13px;min-height:40px;padding:8px 16px;
-    border:1px solid var(--rule);border-radius:7px;background:var(--panel);color:var(--ink-soft);cursor:pointer}
-  .schedule-view-switch button[aria-pressed="true"]{background:var(--sig);border-color:var(--sig);color:#fff}
-  .agenda{background:#FFFCF7;border:1px solid var(--rule);border-radius:12px;overflow:hidden;margin:0 0 18px}
-  .agenda-head{background:var(--sig);color:#fff;padding:18px 22px}
-  .agenda-heading{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:8px}
-  .agenda-week{flex:none;font-size:10px;letter-spacing:1.6px;text-transform:uppercase;line-height:1.5}
-  .agenda-head h2{font:500 29px/1.2 var(--serif);letter-spacing:-.6px;margin:0}
-  .agenda-head p{font-size:12px;line-height:1.6;margin:0;opacity:.9}
-  .agenda-body{padding:7px 22px 0}
-  .agenda-day{padding:17px 0 3px}
-  .agenda-day-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}
-  .agenda-day-heading h3{font:600 13px/1.5 "IBM Plex Sans",sans-serif;margin:0;color:var(--ink)}
-  .agenda-day-heading span{flex:none;font-size:11px;color:var(--ink-soft)}
-  .agenda-row{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:start;gap:10px;margin-bottom:9px}
-  .agenda-time{font-size:11px;color:var(--ink-soft);padding-top:15px;font-variant-numeric:tabular-nums}
-  .agenda-lesson{min-width:0;background:#EEE5DA;border-left:3px solid #93674F;border-radius:5px}
-  .agenda-lesson.rose{background:#F0E0E1;border-color:#9F5F6B}
-  .agenda-lesson.sage{background:#E4E8DC;border-color:#7C8960}
-  .agenda-lesson-line{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 12px;min-height:46px;list-style:none}
-  .agenda-lesson-line::-webkit-details-marker{display:none}
-  summary.agenda-lesson-line{cursor:pointer}
-  .agenda-name{font-size:13px;line-height:1.5;overflow-wrap:anywhere;min-width:0}
-  .agenda-duration{font-size:11px;color:#66584B;white-space:nowrap;flex:none}
-  details .agenda-duration::after{content:"⌄";display:inline-block;margin-left:9px}
-  details[open] .agenda-duration::after{transform:rotate(180deg)}
-  .agenda-controls{padding:0 12px 13px}
-  .agenda-controls p{font-size:11px;line-height:1.5;margin:0 0 10px;color:var(--ink-soft)}
-  .agenda-controls .cancels{flex-wrap:wrap;gap:8px}
-  .agenda-controls .mini{min-height:38px;background:#FFFCF7}
-  .agenda-foot{display:flex;align-items:flex-start;gap:8px;border-top:1px solid var(--rule);margin:14px 0 0;padding:15px 0 18px;font-size:11px;line-height:1.6;color:var(--ink-soft)}
-  .agenda-dot{width:6px;height:6px;border-radius:50%;background:var(--sig);flex:none;margin-top:6px}
-  .agenda .empty{margin:0;padding:20px 0 6px}
-  .agenda-choice{display:block;margin:0 0 14px;font-size:13px;color:var(--ink-soft)}
-  .agenda-choice select{display:block;width:100%;font:inherit;font-size:16px;color:var(--ink);padding:11px 9px;margin-top:7px;border:1px solid var(--rule);border-radius:7px;background:var(--panel)}
-  @media(max-width:380px){
-    .agenda-head{padding:16px}.agenda-head h2{font-size:26px}.agenda-body{padding:5px 14px 0}
-    .agenda-row{grid-template-columns:39px minmax(0,1fr);gap:7px}.agenda-lesson-line{padding:12px 9px;gap:7px}
-    .agenda-day-heading{align-items:flex-start}.agenda-day-heading span{font-size:10px}
-  }
-
   .toast{position:fixed;left:16px;right:16px;bottom:18px;background:var(--ink);color:var(--paper);
-         padding:12px 14px;border-radius:7px;font-size:13.5px;z-index:50;opacity:0}
+         padding:12px 14px;border-radius:9px;font-size:13.5px;z-index:50;opacity:0}
   .toast.show{animation:toastFade 2.6s ease-in-out both}
   @keyframes toastFade{0%{opacity:0}12%{opacity:1}82%{opacity:1}100%{opacity:0}}
   .empty{font-size:13.5px;color:var(--ink-soft);line-height:1.55;padding:20px 0}
-  #brandFooter{
-    position:fixed;left:0;right:0;bottom:0;z-index:40;
-    display:flex;align-items:center;justify-content:center;
-    padding:24px 0 14px;
-    background:linear-gradient(to top, var(--paper) 55%, transparent);
-    pointer-events:none;
-    transform:translateZ(0);
-    -webkit-transform:translateZ(0);
-    will-change:transform;
-  }
-  #brandFooterInner{
-    display:flex;align-items:center;justify-content:center;gap:0.14em;
-    width:max-content;
-    font-family:var(--serif);
-    font-size:12.5px;
-    line-height:1;
-    font-weight:700;
-    letter-spacing:-0.025em;
-    color:var(--ink-soft);
-    white-space:nowrap;
-    text-rendering:optimizeLegibility;
-    -webkit-font-smoothing:antialiased;
-  }
-  #brandFooter .brand-mark{flex:none;width:0.78em;height:0.78em;transform:translateY(0.035em)}
-  .accent-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:10px}
-  .accent-option{display:flex;align-items:center;gap:9px;min-height:52px;padding:10px;border:1px solid var(--rule);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
-  .accent-option[aria-pressed="true"]{border-color:var(--sig);background:var(--sig-soft);box-shadow:inset 0 0 0 1px var(--sig)}
-  .accent-swatch{display:flex;align-items:center;justify-content:center;flex:none;width:26px;height:26px;border-radius:50%;color:white;font-weight:700}
-</style>
-<style>
-  #syncNotice{padding:12px 16px;background:#FFF2D8;border-bottom:1px solid #D5B580;color:#503C1D}
-  #syncNotice p{margin:0 0 8px}
 </style>
 </head>
 <body>
-<div id="syncNotice" role="alert" hidden></div>
 <div id="app"></div>
-
-<div id="brandFooter">
-  <div id="brandFooterInner">
-    <svg class="brand-mark" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-      <rect width="40" height="40" rx="9" fill="var(--sig)"/>
-      <rect x="8" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/>
-      <rect x="20" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/>
-    </svg>
-    <span>Cadence.</span>
-  </div>
-</div>
 <div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
 <div id="sidebarPanel" class="sidebar-panel"></div>
 <div id="toast" class="toast" hidden></div>
+
 <script>
-const ACCENT_THEMES = {
-  oxblood: { name: "Oxblood", ink: "#6E1423", soft: "#EDDEDD" },
-  midnight: { name: "Midnight blue", ink: "#203D64", soft: "#E0E7F0" },
-  forest: { name: "Forest green", ink: "#24513D", soft: "#DFEAE2" },
-  plum: { name: "Deep plum", ink: "#59345F", soft: "#EBE0ED" },
-  slate: { name: "Slate", ink: "#44515F", soft: "#E3E7EB" }
-};
-function accentTheme(id) {
-  return Object.prototype.hasOwnProperty.call(ACCENT_THEMES, id) ? ACCENT_THEMES[id] : ACCENT_THEMES.oxblood;
-}
-function applyAccent(id) {
-  const theme = accentTheme(id);
-  document.body.style.setProperty("--sig", theme.ink);
-  document.body.style.setProperty("--sig-soft", theme.soft);
-}
-
-// Safari on iPad doesn't move focus between text fields on Tab by
-// default — that only happens with "Full Keyboard Access" turned on in
-// Accessibility settings, which almost nobody enables. With a hardware
-// keyboard, pressing Tab there just exits the field with nowhere to go.
-// Advancing focus by hand here makes Tab work as expected regardless of
-// that setting. Fields are queried fresh on every keypress (rather than
-// once) since this app's field list changes constantly — students added,
-// tabs switched, and so on.
-document.addEventListener("keydown", (e) => {
-  if (e.key !== "Tab") return;
-  const selector = 'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])';
-  const fields = Array.from(document.querySelectorAll(selector)).filter(el => el.offsetParent !== null);
-  const idx = fields.indexOf(document.activeElement);
-  if (idx === -1) return;
-  const next = fields[e.shiftKey ? idx - 1 : idx + 1];
-  if (!next) return; // at the boundary — let the browser's own tab order take over
-  e.preventDefault();
-  next.focus();
-});
-
 /* ================================================================== */
 /*  Constants                                                          */
 /* ================================================================== */
 
-const GRID_SLOT_MIN = 30;
-const SCHEDULE_SLOT_MIN = 15;
-const MIN_LESSON_MINUTES = 30;
-const MAX_LESSON_MINUTES = 90;
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+const START_HOUR = 9;
+const SLOT_MIN = 30;
+const SLOTS = 20; // 09:00 -> 19:00
 
-// Every round snapshots includeWeekends/dayStartHour/dayEndHour at the
-// moment it's created (see blankRound), rather than reading a live global
-// — so changing the Settings page only shapes weeks you haven't painted
-// yet. A week already on the grid keeps meaning exactly what it always
-// did, even if the setting changes later.
-function roundDays(rnd) {
-  const base = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-  return rnd.includeWeekends ? base.concat(["Sat", "Sun"]) : base;
-}
-function roundSlots(rnd) {
-  return (rnd.dayEndHour - rnd.dayStartHour) * 2;
-}
-function slotTimeFor(startHour, i) {
-  const total = startHour * 60 + i * GRID_SLOT_MIN;
+const slotTime = (i) => {
+  const total = START_HOUR * 60 + i * SLOT_MIN;
   const h = Math.floor(total / 60);
   const m = total % 60;
   return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
-}
-function scheduleTimeFor(startHour, i) {
-  const total = startHour * 60 + i * SCHEDULE_SLOT_MIN;
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
-}
+};
 
 const key = (d, i) => d + "-" + i;
-
-function expandGridAvailability(cells) {
-  const expanded = new Set();
-  cells.forEach(value => {
-    const [d, i] = String(value).split("-").map(Number);
-    if (!Number.isInteger(d) || !Number.isInteger(i)) return;
-    expanded.add(key(d, i * 2));
-    expanded.add(key(d, i * 2 + 1));
-  });
-  return expanded;
-}
-
-function solverBlockPreferences(rnd) {
-  return reconcileBlockPreferences(rnd).map(block => ({
-    ...block,
-    start: block.start * 2,
-    end: block.end * 2,
-  }));
-}
 
 const todayISO = () => { const n = new Date(); return new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())).toISOString().slice(0, 10); };
 
@@ -822,41 +429,11 @@ const DEFAULT_TERM_RANGES = [
   { start: "2027-04-12", end: "2027-07-02" },
 ];
 
-// The order the solver weighs its scoring dimensions in, most important
-// first. A user can reorder this from Settings > Priorities; this is only
-// the default for a brand-new account or an older saved state that
-// predates the feature.
-const PRIORITY_KEYS = ["days", "preference", "gaps", "placement", "latest", "latestStart"];
-const DEFAULT_PRIORITY_ORDER = ["days", "preference", "gaps", "placement", "latest"];
-const PRIORITY_OPTIONS_VERSION = 2;
-
-function normalisePriorityOrder(order) {
-  if (!Array.isArray(order)) return DEFAULT_PRIORITY_ORDER.slice();
-  const valid = order.filter((key, i) => PRIORITY_KEYS.includes(key) && order.indexOf(key) === i);
-  return valid.length ? valid : [DEFAULT_PRIORITY_ORDER[0]];
-}
-
-function migratePrioritySettings(settings) {
-  const next = { ...(settings || {}) };
-  const previousVersion = Number(next.priorityOptionsVersion || 0);
-  const order = normalisePriorityOrder(next.priorityOrder);
-  // Versions before exclusions existed expected these two former hidden
-  // tie-breakers to remain active. The genuinely new Latest start option is
-  // intentionally left excluded until the teacher opts in.
-  if (previousVersion < 1) {
-    ["placement", "latest"].forEach(key => { if (!order.includes(key)) order.push(key); });
-  }
-  next.priorityOrder = order;
-  next.priorityOptionsVersion = PRIORITY_OPTIONS_VERSION;
-  return next;
-}
-
 // The teaching-week total is derived from S.termRanges (raw calendar weeks
 // across every term), not a fixed number — reading weeks reduce it the
 // same way any "not teaching" week does, by being marked, not by a
 // separate deduction baked into a constant.
 function termWeeks() {
-  if (S.settings && S.settings.schedulingMode === "rolling") return 999;
   let total = 0;
   (S.termRanges || []).forEach(t => {
     if (!t.start || !t.end) return;
@@ -880,7 +457,6 @@ function isoParts(iso) {
 function nextWeekStart(iso) {
   const { y, m, d } = isoParts(iso);
   const naiveISO = new Date(Date.UTC(y, m - 1, d + 7)).toISOString().slice(0, 10);
-  if (S.settings && S.settings.schedulingMode === "rolling") return naiveISO;
   const term = (S.termRanges || []).find(t => iso >= t.start && iso <= t.end);
   if (!term) return naiveISO; // outside any known term — just roll forward
   if (naiveISO > term.end) {
@@ -933,11 +509,11 @@ const hashStr = (s) => {
 
 const bitCount = (n) => { let c = 0; while (n) { n &= n - 1; c++; } return c; };
 
-function buildCandidates(participants, offered, days, slots) {
+function buildCandidates(participants, offered) {
   return participants.map((p) => {
     const cands = [];
-    for (let d = 0; d < days.length; d++) {
-      for (let i = 0; i + p.lesson <= slots; i++) {
+    for (let d = 0; d < DAYS.length; d++) {
+      for (let i = 0; i + p.lesson <= SLOTS; i++) {
         let ok = true;
         for (let k = 0; k < p.lesson; k++) {
           const kk = key(d, i + k);
@@ -950,49 +526,10 @@ function buildCandidates(participants, offered, days, slots) {
   });
 }
 
-// Contiguous offered slots are independent blocks. Stored ranges let a
-// preference follow resizing/splitting without leaking into a new block.
-function availabilityBlocks(offered, days, slots) {
-  const blocks = [];
-  for (let d = 0; d < days.length; d++) {
-    let start = null;
-    for (let i = 0; i <= slots; i++) {
-      const on = i < slots && offered.has(key(d, i));
-      if (on && start === null) start = i;
-      if (!on && start !== null) { blocks.push({ d, start, end: i }); start = null; }
-    }
-  }
-  return blocks;
-}
-
-function reconcileBlockPreferences(rnd) {
-  const previous = Array.isArray(rnd.blockPreferences) ? rnd.blockPreferences : [];
-  rnd.blockPreferences = availabilityBlocks(rnd.offered, roundDays(rnd), roundSlots(rnd)).map(block => {
-    const overlapping = previous.filter(p => p.d === block.d && p.start < block.end && p.end > block.start);
-    const values = new Set(overlapping.map(p => p.placement === "early" || p.placement === "late" ? p.placement : "any"));
-    // Splits inherit; merging conflicting preferences safely resets to Any.
-    return { ...block, placement: values.size === 1 ? [...values][0] : "any" };
-  });
-  return rnd.blockPreferences;
-}
-
-function placementCost(assign, blocks = []) {
-  let cost = 0;
-  for (const block of blocks) {
-    if (block.placement !== "early" && block.placement !== "late") continue;
-    const lessons = assign.filter(a => a.d === block.d && a.start >= block.start && a.start + a.lesson <= block.end);
-    if (!lessons.length) continue;
-    cost += block.placement === "early"
-      ? Math.min(...lessons.map(a => a.start)) - block.start
-      : block.end - Math.max(...lessons.map(a => a.start + a.lesson));
-  }
-  return cost;
-}
-
-function scoreSolution(assign, dayPreferences = {}, blockPreferences = []) {
+function scoreSolution(assign, dayPreferences = {}) {
   const byDay = {};
   assign.forEach((a) => { (byDay[a.d] = byDay[a.d] || []).push(a); });
-  let gaps = 0, latest = 0, earliestStart = Infinity, preference = 0;
+  let gaps = 0, latest = 0, preference = 0;
   Object.entries(byDay).forEach(([d, list]) => {
     list.sort((x, y) => x.start - y.start);
     const first = list[0].start;
@@ -1000,34 +537,9 @@ function scoreSolution(assign, dayPreferences = {}, blockPreferences = []) {
     const busy = list.reduce((s, x) => s + x.lesson, 0);
     gaps += last - first - busy;
     latest = Math.max(latest, last);
-    earliestStart = Math.min(earliestStart, first);
     preference += Number(dayPreferences[d] || 0);
   });
-  return { days: Object.keys(byDay).length, gaps, latest, earliestStart, preference, placement: placementCost(assign, blockPreferences) };
-}
-
-// Turns the user's ranked list (Settings > Priorities) into a comparator:
-// try each dimension in the order given, falling through to the next only
-// on a tie. It never removes a feasible slot.
-function buildPriorityComparator(priorityOrder) {
-  const order = normalisePriorityOrder(priorityOrder);
-  const diffs = {
-    days: (x, y) => x.days - y.days,
-    gaps: (x, y) => x.gaps - y.gaps,
-    preference: (x, y) => x.preference - y.preference,
-    placement: (x, y) => (x.placement || 0) - (y.placement || 0),
-    latest: (x, y) => x.latest - y.latest,
-    latestStart: (x, y) => y.earliestStart - x.earliestStart,
-  };
-  return (x, y) => {
-    for (const key of order) {
-      const fn = diffs[key];
-      if (!fn) continue;
-      const d = fn(x, y);
-      if (d !== 0) return d;
-    }
-    return 0;
-  };
+  return { days: Object.keys(byDay).length, gaps, latest, preference };
 }
 
 function combinations(arr, k) {
@@ -1041,8 +553,8 @@ function combinations(arr, k) {
   return out;
 }
 
-function dayBlockers(withCands, offered, days) {
-  return days.map((label, d) => {
+function dayBlockers(withCands, offered) {
+  return DAYS.map((label, d) => {
     const dayWasOffered = [...offered].some((k) => Number(k.split("-")[0]) === d);
     if (!dayWasOffered) return null; // nothing to negotiate — you never offered this day
     const blocked = withCands.filter((p) => !p.cands.some((c) => c.d === d)).map((p) => p.name);
@@ -1050,30 +562,11 @@ function dayBlockers(withCands, offered, days) {
   }).filter(Boolean).sort((a, b) => a.blocked.length - b.blocked.length);
 }
 
-function solve(participants, offered, dayPreferences = {}, days, slots, priorityOrder, blockPreferences = []) {
-  const withCands = buildCandidates(participants, offered, days, slots);
-  // The search is bounded, so visit the active placement/time preferences in
-  // their ranked order before the solution cap is reached (not only re-rank
-  // the solutions that happened to be generated first).
-  const searchOrder = normalisePriorityOrder(priorityOrder);
-  for (const p of withCands) {
-    p.cands.sort((a, b) => {
-      for (const key of searchOrder) {
-        let diff = 0;
-        if (key === "placement") {
-          diff = placementCost([{ ...a, lesson: p.lesson }], blockPreferences)
-            - placementCost([{ ...b, lesson: p.lesson }], blockPreferences);
-        } else if (key === "latest") diff = a.start - b.start;
-        else if (key === "latestStart") diff = b.start - a.start;
-        if (diff !== 0) return diff;
-      }
-      return a.d - b.d || a.start - b.start;
-    });
-  }
-  const comparator = buildPriorityComparator(priorityOrder);
+function solve(participants, offered, dayPreferences = {}) {
+  const withCands = buildCandidates(participants, offered);
 
   const masks = [];
-  for (let m = 1; m < 1 << days.length; m++) masks.push(m);
+  for (let m = 1; m < 1 << DAYS.length; m++) masks.push(m);
   masks.sort((a, b) => bitCount(a) - bitCount(b) || a - b);
 
   const tryMask = (mask, people) => {
@@ -1109,8 +602,13 @@ function solve(participants, offered, dayPreferences = {}, days, slots, priority
   };
 
   const rankAndDedupe = (found, limit = 12) => {
-    const scored = found.map((a) => ({ assign: a, ...scoreSolution(a, dayPreferences, blockPreferences) }))
-      .sort(comparator);
+    const scored = found.map((a) => ({ assign: a, ...scoreSolution(a, dayPreferences) }))
+      .sort((x, y) =>
+        x.days - y.days ||
+        x.preference - y.preference ||
+        x.gaps - y.gaps ||
+        x.latest - y.latest
+      );
 
     const assignmentSeen = new Set();
     const unique = [];
@@ -1121,27 +619,22 @@ function solve(participants, offered, dayPreferences = {}, days, slots, priority
       unique.push(s);
     }
 
-    // Preserve the true priority ranking unless an option is effectively the
-    // same timetable with students shuffled between identical lesson slots.
-    // Keep the best-ranked version of each layout in place, then show those
-    // near-duplicate variants after the meaningfully different options.
-    const layoutSeen = new Set();
-    const distinct = [];
-    const nearDuplicates = [];
+    // Make the first choices genuinely different where possible: show
+    // different day combinations before alternate student orders on the same day(s).
+    const daySeen = new Set();
+    const diverse = [];
+    const remainder = [];
     unique.forEach(s => {
-      const layoutSig = s.assign
-        .map(a => a.d + ":" + a.start + ":" + a.lesson)
-        .sort()
-        .join("|");
-      if (!layoutSeen.has(layoutSig)) {
-        layoutSeen.add(layoutSig);
-        distinct.push(s);
+      const daySig = [...new Set(s.assign.map(a => a.d))].sort().join(",");
+      if (!daySeen.has(daySig)) {
+        daySeen.add(daySig);
+        diverse.push(s);
       } else {
-        nearDuplicates.push(s);
+        remainder.push(s);
       }
     });
 
-    return [...distinct, ...nearDuplicates].slice(0, limit);
+    return [...diverse, ...remainder].slice(0, limit);
   };
 
   const impossible = withCands.some((p) => p.cands.length === 0);
@@ -1151,11 +644,7 @@ function solve(participants, offered, dayPreferences = {}, days, slots, priority
 
     for (const mask of masks) {
       const dayCount = bitCount(mask);
-      // Keep going one day-count tier past the first one that works, so a
-      // priority ranked above "Fewest days" (e.g. "No gaps") has a genuine
-      // alternative to compete against rather than only ever seeing
-      // solutions from the single smallest day count.
-      if (bestDayCount !== null && dayCount > bestDayCount + 1) break;
+      if (bestDayCount !== null && dayCount > bestDayCount) break;
       const found = tryMask(mask, withCands);
       if (!found.length) continue;
       if (bestDayCount === null) bestDayCount = dayCount;
@@ -1167,7 +656,7 @@ function solve(participants, offered, dayPreferences = {}, days, slots, priority
         ok: true,
         options: rankAndDedupe(allBest, 12),
         unplaced: [],
-        blockers: dayBlockers(withCands, offered, days)
+        blockers: dayBlockers(withCands, offered)
       };
     }
   }
@@ -1213,11 +702,11 @@ function solve(participants, offered, dayPreferences = {}, days, slots, priority
       ok: false,
       options: rankAndDedupe(partialFound, 12),
       unplaced: withCands.filter((p) => !bestPlacedIds.has(p.id)).map((p) => p.name),
-      blockers: dayBlockers(withCands, offered, days),
+      blockers: dayBlockers(withCands, offered),
     };
   }
 
-  return { ok: false, options: [], unplaced: withCands.map((p) => p.name), blockers: dayBlockers(withCands, offered, days) };
+  return { ok: false, options: [], unplaced: withCands.map((p) => p.name), blockers: dayBlockers(withCands, offered) };
 }
 
 /* ================================================================== */
@@ -1239,85 +728,47 @@ async function loadMe() {
 function blankRound(weekStart) {
   return {
     weekStart,
-    schedulerSlotMinutes: SCHEDULE_SLOT_MIN,
     offered: new Set(),
-    blockPreferences: [],
     replies: {},
     plan: null,
     result: null,
     chosen: 0,
     notTeaching: false,
-    sent: false,
-    note: "",
-    dayPreferences: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+    dayPreferences: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 },
     optionsExpanded: false,
-    includeWeekends: S.settings.includeWeekends,
-    dayStartHour: S.settings.dayStartHour,
-    dayEndHour: S.settings.dayEndHour,
   };
 }
 
 let S = {
   tab: "week",
-  scheduleView: "timetable",
   week: 1,
   weeksCompleted: 0,
   termRanges: DEFAULT_TERM_RANGES.map(r => ({ ...r })),
-  settings: { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice(), priorityOptionsVersion: PRIORITY_OPTIONS_VERSION, schedulingMode: "terms", cancellationWindowHours: 24 },
-  rounds: {},
+  rounds: { "1": blankRound(DEFAULT_TERM_RANGES[0].start) },
   students: [],
   openStudent: null,
   log: [],
   openHours: null,
-  hoursSort: "first",
-  hoursExportTimeframe: "week",
-  hoursExportText: "",
-  draft: { date: "", hours: 1 },
+  draft: { date: todayISO(), hours: 1 },
   fallbackText: "",
   imgUrl: "",
 };
-S.rounds["1"] = blankRound(DEFAULT_TERM_RANGES[0].start);
-// Replies-tab disclosures are deliberately transient: each fresh visit starts
-// with the combined overlay tucked away, while an opened panel survives rerenders.
-let repliesOverlayOpen = false;
 
 function ensureRound(weekNo) {
   const k = String(weekNo);
-  if (S.rounds[k]) return syncRoundShape(S.rounds[k]);
+  if (S.rounds[k]) return S.rounds[k];
   let fromWeek = 1;
-  let fromStart = (S.termRanges && S.termRanges[0]) ? S.termRanges[0].start : todayISO();
+  let fromStart = S.termRanges[0].start;
   for (let w = weekNo - 1; w >= 1; w--) {
     if (S.rounds[String(w)]) { fromWeek = w; fromStart = S.rounds[String(w)].weekStart; break; }
   }
   let cur = fromStart;
   for (let w = fromWeek; w < weekNo; w++) cur = nextWeekStart(cur);
   S.rounds[k] = blankRound(cur);
-  return syncRoundShape(S.rounds[k]);
-}
-// A round that's still completely blank — no offered blocks, not marked
-// not-teaching, no replies, no plan — keeps mirroring whatever Settings
-// currently says, every single time it's touched, including just being
-// glanced at while stepping through the picker. Only the moment it's
-// actually used does its shape freeze, at whatever was true right then.
-function syncRoundShape(rnd) {
-  const untouched = rnd.offered.size === 0 && !rnd.notTeaching && !rnd.plan && Object.keys(rnd.replies).length === 0;
-  if (untouched) {
-    rnd.includeWeekends = S.settings.includeWeekends;
-    rnd.dayStartHour = S.settings.dayStartHour;
-    rnd.dayEndHour = S.settings.dayEndHour;
-  }
-  return rnd;
+  return S.rounds[k];
 }
 function activeRound() { return ensureRound(S.week); }
-const lessonMinutesFor = (rnd, id) => {
-  const reply = rnd.replies[id];
-  if (!reply) return 60;
-  const minutes = Number.isInteger(reply.lessonMinutes)
-    ? reply.lessonMinutes
-    : (Number.isFinite(Number(reply.lesson)) ? Number(reply.lesson) * GRID_SLOT_MIN : 60);
-  return Math.min(MAX_LESSON_MINUTES, Math.max(MIN_LESSON_MINUTES, minutes));
-};
-const lessonFor = (rnd, id) => lessonMinutesFor(rnd, id) / SCHEDULE_SLOT_MIN;
+const lessonFor = (rnd, id) => (rnd.replies[id] && rnd.replies[id].lesson) || 2;
 
 /* ================================================================== */
 /*  Persistence — one JSON blob synced to D1 via a Pages Function      */
@@ -1331,38 +782,28 @@ function serializeState() {
     const rr = S.rounds[k];
     rounds[k] = {
       weekStart: rr.weekStart,
-      schedulerSlotMinutes: SCHEDULE_SLOT_MIN,
       offered: [...rr.offered],
-      blockPreferences: reconcileBlockPreferences(rr),
       replies: Object.fromEntries(Object.entries(rr.replies).map(([id, rep]) => [id, {
         status: rep.status,
         avail: [...rep.avail],
-        lessonMinutes: Number.isInteger(rep.lessonMinutes) ? rep.lessonMinutes : lessonMinutesFor(rr, id),
+        lesson: rep.lesson || 2,
         source: rep.source || null,
       }])),
       plan: rr.plan,
       result: rr.result,
       chosen: rr.chosen,
       notTeaching: !!rr.notTeaching,
-      sent: !!rr.sent,
-      note: rr.note || "",
-      dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
-      includeWeekends: !!rr.includeWeekends,
-      dayStartHour: rr.dayStartHour,
-      dayEndHour: rr.dayEndHour,
+      dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 },
     };
   });
   return JSON.stringify({
     tab: S.tab,
-    scheduleView: S.scheduleView,
     week: S.week,
     weeksCompleted: S.weeksCompleted,
     termRanges: S.termRanges,
-    settings: S.settings,
     rounds,
     students: S.students,
     log: S.log,
-    hoursSort: S.hoursSort,
     draft: S.draft,
   });
 }
@@ -1370,59 +811,28 @@ function serializeState() {
 function applySavedState(saved) {
   if (!saved) return;
   S.tab = saved.tab || S.tab;
-  S.scheduleView = saved.scheduleView === "agenda" ? "agenda" : "timetable";
   S.week = saved.week || S.week;
   S.weeksCompleted = saved.weeksCompleted || 0;
-  S.termRanges = Array.isArray(saved.termRanges) ? saved.termRanges : S.termRanges;
-  S.settings = migratePrioritySettings(saved.settings || S.settings);
-  if (S.settings.schedulingMode !== "rolling") {
-    // Infer rolling mode for accounts whose onboarding sent an empty
-    // termRanges array but predates the schedulingMode field itself —
-    // an explicit "no terms" signal should still be honoured.
-    S.settings.schedulingMode = S.termRanges.length === 0 ? "rolling" : "terms";
-  }
-  if (!S.settings.cancellationWindowHours) S.settings.cancellationWindowHours = 24;
+  S.termRanges = (saved.termRanges && saved.termRanges.length) ? saved.termRanges : S.termRanges;
   S.students = saved.students || S.students;
   S.log = saved.log || [];
-  S.hoursSort = saved.hoursSort || "first";
-  // A date is only meaningful for the next unsaved manual entry. Never carry
-  // an abandoned choice across a reload.
-  S.draft = { ...S.draft, ...(saved.draft || {}), date: "" };
+  S.draft = saved.draft || S.draft;
   S.rounds = {};
   Object.entries(saved.rounds || {}).forEach(([k, rr]) => {
-    const usesQuarterHours = rr.schedulerSlotMinutes === SCHEDULE_SLOT_MIN;
-    const migrateLesson = lesson => ({
-      ...lesson,
-      start: usesQuarterHours ? lesson.start : lesson.start * 2,
-      lesson: usesQuarterHours ? lesson.lesson : lesson.lesson * 2,
-      key: lesson.id + "-" + lesson.d + "-" + (usesQuarterHours ? lesson.start : lesson.start * 2),
-    });
     S.rounds[k] = {
       weekStart: rr.weekStart,
-      schedulerSlotMinutes: SCHEDULE_SLOT_MIN,
       offered: new Set(rr.offered || []),
-      blockPreferences: Array.isArray(rr.blockPreferences) ? rr.blockPreferences : [],
       replies: Object.fromEntries(Object.entries(rr.replies || {}).map(([id, rep]) => [id, {
         status: rep.status,
         avail: new Set(rep.avail || []),
-        lessonMinutes: Math.min(MAX_LESSON_MINUTES, Math.max(MIN_LESSON_MINUTES,
-          Number.isInteger(rep.lessonMinutes) ? rep.lessonMinutes : ((rep.lesson || 2) * GRID_SLOT_MIN))),
+        lesson: rep.lesson || 2,
         source: rep.source || null,
       }])),
-      plan: rr.plan ? { ...rr.plan, lessons: (rr.plan.lessons || []).map(migrateLesson) } : null,
-      // Old solver results used 30-minute coordinates. They are cheap and
-      // safer to regenerate than to migrate every cached score field.
-      result: usesQuarterHours ? (rr.result || null) : null,
+      plan: rr.plan || null,
+      result: rr.result || null,
       chosen: rr.chosen || 0,
       notTeaching: !!rr.notTeaching,
-      sent: !!rr.sent,
-      dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
-      note: rr.note || "",
-      // A round saved before this feature existed has none of these — default
-      // to exactly what was hardcoded before, so nothing already painted shifts.
-      includeWeekends: !!rr.includeWeekends,
-      dayStartHour: rr.dayStartHour != null ? rr.dayStartHour : 9,
-      dayEndHour: rr.dayEndHour != null ? rr.dayEndHour : 19,
+      dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 },
       optionsExpanded: false,
     };
   });
@@ -1430,148 +840,28 @@ function applySavedState(saved) {
 }
 
 let saveTimer = null;
-let stateReady = false, stateBlocked = false, saveInFlight = false, refreshInFlight = false;
-let stateRevision = 0, savedFingerprint = "";
-let suppressStateRefreshUntil = 0;
-
-function stateFingerprint(body = serializeState()) {
-  const value = JSON.parse(body);
-  // Browsing/view preferences alone must not write the database.
-  for (const field of ["tab","week","scheduleView","hoursSort","draft"]) delete value[field];
-  for (const [week,rnd] of Object.entries(value.rounds || {})) {
-    delete rnd.chosen;
-    if (!rnd.offered.length && !Object.keys(rnd.replies).length && !rnd.plan && !rnd.result &&
-        !rnd.notTeaching && !rnd.sent && !rnd.note &&
-        !Object.values(rnd.dayPreferences || {}).some(Boolean)) delete value.rounds[week];
-  }
-  return JSON.stringify(value);
-}
-
-function syncNotice(message, conflict = false) {
-  const box = document.getElementById("syncNotice");
-  if (!box) return;
-  box.hidden = !message;
-  box.innerHTML = message ? '<p>' + escapeHTML(message) + '</p>' +
-    (conflict ? '<button class="btn" onclick="downloadUnsavedState()">Download unsaved changes</button> <button class="btn" onclick="location.reload()">Reload latest</button>'
-      : '<button class="btn" onclick="' + (stateReady ? 'saveStateNow()' : 'location.reload()') + '">' + (stateReady ? 'Retry save' : 'Reload') + '</button>') : "";
-}
-function downloadUnsavedState() {
-  const url = URL.createObjectURL(new Blob([serializeState()],{type:"application/json"}));
-  const a = document.createElement("a"); a.href=url; a.download="cadence-unsaved-changes.json"; a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
-}
-function blockStaleState() {
-  stateBlocked = true;
-  clearTimeout(saveTimer);
-  syncNotice("Newer changes were saved elsewhere. This tab has stopped saving to protect them. Download any unsaved changes before reloading.",true);
-  document.getElementById("app").inert = true;
-}
 function scheduleSave() {
-  if (!stateReady || stateBlocked) return;
   clearTimeout(saveTimer);
-  if (stateFingerprint() === savedFingerprint) return;
-  saveTimer = setTimeout(saveStateNow,500);
+  saveTimer = setTimeout(() => {
+    fetch("/api/state", { method: "POST", headers: { "content-type": "application/json" }, body: serializeState() })
+      .catch(() => { /* offline or backend not deployed yet — next change retries */ });
+  }, 500);
 }
-async function saveStateNow() {
-  if (!stateReady || stateBlocked || saveInFlight) return;
-  clearTimeout(saveTimer);
-  const body = serializeState(), fingerprint = stateFingerprint(body);
-  if (fingerprint === savedFingerprint) return;
-  saveInFlight = true;
-  let succeeded = false;
-  try {
-    const res = await fetch("/api/state",{method:"POST",headers:{"content-type":"application/json","if-match":'"' + stateRevision + '"'},body});
-    if (res.status === 409 || res.status === 428) { blockStaleState(); return; }
-    if (!res.ok) throw new Error("Save rejected");
-    const result = await res.json();
-    if (!result.ok || !Number.isSafeInteger(result.revision)) throw new Error("Invalid save acknowledgement");
-    stateRevision = result.revision;
-    savedFingerprint = fingerprint;
-    succeeded = true;
-    syncNotice("");
-  } catch (e) {
-    syncNotice("Your latest changes haven't been saved. Keep this tab open and retry when connected.");
-  } finally {
-    saveInFlight = false;
-    if (succeeded) scheduleSave(); // Serialise edits made while the request was in flight.
-  }
-}
-async function readLatestState() {
-  const res = await fetch("/api/state",{cache:"no-store"});
-  if (res.status === 401) { window.location.href="/login.html"; throw new Error("Sign in required"); }
-  if (!res.ok || res.headers.get("x-cadence-state-protocol") !== "2") throw new Error("Safe-save backend unavailable");
-  const saved = await res.json();
-  if (!saved || !Number.isSafeInteger(saved._revision)) throw new Error("Invalid saved state");
-  return saved;
-}
+
 async function loadState() {
   try {
-    const saved = await readLatestState();
+    const res = await fetch("/api/state");
+    if (res.status === 401) { window.location.href = "/login.html"; return; }
+    if (!res.ok) return;
+    const saved = await res.json();
     applySavedState(saved);
-    stateRevision = saved._revision;
-    savedFingerprint = stateFingerprint();
-    stateReady = true;
-    syncNotice("");
-  } catch (e) {
-    stateReady = false;
-    clearTimeout(saveTimer);
-    syncNotice("Couldn't load your saved data safely. Editing and saving are paused. Reload to try again.");
-  }
+  } catch (e) { /* no backend yet, or offline — start from in-page defaults */ }
 }
-async function refreshSavedState() {
-  // Opening Safari's native date picker can produce a window-focus event.
-  // Never let a background state refresh replace the DOM underneath it.
-  if (Date.now() < suppressStateRefreshUntil) return;
-  if (document.activeElement && document.activeElement.matches('.manual-date-field input[type="date"]')) return;
-  if (!stateReady || stateBlocked || saveInFlight || refreshInFlight || stateFingerprint() !== savedFingerprint) return;
-  refreshInFlight = true;
-  try {
-    const saved = await readLatestState();
-    // The user may have edited while the read was in flight.
-    if (saveInFlight || stateBlocked || stateFingerprint() !== savedFingerprint || saved._revision <= stateRevision) return;
-    const view = {tab:S.tab,week:S.week,scheduleView:S.scheduleView,hoursSort:S.hoursSort,draft:S.draft};
-    applySavedState(saved); Object.assign(S,view); ensureRound(S.week);
-    stateRevision = saved._revision;
-    savedFingerprint = stateFingerprint();
-    render();
-  } catch (e) { /* Retain the loaded copy; any future write still requires its revision. */ }
-  finally { refreshInFlight = false; }
-}
-window.addEventListener("focus",refreshSavedState);
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState === "visible") refreshSavedState();});
-setInterval(()=>{if(document.visibilityState === "visible") refreshSavedState();},30000);
-window.addEventListener("beforeunload",e=>{
-  if (stateReady && stateFingerprint() !== savedFingerprint) { e.preventDefault(); e.returnValue=""; }
-});
 
 const taughtFor = (id) => S.log.filter(e => e.studentId === id).reduce((s, e) => s + e.hours, 0);
-const scheduledLessonsFor = (id) => Object.values(S.rounds || {}).flatMap(rnd => {
-  if (!rnd.plan || !Array.isArray(rnd.plan.lessons)) return [];
-  return rnd.plan.lessons
-    .filter(lesson => lesson.id === id && (lesson.status === "planned" || lesson.status === "cancelled_late"))
-    .map(lesson => ({ lesson, plan: rnd.plan, startHour: rnd.dayStartHour != null ? rnd.dayStartHour : 9 }));
-}).sort((a, b) => a.plan.weekStart.localeCompare(b.plan.weekStart) || a.lesson.d - b.lesson.d || a.lesson.start - b.lesson.start);
-const scheduledFor = (id) => scheduledLessonsFor(id)
-  .reduce((sum, item) => sum + (item.lesson.lesson * SCHEDULE_SLOT_MIN) / 60, 0);
-const compactHours = value => String(Number(Number(value || 0).toFixed(2)));
 const getParticipants = (rnd) => S.students
   .filter(s => rnd.replies[s.id] && rnd.replies[s.id].status === "in" && rnd.replies[s.id].avail.size > 0)
   .map(s => ({ id: s.id, name: s.name, lesson: lessonFor(rnd, s.id), avail: rnd.replies[s.id].avail }));
-function solveRound(participants, rnd) {
-  const expandedParticipants = participants.map(person => ({
-    ...person,
-    avail: expandGridAvailability(person.avail),
-  }));
-  return solve(
-    expandedParticipants,
-    expandGridAvailability(rnd.offered),
-    rnd.dayPreferences || {},
-    roundDays(rnd),
-    roundSlots(rnd) * 2,
-    S.settings.priorityOrder,
-    solverBlockPreferences(rnd)
-  );
-}
 const getHeat = (rnd) => {
   const h = {};
   Object.values(rnd.replies).forEach(r => { if (r.status !== "in") return; r.avail.forEach(k => { h[k] = (h[k] || 0) + 1; }); });
@@ -1588,54 +878,6 @@ const dayDateLong = (weekStartISO, d) => {
   return base.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 };
 const fmtDateShort = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-
-// Timeframe is always resolved relative to the currently active week
-// (S.week), not "today" — so exporting still makes sense if you're
-// looking back at an earlier week's hours.
-function computeExportRange(timeframe) {
-  const rnd = activeRound();
-  const ref = rnd.weekStart || todayISO();
-  const { y, m, d } = isoParts(ref);
-  if (timeframe === "month") {
-    const start = new Date(Date.UTC(y, m - 1, 1)).toISOString().slice(0, 10);
-    const end = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
-    const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
-    return { start, end, label };
-  }
-  if (timeframe === "term") {
-    const term = (S.termRanges || []).find(t => ref >= t.start && ref <= t.end);
-    if (term) return { start: term.start, end: term.end, label: "term (" + fmtDateShort(term.start) + "\u2013" + fmtDateShort(term.end) + ")" };
-    return { start: "0000-01-01", end: "9999-12-31", label: "all logged hours" };
-  }
-  if (timeframe === "year") {
-    return { start: y + "-01-01", end: y + "-12-31", label: String(y) };
-  }
-  // week
-  const end = new Date(Date.UTC(y, m - 1, d + 6)).toISOString().slice(0, 10);
-  return { start: ref, end, label: "week beginning " + fmtDateShort(ref) };
-}
-
-function buildHoursExportText(timeframe) {
-  const range = computeExportRange(timeframe);
-  const lines = [(ME.instrument ? ME.instrument + " hours" : "Hours") + " \u2014 " + range.label];
-  let total = 0;
-  S.students.forEach(s => {
-    const h = S.log
-      .filter(e => e.studentId === s.id && e.date >= range.start && e.date <= range.end)
-      .reduce((sum, e) => sum + e.hours, 0);
-    if (h > 0) { lines.push(s.name + ": " + h + "h"); total += h; }
-  });
-  if (lines.length === 1) lines.push("Nothing logged in this period.");
-  else { lines.push(""); lines.push("Total: " + total + "h"); }
-  return lines.join("\n");
-}
-
-async function exportHours() {
-  const text = buildHoursExportText(S.hoursExportTimeframe || "week");
-  try { await navigator.clipboard.writeText(text); S.hoursExportText = ""; flash("Copied hours summary"); }
-  catch (e) { S.hoursExportText = text; }
-  render();
-}
 
 /* ================================================================== */
 /*  Toast                                                              */
@@ -1667,8 +909,7 @@ function flash(msg) {
 function clearOffer() {
   const rnd = activeRound();
   if (rnd.notTeaching) { rnd.notTeaching = false; S.weeksCompleted = Math.max(0, S.weeksCompleted - 1); }
-  rnd.sent = false;
-  rnd.offered = new Set(); rnd.blockPreferences = []; rnd.result = null;
+  rnd.offered = new Set(); rnd.result = null;
   render();
 }
 
@@ -1679,10 +920,10 @@ function sampleReplies() {
     const rand = mulberry(hashStr(s.id + "w" + S.week));
     const need = s.allocated / termWeeks();
     const wants = rand() < Math.min(0.95, need + 0.25);
-    if (!wants) { next[s.id] = { status: "skip", avail: new Set(), lessonMinutes: 60, source: "student" }; return; }
+    if (!wants) { next[s.id] = { status: "skip", avail: new Set(), lesson: 2, source: "student" }; return; }
     const avail = new Set();
     rnd.offered.forEach(k => { if (rand() < 0.45) avail.add(k); });
-    next[s.id] = { status: avail.size ? "in" : "none", avail, lessonMinutes: 60, source: "student" };
+    next[s.id] = { status: avail.size ? "in" : "none", avail, lesson: 2, source: "student" };
   });
   rnd.replies = next; rnd.result = null;
   flash("Sample replies loaded");
@@ -1692,12 +933,11 @@ function sampleReplies() {
 function adjustLength(id, delta) {
   const rnd = activeRound();
   const s = S.students.find(x => x.id === id);
-  if (!s || !rnd.replies[id]) return;
-  const remainingMinutes = Math.max(0, (s.allocated - taughtFor(id)) * 60);
-  const cap = Math.max(MIN_LESSON_MINUTES, Math.floor(remainingMinutes / SCHEDULE_SLOT_MIN) * SCHEDULE_SLOT_MIN);
-  const cur = lessonMinutesFor(rnd, id);
-  const next = Math.min(MAX_LESSON_MINUTES, Math.max(MIN_LESSON_MINUTES, cur + delta * SCHEDULE_SLOT_MIN));
-  rnd.replies[id].lessonMinutes = Math.min(next, cap);
+  if (!s || !rnd.replies[id] || rnd.replies[id].source !== "admin") return;
+  const cap = Math.max(1, Math.round((s.allocated - taughtFor(id)) * 2));
+  const cur = lessonFor(rnd, id);
+  const next = Math.min(4, Math.max(1, cur + delta));
+  rnd.replies[id].lesson = Math.min(next, cap);
   rnd.result = null;
   render();
 }
@@ -1707,13 +947,11 @@ function runSolver() {
   if (!rnd.offered.size) { flash("Paint some blocks first"); return; }
   const participants = getParticipants(rnd);
   if (!participants.length) { flash("No students available this week"); return; }
-  rnd.result = solveRound(participants, rnd);
+  rnd.result = solve(participants, rnd.offered, rnd.dayPreferences || {});
   rnd.chosen = 0;
   rnd.optionsExpanded = false;
-  const tabOrder = ["week", "replies", "plan", "hours"];
-  const dir = tabOrder.indexOf("plan") >= tabOrder.indexOf(S.tab) ? 1 : -1;
   S.tab = "plan";
-  animatedRender(dir);
+  render();
 }
 
 function cycleDayPreference(day) {
@@ -1732,94 +970,72 @@ function preferenceLabel(v) {
 
 function toggleMoreOptions() {
   const rnd = activeRound();
-  const expander = document.getElementById("moreOptionsExpander");
-  const button = document.querySelector('[data-action="toggleMoreOptions"]');
-
   rnd.optionsExpanded = !rnd.optionsExpanded;
-
-  if (expander) {
-    requestAnimationFrame(() => {
-      expander.classList.toggle("open", rnd.optionsExpanded);
-    });
-  }
-
-  if (button) {
-    button.textContent = rnd.optionsExpanded
-      ? "Show fewer options"
-      : "Show more options (" + Math.max(0, (rnd.result?.options?.length || 0) - 3) + ")";
-    button.setAttribute("aria-expanded", rnd.optionsExpanded ? "true" : "false");
-  }
+  render();
 }
 
-function buildShareText(assign, weekNoLabel, weekStartISO, startHour, note) {
+function buildShareText(assign, weekNoLabel, weekStartISO) {
   const by = groupByDay(assign);
   const heading = (ME.instrument ? ME.instrument + " lessons" : "Lessons") + " — week " + weekNoLabel;
   let out = heading;
-  if (note) out += "\n" + note;
   Object.keys(by).sort().forEach(d => {
     out += "\n\n" + dayDateLong(weekStartISO, +d) + "\n";
-    by[d].forEach(a => { out += scheduleTimeFor(startHour, a.start) + "–" + scheduleTimeFor(startHour, a.start + a.lesson) + "  " + a.name.split(" ")[0] + "\n"; });
+    by[d].forEach(a => { out += slotTime(a.start) + "–" + slotTime(a.start + a.lesson) + "  " + a.name.split(" ")[0] + "\n"; });
   });
   return out.trim();
 }
 
-async function doCopy(assign, weekNoLabel, weekStartISO, startHour, note) {
-  const t = buildShareText(assign, weekNoLabel, weekStartISO, startHour, note);
+async function doCopy(assign, weekNoLabel, weekStartISO) {
+  const t = buildShareText(assign, weekNoLabel, weekStartISO);
   try { await navigator.clipboard.writeText(t); S.fallbackText = ""; flash("Copied — paste into WhatsApp"); }
   catch (e) { S.fallbackText = t; }
   render();
 }
 
-async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startHour, note) {
+async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo) {
   const by = groupByDay(assign);
   const days = Object.keys(by).sort();
   const rows = assign.length;
-  const noteLines = note ? 1 : 0;
-  const W = 1000, H = 210 + days.length * 96 + rows * 78 + 110 + noteLines * 44;
+  const W = 1000, H = 210 + days.length * 96 + rows * 78 + 110;
   const c = document.createElement("canvas");
   c.width = W; c.height = H;
   const x = c.getContext("2d");
   const FONT = 'ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif';
 
   const heading = ME.instrument ? ME.instrument + " lessons" : "Lessons";
-  x.fillStyle = "#F2EFE7"; x.fillRect(0, 0, W, H);
-  x.fillStyle = accentTheme(S.settings.accent).ink; x.fillRect(0, 0, W, 12);
-  x.fillStyle = "#211C17"; x.font = "640 46px " + FONT; x.fillText(heading, 64, 108);
-  x.fillStyle = "#6B6157"; x.font = "400 28px " + FONT;
-  const weekLine = S.settings.schedulingMode === "rolling" ? "Week " + weekNoLabel : "Week " + weekNoLabel + " of " + termWeeks();
-  x.fillText((ME.name ? ME.name + " · " : "") + weekLine, 64, 152);
-  if (note) {
-    x.fillStyle = accentTheme(S.settings.accent).ink; x.font = "600 26px " + FONT;
-    x.fillText(note, 64, 192);
-  }
+  x.fillStyle = "#FBFAF8"; x.fillRect(0, 0, W, H);
+  x.fillStyle = "#832222"; x.fillRect(0, 0, W, 12);
+  x.fillStyle = "#1B2430"; x.font = "640 46px " + FONT; x.fillText(heading, 64, 108);
+  x.fillStyle = "#5A6675"; x.font = "400 28px " + FONT;
+  x.fillText((ME.name ? ME.name + " · " : "") + "Week " + weekNoLabel + " of " + termWeeks(), 64, 152);
 
-  let y = 240 + noteLines * 44;
+  let y = 240;
   days.forEach(d => {
-    x.fillStyle = accentTheme(S.settings.accent).ink; x.font = "620 32px " + FONT;
+    x.fillStyle = "#832222"; x.font = "620 32px " + FONT;
     x.fillText(dayDateLong(weekStartISO, +d), 64, y); y += 46;
-    x.strokeStyle = "#DCD5C6"; x.lineWidth = 2;
+    x.strokeStyle = "#DDD8CE"; x.lineWidth = 2;
     x.beginPath(); x.moveTo(64, y - 16); x.lineTo(W - 64, y - 16); x.stroke();
 
     by[d].forEach(a => {
-      x.fillStyle = "#211C17"; x.font = "500 32px " + FONT;
-      x.fillText(scheduleTimeFor(startHour, a.start) + "–" + scheduleTimeFor(startHour, a.start + a.lesson), 64, y + 32);
+      x.fillStyle = "#1B2430"; x.font = "500 32px " + FONT;
+      x.fillText(slotTime(a.start) + "–" + slotTime(a.start + a.lesson), 64, y + 32);
       x.font = "600 32px " + FONT;
       x.fillText(a.name.split(" ")[0], 360, y + 32);
-      x.fillStyle = "#6B6157"; x.font = "400 26px " + FONT; x.textAlign = "right";
-      x.fillText(((a.lesson * SCHEDULE_SLOT_MIN) / 60) + "h", W - 64, y + 32);
+      x.fillStyle = "#5A6675"; x.font = "400 26px " + FONT; x.textAlign = "right";
+      x.fillText(((a.lesson * SLOT_MIN) / 60) + "h", W - 64, y + 32);
       x.textAlign = "left";
       y += 78;
     });
     y += 50;
   });
 
-  x.fillStyle = "#6B6157"; x.font = "400 25px " + FONT;
+  x.fillStyle = "#5A6675"; x.font = "400 25px " + FONT;
   x.fillText("Let me know as soon as possible if anything changes.", 64, H - 52);
 
   const blob = await new Promise(res => c.toBlob(res, "image/png"));
   const file = new File([blob], "lessons-week-" + filenameWeekNo + ".png", { type: "image/png" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file] }); return; } catch (e) { /* fall through */ }
+    try { await navigator.share({ files: [file], title: heading }); return; } catch (e) { /* fall through */ }
   }
   if (S.imgUrl) URL.revokeObjectURL(S.imgUrl);
   S.imgUrl = URL.createObjectURL(blob);
@@ -1835,47 +1051,8 @@ function confirmSchedule() {
     weekStart: rnd.weekStart,
     lessons: opt.assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" })),
   };
-  // Keep rnd.result and rnd.chosen intact so "Undo confirmation" can return
-  // to the exact option set that was just confirmed.
-  S.imgUrl = ""; S.fallbackText = "";
-  flash("Week confirmed. Post it to the group");
-  render();
-}
-
-function undoConfirmSchedule() {
-  const rnd = activeRound();
-  if (!rnd.plan) return;
-
-  // If this round came from an older saved state where result was cleared
-  // on confirmation, rebuild the solver result from the still-current
-  // replies and offered blocks so the teacher isn't stranded.
-  if (!rnd.result || !rnd.result.options || !rnd.result.options.length) {
-    const participants = getParticipants(rnd);
-    if (participants.length && rnd.offered.size) {
-      rnd.result = solveRound(participants, rnd);
-
-      // Try to re-select the option that most closely matches the confirmed
-      // plan. Fall back to option 0 if no exact assignment is found.
-      const planSig = rnd.plan.lessons
-        .filter(l => l.status === "planned")
-        .map(l => l.id + ":" + l.d + ":" + l.start)
-        .sort()
-        .join("|");
-
-      const matchIdx = rnd.result.options.findIndex(opt =>
-        opt.assign
-          .map(a => a.id + ":" + a.d + ":" + a.start)
-          .sort()
-          .join("|") === planSig
-      );
-      rnd.chosen = matchIdx >= 0 ? matchIdx : 0;
-    }
-  }
-
-  rnd.plan = null;
-  S.imgUrl = "";
-  S.fallbackText = "";
-  flash("Confirmation undone");
+  rnd.result = null; S.imgUrl = ""; S.fallbackText = "";
+  flash("Week confirmed — post it to the group");
   render();
 }
 
@@ -1894,12 +1071,12 @@ function rescheduleWeek() {
     avail: (rnd.replies[l.id] && rnd.replies[l.id].avail) || new Set(),
   }));
   if (!pool.length) { flash("Nobody left to reschedule"); return; }
-  const solved = solveRound(pool, rnd);
+  const solved = solve(pool, rnd.offered, rnd.dayPreferences || {});
   if (!solved.options.length) { flash("No tighter arrangement available"); return; }
   const fresh = solved.options[0].assign.map(a => ({ ...a, key: a.id + "-" + a.d + "-" + a.start, status: "planned" }));
   rnd.plan.lessons = [...rnd.plan.lessons.filter(l => l.status !== "planned"), ...fresh];
   S.imgUrl = ""; S.fallbackText = "";
-  flash("Rescheduled. Repost to the group");
+  flash("Rescheduled — repost to the group");
   render();
 }
 
@@ -1912,7 +1089,7 @@ function endWeek() {
     const dateISO = new Date(Date.UTC(y, m - 1, d + l.d)).toISOString().slice(0, 10);
     return {
       id: "s" + Date.now() + "-" + l.key, studentId: l.id,
-      date: dateISO, hours: (l.lesson * SCHEDULE_SLOT_MIN) / 60,
+      date: dateISO, hours: (l.lesson * SLOT_MIN) / 60,
       manual: false, lateCancel: l.status === "cancelled_late",
     };
   });
@@ -1923,7 +1100,7 @@ function endWeek() {
   ensureRound(S.week);
   S.imgUrl = ""; S.fallbackText = ""; S.tab = "hours";
   flash(entries.length + " lessons logged");
-  animatedRender(1);
+  render();
 }
 
 // A toggle now, not a one-shot jump — tapping it marks the CURRENT week
@@ -1957,100 +1134,16 @@ function nextWeek() {
   render();
 }
 
-// Transient feedback belongs to a particular round, not to the global toast.
-let offerTransitionBusy = false;
-let linkFeedback = null;
-let linkCopyToken = 0;
-
-function linkFeedbackHTML(rnd) {
-  if (!linkFeedback || linkFeedback.round !== rnd) return "";
-  return escapeHTML(linkFeedback.message) + (linkFeedback.url
-    ? '<input class="link-copy-fallback" aria-label="Student link — select and copy" readonly value="' + escapeHTML(linkFeedback.url) + '">'
-    : "");
-}
-
-function refreshLinkFeedback() {
-  const rnd = activeRound();
-  const status = document.getElementById("linkFeedback");
-  if (status) status.innerHTML = linkFeedbackHTML(rnd);
-  const button = document.querySelector('[data-action="copyStudentLink"]');
-  if (button) button.disabled = !!(linkFeedback && linkFeedback.round === rnd && linkFeedback.pending);
-}
-
-async function copyStudentLink() {
-  const rnd = activeRound();
-  if (!rnd.sent || (linkFeedback && linkFeedback.round === rnd && linkFeedback.pending)) return;
-  const token = ++linkCopyToken;
+async function goReplies() {
+  S.tab = "replies";
+  render();
   const url = window.location.origin + "/s/" + (ME.slug || "") + "/" + S.week;
-  linkFeedback = { round: rnd, pending: true, message: "Copying link…" };
-  refreshLinkFeedback();
   try {
-    // Called in the click turn, before waiting for any animation.
     await navigator.clipboard.writeText(url);
-    if (token !== linkCopyToken || !rnd.sent) return;
-    linkFeedback = { round: rnd, message: "Link copied—ready to paste into your group." };
+    flash("Student link copied to clipboard");
   } catch (e) {
-    if (token !== linkCopyToken || !rnd.sent) return;
-    linkFeedback = { round: rnd, message: "Couldn't copy automatically. Select and copy this link:", url };
+    flash("Couldn't copy — the link is " + url);
   }
-  refreshLinkFeedback();
-}
-
-async function transitionOffer(locked) {
-  if (offerTransitionBusy) return;
-  const rnd = activeRound();
-  if (rnd.sent === locked || (locked && (!rnd.offered.size || rnd.notTeaching))) return;
-  offerTransitionBusy = true;
-  const focused = document.activeElement;
-  const restoreFocus = !!(focused && focused.closest && focused.closest("#offerActions"));
-  ++linkCopyToken;
-  linkFeedback = null;
-  rnd.sent = locked;
-  try {
-    // Both control panels occupy the same CSS-grid area, which reserves
-    // the larger height even when a phone wraps the secondary buttons.
-    render();
-    const actions = document.getElementById("offerActions");
-    const grid = document.getElementById("offerGrid");
-    if (actions) actions.setAttribute("aria-busy", "true");
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const animations = [];
-    const animate = (node, frames) => {
-      if (node && typeof node.animate === "function") {
-        animations.push(node.animate(frames, { duration: 340, easing: "ease-in-out" }));
-      }
-    };
-    if (!reduceMotion) {
-      if (grid) grid.querySelectorAll(".grid-head, .row").forEach(row =>
-        animate(row, [{ opacity: locked ? 1 : 0.5 }, { opacity: locked ? 0.5 : 1 }]));
-      if (actions) {
-        const incoming = actions.querySelector(locked ? '[data-mode="locked"]' : '[data-mode="editing"]');
-        const outgoing = actions.querySelector(locked ? '[data-mode="editing"]' : '[data-mode="locked"]');
-        animate(incoming, [{ opacity: 0, visibility: "visible" }, { opacity: 1, visibility: "visible" }]);
-        animate(outgoing, [{ opacity: 1, visibility: "visible" }, { opacity: 0, visibility: "visible" }]);
-      }
-      if (locked && grid) animate(grid.querySelector(".placement-layer"), [{ opacity: 0 }, { opacity: 1 }]);
-    }
-    await Promise.all(animations.map(animation => animation.finished.catch(() => {})));
-    if (actions && actions.isConnected) actions.removeAttribute("aria-busy");
-    if (restoreFocus && actions && actions.isConnected && activeRound() === rnd) {
-      const target = actions.querySelector(locked ? '[data-action="editAvailability"]' : '[data-action="sendToStudents"]');
-      if (target) target.focus({ preventScroll: true });
-    }
-  } finally {
-    offerTransitionBusy = false;
-  }
-}
-
-function sendToStudents() {
-  const rnd = activeRound();
-  if (offerTransitionBusy || rnd.sent || !rnd.offered.size || rnd.notTeaching) return;
-  transitionOffer(true);
-  copyStudentLink();
-}
-
-function editAvailability() {
-  return transitionOffer(false);
 }
 
 async function saveProfile() {
@@ -2063,11 +1156,11 @@ async function saveProfile() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name, instrument }),
     });
-    if (!res.ok) { flash("Couldn't save. Try again"); return; }
+    if (!res.ok) { flash("Couldn't save — try again"); return; }
     flash("Profile updated");
     render();
   } catch (e) {
-    flash("Couldn't save. Check your connection");
+    flash("Couldn't save — check your connection");
   }
 }
 
@@ -2087,43 +1180,9 @@ function removeStudent(id) {
   render();
 }
 
-async function addEntry(studentId, trigger) {
-  const date = manualDateDrafts[studentId] || "";
-  if (!date) {
-    flash("Select a date first");
-    const input = trigger && trigger.closest(".manual-entry-expander")?.querySelector('[data-bind="draftDate"]');
-    if (input) input.focus({ preventScroll: true });
-    return;
-  }
-  if (!S.draft.hours) return;
-  S.log.push({ id: "m" + Date.now(), studentId, date, hours: Number(S.draft.hours), manual: true });
-  delete manualDateDrafts[studentId];
-  manualEntryOpenId = null;
-  scheduleSave();
-
-  const expander = trigger && trigger.closest(".manual-entry-expander");
-  const toggle = expander && expander.parentElement.querySelector('[data-action="toggleManualEntry"]');
-  if (expander) expander.classList.remove("open");
-  if (toggle) {
-    toggle.textContent = "+ Add hours manually";
-    toggle.setAttribute("aria-expanded", "false");
-  }
-  if (trigger) trigger.disabled = true;
-
-  if (expander && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    await new Promise(resolve => {
-      let finished = false;
-      const done = () => {
-        if (finished) return;
-        finished = true;
-        expander.removeEventListener("transitionend", onEnd);
-        resolve();
-      };
-      const onEnd = event => { if (event.propertyName === "grid-template-rows") done(); };
-      expander.addEventListener("transitionend", onEnd);
-      setTimeout(done, 450);
-    });
-  }
+function addEntry(studentId) {
+  if (!S.draft.date || !S.draft.hours) return;
+  S.log.push({ id: "m" + Date.now(), studentId, date: S.draft.date, hours: Number(S.draft.hours), manual: true });
   flash("Hours added");
   render();
 }
@@ -2133,35 +1192,6 @@ function removeEntry(id) { S.log = S.log.filter(e => e.id !== id); render(); }
 // and the working copy of its date/hours while that's open.
 let editingEntryId = null;
 let editDraft = { date: "", hours: 1 };
-// Unsaved manual dates belong to the student whose row they were chosen in.
-// They are intentionally transient and never synced or reused for another row.
-let manualDateDrafts = {};
-let manualEntryOpenId = null;
-
-function toggleManualEntry(studentId, trigger) {
-  const expander = trigger.closest(".ledger")?.querySelector("[data-manual-entry]");
-  if (!expander) return;
-  const opening = manualEntryOpenId !== studentId;
-
-  if (manualEntryOpenId && manualEntryOpenId !== studentId) delete manualDateDrafts[manualEntryOpenId];
-  manualEntryOpenId = opening ? studentId : null;
-  if (!opening) {
-    delete manualDateDrafts[studentId];
-    const input = expander.querySelector('[data-bind="draftDate"]');
-    const field = input && input.closest(".manual-date-field");
-    if (input) input.value = "";
-    if (field) {
-      field.classList.add("empty");
-      const label = field.querySelector("span");
-      if (label) label.textContent = "Select date";
-    }
-  }
-
-  trigger.textContent = opening ? "Cancel manual entry" : "+ Add hours manually";
-  trigger.setAttribute("aria-expanded", String(opening));
-  if (opening) requestAnimationFrame(() => expander.classList.add("open"));
-  else expander.classList.remove("open");
-}
 function startEditEntry(id) {
   const e = S.log.find(x => x.id === id);
   if (!e) return;
@@ -2182,10 +1212,8 @@ function saveEditEntry(id) {
 
 function resetYear() {
   S.log = []; S.week = 1; S.weeksCompleted = 0;
-  S.rounds = { "1": blankRound((S.termRanges && S.termRanges[0]) ? S.termRanges[0].start : todayISO()) };
+  S.rounds = { "1": blankRound(S.termRanges[0].start) };
   S.openHours = null;
-  manualDateDrafts = {};
-  manualEntryOpenId = null;
   flash("Year reset");
   render();
 }
@@ -2205,11 +1233,6 @@ function handleResetClick() {
     resetConfirmTimer = setTimeout(() => { confirmingReset = false; render(); }, 3000);
   }
 }
-
-// Transient, session-only — a second, explicit confirm-and-warn step
-// (Cancel / Yes, delete) rather than a double-tap on the same button:
-// this is more destructive than "Reset year", so it gets a harder stop.
-let confirmingDeleteAccount = false;
 
 /* ================================================================== */
 /*  Term Dates — transient draft, snapshotted from S.termRanges each   */
@@ -2235,100 +1258,6 @@ function saveTermDates() {
   flash("Term dates updated");
   render();
 }
-function switchToTermsFromTermDates() {
-  S.settings = { ...S.settings, schedulingMode: "terms" };
-  if (!S.termRanges || !S.termRanges.length) S.termRanges = DEFAULT_TERM_RANGES.map(r => ({ ...r }));
-  openTermDatesDraft();
-  flash("Switched to term dates");
-  render();
-}
-
-/* ================================================================== */
-/*  Settings — same snapshot-on-open, save-on-demand pattern as Term   */
-/*  Dates. Applies to weeks not yet painted; a round that already has  */
-/*  offered blocks keeps whatever shape it was created with.           */
-/* ================================================================== */
-
-let settingsDraft = { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice(), priorityOptionsVersion: PRIORITY_OPTIONS_VERSION, schedulingMode: "terms", cancellationWindowHours: 24 };
-// Transient — which of the two Settings sub-tabs is showing.
-let settingsTab = "general";
-function openSettingsDraft() {
-  settingsDraft = { ...S.settings, priorityOrder: normalisePriorityOrder(S.settings.priorityOrder) };
-}
-function excludePriority(key) {
-  const order = normalisePriorityOrder(settingsDraft.priorityOrder);
-  if (!order.includes(key)) return;
-  if (order.length === 1) { flash("Keep at least one active priority"); return; }
-  settingsDraft.priorityOrder = order.filter(item => item !== key);
-  render();
-}
-function includePriority(key) {
-  if (!PRIORITY_KEYS.includes(key)) return;
-  const order = normalisePriorityOrder(settingsDraft.priorityOrder);
-  if (!order.includes(key)) order.push(key);
-  settingsDraft.priorityOrder = order;
-  render();
-}
-function toggleWeekendSetting() {
-  settingsDraft.includeWeekends = !settingsDraft.includeWeekends;
-  render();
-}
-function setSchedulingMode(mode) {
-  settingsDraft.schedulingMode = mode;
-  render();
-}
-function adjustCancellationWindow(delta) {
-  let next = Number(settingsDraft.cancellationWindowHours || 24) + delta;
-  next = Math.max(6, Math.min(72, next));
-  settingsDraft.cancellationWindowHours = next;
-  render();
-}
-function adjustSettingsHour(which, delta) {
-  const key = which === "start" ? "dayStartHour" : "dayEndHour";
-  const other = which === "start" ? settingsDraft.dayEndHour : settingsDraft.dayStartHour;
-  let next = Number(settingsDraft[key]) + delta;
-  next = Math.max(6, Math.min(22, next));
-  if (which === "start" && next >= other) return;
-  if (which === "end" && next <= other) return;
-  settingsDraft[key] = next;
-  render();
-}
-function saveSettings() {
-  const start = Number(settingsDraft.dayStartHour);
-  const end = Number(settingsDraft.dayEndHour);
-  if (!(end > start)) { flash("End time must be after start time"); return; }
-  const switchingToTerms = settingsDraft.schedulingMode === "terms" && S.settings.schedulingMode === "rolling";
-  S.settings = {
-    accent: Object.prototype.hasOwnProperty.call(ACCENT_THEMES, settingsDraft.accent) ? settingsDraft.accent : "oxblood",
-    includeWeekends: !!settingsDraft.includeWeekends,
-    dayStartHour: start,
-    dayEndHour: end,
-    priorityOrder: normalisePriorityOrder(settingsDraft.priorityOrder),
-    priorityOptionsVersion: PRIORITY_OPTIONS_VERSION,
-    schedulingMode: settingsDraft.schedulingMode === "rolling" ? "rolling" : "terms",
-    cancellationWindowHours: Number(settingsDraft.cancellationWindowHours) || 24,
-  };
-  if (switchingToTerms && (!S.termRanges || !S.termRanges.length)) {
-    S.termRanges = DEFAULT_TERM_RANGES.map(r => ({ ...r }));
-  }
-  flash("Settings updated");
-  render();
-}
-
-/* ================================================================== */
-/*  Account deletion                                                    */
-/* ================================================================== */
-
-async function deleteAccount() {
-  try {
-    const res = await fetch("/api/account", { method: "DELETE" });
-    if (!res.ok) { flash("Couldn't delete your account. Try again"); confirmingDeleteAccount = false; render(); return; }
-    window.location.href = "/login.html";
-  } catch (e) {
-    flash("Couldn't reach the server. Check your connection");
-    confirmingDeleteAccount = false; render();
-  }
-}
 
 /* ================================================================== */
 /*  Grid: drag-to-paint (state + one class toggle per cell; no         */
@@ -2336,17 +1265,16 @@ async function deleteAccount() {
 /* ================================================================== */
 
 function buildGridHTML(role, opts) {
-  const { selected, offered, heat, studentId, days, slots, startHour } = opts;
-  const blocks = role === "offer" && activeRound().sent ? reconcileBlockPreferences(activeRound()) : [];
-  let head = '<div class="grid-head"><div class="gutter"></div>' + days.map(d => '<div class="dayhead">' + d + '</div>').join("") + "</div>";
+  const { selected, offered, heat, studentId } = opts;
+  let head = '<div class="grid-head"><div class="gutter"></div>' + DAYS.map(d => '<div class="dayhead">' + d + '</div>').join("") + "</div>";
   let rows = "";
-  for (let i = 0; i < slots; i++) {
+  for (let i = 0; i < SLOTS; i++) {
     let cells = "";
-    for (let d = 0; d < days.length; d++) {
+    for (let d = 0; d < DAYS.length; d++) {
       const k = key(d, i);
       const isOffered = !offered || offered.has(k);
       const on = selected && selected.has(k);
-      const h = heat && isOffered ? (heat[k] || 0) : 0;
+      const h = heat ? (heat[k] || 0) : 0;
       let cls = "cell";
       if (!isOffered) cls += " muted";
       if (on) cls += " on";
@@ -2354,59 +1282,15 @@ function buildGridHTML(role, opts) {
       const style = h > 0 ? ' style="opacity:' + (0.25 + Math.min(h, 4) * 0.18) + '"' : "";
       cells += '<div class="' + cls + '" data-d="' + d + '" data-i="' + i + '"' + style + ">" + (h > 0 ? '<span class="heatnum">' + h + "</span>" : "") + "</div>";
     }
-    rows += '<div class="row"><div class="gutter time">' + (i % 2 === 0 ? '<span' + (i === 0 ? ' class="first"' : '') + '>' + slotTimeFor(startHour, i) + "</span>" : "") + "</div>" + cells + "</div>";
+    rows += '<div class="row"><div class="gutter time">' + (i % 2 === 0 ? slotTime(i) : "") + "</div>" + cells + "</div>";
   }
-  // Controls occupy existing half-hour cells without changing row height.
-  // At the bottom edge, use the block's final cell instead. This sibling
-  // overlay stays fully opaque while the timetable rows beneath are dimmed.
-  const placementLayer = blocks.length ? '<div class="placement-layer">' + blocks.map(block => {
-        const d = block.d;
-        const label = days[d] + ' ' + slotTimeFor(startHour, block.start) + '–' + slotTimeFor(startHour, block.end);
-        const placement = block.placement;
-        const slot = Math.min(block.end, slots - 1);
-        const position = 'top:' + (slot * 25 + 1) + 'px;left:calc(100% * ' + d + ' / ' + days.length + ' + 2px);width:calc(100% / ' + days.length + ' - 4px)';
-        return '<label class="placement-pill' + (placement !== 'any' ? ' chosen' : '') + '" style="' + position + '" title="Placement for ' + label + '">' +
-          '<span class="placement-prefix" aria-hidden="true">Placement:</span><span aria-hidden="true">' + ({any:'Any',early:'Early',late:'Late'})[placement] + ' ⌄</span>' +
-          '<select data-bind="blockPlacement" data-block-day="' + d + '" data-block-start="' + block.start + '" aria-label="Lesson placement for ' + label + '"' + (activeRound().plan ? ' disabled' : '') + '>' +
-          ['any','early','late'].map(value => '<option value="' + value + '"' + (placement === value ? ' selected' : '') + '>' + ({any:'Any — no preference',early:'Early — favour the start',late:'Late — favour the end'})[value] + '</option>').join('') +
-          '</select></label>';
-      }).join('') + '</div>' : '';
   const attrs = 'data-role="' + role + '"' + (studentId ? ' data-student="' + studentId + '"' : "");
-  return '<div class="grid-wrap" ' + attrs + ">" + head + '<div class="grid-body">' + rows + placementLayer + "</div></div>";
-}
-
-// Safari can still interpret quick taps as a zoom gesture. Cancel only
-// a completed single-finger cell tap, never a drag or multi-touch gesture.
-function suppressGridDoubleTapZoom(el) {
-  let tap = null;
-  el.addEventListener("touchstart", (e) => {
-    if (e.touches.length !== 1) { tap = null; return; }
-    const t = e.touches[0];
-    const cell = e.target.closest && e.target.closest(".cell");
-    tap = cell && el.contains(cell)
-      ? { id: t.identifier, x: t.clientX, y: t.clientY, time: Date.now() }
-      : null;
-  }, { passive: true, capture: true });
-  el.addEventListener("touchmove", (e) => {
-    if (!tap) return;
-    const t = e.touches[0];
-    if (e.touches.length !== 1 || t.identifier !== tap.id ||
-        Math.hypot(t.clientX - tap.x, t.clientY - tap.y) > 10) tap = null;
-  }, { passive: true, capture: true });
-  el.addEventListener("touchend", (e) => {
-    const t = Array.from(e.changedTouches).find(t => tap && t.identifier === tap.id);
-    if (tap && t && e.touches.length === 0 && Date.now() - tap.time < 500 &&
-        Math.hypot(t.clientX - tap.x, t.clientY - tap.y) <= 10 && e.cancelable) {
-      e.preventDefault();
-    }
-    tap = null;
-  }, { passive: false, capture: true });
-  el.addEventListener("touchcancel", () => { tap = null; }, { passive: true, capture: true });
+  return '<div class="grid-wrap" ' + attrs + ">" + head + '<div class="grid-body">' + rows + "</div></div>";
 }
 
 function cellAt(el, x, y) {
   const at = document.elementFromPoint(x, y);
-  const cell = at && at.closest ? at.closest(".cell[data-d][data-i]") : null;
+  const cell = at && at.closest ? at.closest("[data-d]") : null;
   if (!cell || !el.contains(cell)) return null;
   return { d: Number(cell.dataset.d), i: Number(cell.dataset.i), node: cell };
 }
@@ -2415,7 +1299,6 @@ let activeEnd = null;
 window.addEventListener("mouseup", () => { if (activeEnd) { const fn = activeEnd; activeEnd = null; fn(); } });
 
 function mountPaintGrid(el) {
-  suppressGridDoubleTapZoom(el);
   const role = el.dataset.role;
   const studentId = el.dataset.student;
   const rnd = activeRound();
@@ -2430,7 +1313,7 @@ function mountPaintGrid(el) {
     if (role === "offer") {
       val ? rnd.offered.add(k) : rnd.offered.delete(k);
     } else {
-      if (!rnd.replies[studentId]) rnd.replies[studentId] = { status: "in", avail: new Set(), lessonMinutes: 60, source: "admin" };
+      if (!rnd.replies[studentId]) rnd.replies[studentId] = { status: "in", avail: new Set(), lesson: 2, source: "admin" };
       rnd.replies[studentId].source = "admin";
       val ? rnd.replies[studentId].avail.add(k) : rnd.replies[studentId].avail.delete(k);
       rnd.replies[studentId].status = "in";
@@ -2446,44 +1329,29 @@ function mountPaintGrid(el) {
     if (k === last) return;
     last = k; apply(c, painting);
   };
-  const end = () => {
-    if (painting !== null) {
-      painting = null; last = "";
-      if (role === "offer") reconcileBlockPreferences(rnd);
-      rnd.result = null; rnd.chosen = 0; rnd.optionsExpanded = false;
-      S.imgUrl = ""; S.fallbackText = "";
-      render();
-    }
-  };
+  const end = () => { if (painting !== null) { painting = null; last = ""; render(); } };
 
   el.addEventListener("touchstart", (e) => {
-    if (role === "offer" && rnd.sent) return;
-    if (e.touches.length !== 1) return;
     const t = e.touches[0];
     const c = cellAt(el, t.clientX, t.clientY);
     if (!c) return;
+    e.preventDefault(); // claim the gesture before the browser starts a scroll
     const k = key(c.d, c.i);
-
-    // Where this grid has grey/unavailable cells, touch-action:pan-y in
-    // CSS already lets those scroll normally — this listener stays
-    // passive throughout so it never fights the browser's own scrolling.
     if (offeredSet && !offeredSet.has(k)) return;
-
     painting = !isSelected(k); last = k; apply(c, painting);
-  }, { passive: true });
+  }, { passive: false });
 
   el.addEventListener("touchmove", (e) => {
-    if (painting === null || e.touches.length !== 1) return;
+    if (painting === null) return;
+    e.preventDefault();
     const t = e.touches[0];
     move(t.clientX, t.clientY);
-  }, { passive: true });
+  }, { passive: false });
 
   el.addEventListener("touchend", end);
   el.addEventListener("touchcancel", end);
 
   el.addEventListener("mousedown", (e) => {
-    if (role === "offer" && rnd.sent) return;
-    if (e.button !== 0) return;
     const c = cellAt(el, e.clientX, e.clientY);
     if (!c) return;
     const k = key(c.d, c.i);
@@ -2498,75 +1366,6 @@ function mountAllGrids() {
   document.querySelectorAll('.grid-wrap[data-role="offer"], .grid-wrap[data-role="reply"]').forEach(mountPaintGrid);
 }
 
-// Drag-to-reorder for the Priorities list. Same spirit as the grid's own
-// touch handling above: no re-render mid-gesture, just direct DOM moves,
-// with the underlying array only committed to settingsDraft on release.
-function mountPriorityList(el) {
-  if (!el) return;
-  const getRows = () => Array.from(el.querySelectorAll(".priority-row"));
-
-  const renumber = () => {
-    getRows().forEach((row, i) => {
-      row.dataset.idx = i;
-      const rank = row.querySelector(".priority-rank");
-      if (rank) rank.textContent = i + 1;
-    });
-  };
-
-  let dragEl = null;
-  let startY = 0;
-
-  const onMove = (clientY) => {
-    if (!dragEl) return;
-    dragEl.style.transform = "translateY(" + (clientY - startY) + "px)";
-    const rows = getRows();
-    const dragIndex = rows.indexOf(dragEl);
-    for (let i = 0; i < rows.length; i++) {
-      if (i === dragIndex) continue;
-      const rect = rows[i].getBoundingClientRect();
-      const mid = rect.top + rect.height / 2;
-      if (clientY < mid && i < dragIndex) {
-        el.insertBefore(dragEl, rows[i]);
-        renumber();
-        startY = clientY;
-        dragEl.style.transform = "translateY(0px)";
-        break;
-      }
-      if (clientY > mid && i > dragIndex) {
-        el.insertBefore(dragEl, rows[i].nextSibling);
-        renumber();
-        startY = clientY;
-        dragEl.style.transform = "translateY(0px)";
-        break;
-      }
-    }
-  };
-
-  function onPointerMove(e) { onMove(e.clientY); }
-  function onPointerUp() {
-    if (!dragEl) return;
-    dragEl.classList.remove("dragging");
-    dragEl.style.transform = "";
-    settingsDraft.priorityOrder = getRows().map((r) => r.dataset.key);
-    dragEl = null;
-    document.removeEventListener("pointermove", onPointerMove);
-    document.removeEventListener("pointerup", onPointerUp);
-  }
-
-  el.querySelectorAll(".priority-handle").forEach((handle) => {
-    handle.addEventListener("pointerdown", (e) => {
-      const row = handle.closest(".priority-row");
-      if (!row) return;
-      e.preventDefault();
-      dragEl = row;
-      startY = e.clientY;
-      row.classList.add("dragging");
-      document.addEventListener("pointermove", onPointerMove);
-      document.addEventListener("pointerup", onPointerUp);
-    });
-  });
-}
-
 /* ================================================================== */
 /*  Render                                                             */
 /* ================================================================== */
@@ -2576,168 +1375,28 @@ let sidebarOpen = false;
 let currentSection = "scheduler"; // "scheduler" | "profile" | "students" | "termdates" | "settings"
 let sidebarCloseTimer = null;
 
-// Week/tab choices are view state, not studio data. Keep them per account in
-// this browser so a refresh resumes where the teacher was without creating a
-// database revision for every navigation tap.
-function localViewKey() {
-  return "cadence-view-v1:" + String(ME.email || ME.slug || "default").toLowerCase();
-}
-function persistLocalView() {
-  if (!stateReady) return;
-  try {
-    localStorage.setItem(localViewKey(), JSON.stringify({
-      tab: S.tab,
-      week: S.week,
-      scheduleView: S.scheduleView,
-      hoursSort: S.hoursSort,
-    }));
-  } catch (e) { /* Browser storage unavailable — server state still remains safe. */ }
-}
-function restoreLocalView() {
-  try {
-    const view = JSON.parse(localStorage.getItem(localViewKey()) || "null");
-    if (!view) return;
-    if (["week", "replies", "plan", "hours"].includes(view.tab)) S.tab = view.tab;
-    if (["timetable", "agenda"].includes(view.scheduleView)) S.scheduleView = view.scheduleView;
-    if (["first", "surname", "allocated", "remaining"].includes(view.hoursSort)) S.hoursSort = view.hoursSort;
-    const requestedWeek = Number(view.week);
-    if (Number.isInteger(requestedWeek)) S.week = Math.max(1, Math.min(termWeeks(), requestedWeek));
-    ensureRound(S.week);
-  } catch (e) { /* Ignore malformed or unavailable local view state. */ }
-}
-
-// #app now holds three permanent containers rather than being wiped and
-// rebuilt as one blob each render — this is what lets the header and
-// (when unchanged) the week picker/subtabs bar stay perfectly still while
-// only the content that actually differs between two screens slides.
-// Comparing a hand-built template string directly against element.innerHTML
-// is unreliable — the browser re-serializes HTML into its own canonical
-// form when you read .innerHTML back (dropping redundant whitespace like
-// the stray space left by an empty conditional attribute, for instance),
-// so two semantically identical strings can compare as different. Parsing
-// the fresh string through a throwaway element first puts both sides
-// through the same normalization, so the comparison is apples to apples.
-function ensureAppSkeleton() {
-  const app = document.getElementById("app");
-  if (!document.getElementById("appBody")) {
-    app.innerHTML = '<div id="appHeader"></div><div id="appSubbar"></div><div id="appBody"></div>';
-  }
-}
-
-// The "subbar" is whatever sits directly under the header and is often
-// identical across several screens — the week picker (shared by Offer,
-// Replies and Schedule) or the General/Priorities subtabs bar (shared by
-// both Settings panels). Computed once, from current state, and reused by
-// both render() and animatedRender()'s "did this actually change" check.
-function computeSubbarHTML() {
-  if (currentSection === "scheduler") {
-    return S.tab === "hours" ? "" : '<div class="pad" style="padding-bottom:0">' + renderWeekPicker() + "</div>";
-  }
-  if (currentSection === "settings") {
-    return '<div class="pad" style="padding-bottom:0"><div class="subtabs">' +
-      '<button class="subtab' + (settingsTab === "general" ? " sel" : "") + '" data-action="settingsTab" data-tab="general">General</button>' +
-      '<button class="subtab' + (settingsTab === "priorities" ? " sel" : "") + '" data-action="settingsTab" data-tab="priorities">Priorities</button>' +
-      "</div></div>";
-  }
-  return "";
-}
-
-// What *kind* of subbar is showing, independent of which item within it is
-// currently active. Comparing identity rather than raw HTML is what keeps
-// the General/Priorities bar (and any subtabs added to Settings later)
-// genuinely still when toggling between them — their HTML technically
-// differs by a "sel" class each time, which a literal content diff would
-// (correctly, but unhelpfully) treat as "changed" and slide. Identity says
-// "still the same subtabs bar" regardless of which tab within it is lit up.
-function computeSubbarIdentity() {
-  if (currentSection === "scheduler") return S.tab === "hours" ? "none" : "weekpicker";
-  if (currentSection === "settings") return "settings-subtabs";
-  return "none";
-}
-let __subbarIdentity = "none";
-
 function render() {
-  if (!stateReady) {
-    document.getElementById("app").innerHTML = '<div class="pad"><p>Loading your saved schedule…</p></div>';
-    return;
-  }
-  applyAccent(currentSection === "settings" ? settingsDraft.accent : S.settings.accent);
-  ensureAppSkeleton();
-  document.getElementById("appHeader").innerHTML = renderHeader();
-  document.getElementById("appSubbar").innerHTML = computeSubbarHTML();
-  __subbarIdentity = computeSubbarIdentity();
+  const app = document.getElementById("app");
   const sections = {
     profile: renderProfileSection,
     students: renderStudentsSection,
     termdates: renderTermDatesSection,
-    settings: renderSettingsBody,
+    settings: renderSettingsSection,
   };
-  document.getElementById("appBody").innerHTML = sections[currentSection] ? sections[currentSection]() : renderTabContent();
+  app.innerHTML = renderHeader() + (sections[currentSection] ? sections[currentSection]() : renderTabContent());
   mountAllGrids();
-  mountPriorityList(document.getElementById("priorityList"));
-  persistLocalView();
   scheduleSave();
-}
-
-// The header always updates instantly (it's structurally identical across
-// every scheduler tab, and across Profile/Students/Term Dates/Settings
-// only its title text differs — not worth animating). The subbar only
-// slides along with the body when it's a genuinely different KIND of
-// subbar on the other side of the transition — the same week picker or
-// the same subtabs bar (whichever item within it is active) is left
-// completely alone, exactly as asked.
-async function animatedRender(direction) {
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  ensureAppSkeleton();
-  const subbarEl = document.getElementById("appSubbar");
-  const bodyEl = document.getElementById("appBody");
-
-  if (!direction || reduceMotion || !bodyEl.firstChild) {
-    render();
-    return;
-  }
-
-  const subbarChanging = computeSubbarIdentity() !== __subbarIdentity;
-  const targets = subbarChanging ? [subbarEl, bodyEl] : [bodyEl];
-  const outX = direction > 0 ? "-22px" : "22px";
-  const inX = direction > 0 ? "22px" : "-22px";
-
-  targets.forEach((el) => {
-    el.style.transition = "transform .2s ease, opacity .2s ease";
-    el.style.transform = "translateX(" + outX + ")";
-    el.style.opacity = "0";
-  });
-  await new Promise((r) => setTimeout(r, 200));
-
-  render(); // swaps header/subbar/body — an unchanged subbar is rewritten with identical HTML, invisibly, since it isn't a slide target
-
-  targets.forEach((el) => {
-    el.style.transition = "none";
-    el.style.transform = "translateX(" + inX + ")";
-  });
-  void bodyEl.offsetHeight; // force layout so the transition below starts from this position, not "auto"
-  targets.forEach((el) => {
-    el.style.transition = "transform .3s cubic-bezier(.22,.72,.16,1), opacity .3s ease";
-    el.style.transform = "translateX(0)";
-    el.style.opacity = "1";
-  });
-  await new Promise((r) => setTimeout(r, 300));
-  targets.forEach((el) => {
-    el.style.transition = "";
-    el.style.transform = "";
-    el.style.opacity = "";
-  });
 }
 
 function renderHeader() {
   const tabs = [["week", "Offer"], ["replies", "Replies"], ["plan", "Schedule"], ["hours", "Hours"]];
-  const title = (ME.instrument ? ME.instrument + " Lessons" : "Cadence.") + (ME.name ? " - " + ME.name : "");
+  const title = (ME.instrument ? ME.instrument + " Lessons" : "Lesson Scheduler") + (ME.name ? " - " + ME.name : "");
   const sectionTitles = { profile: "Profile", students: "Students", termdates: "Term Dates", settings: "Settings" };
   const inScheduler = currentSection === "scheduler";
   let header = '<div class="bar"><div class="bartop">' +
-    '<span class="hbrow"><button class="hamburger" data-action="toggleSidebar" aria-label="Menu"><svg width="24" height="18" viewBox="0 0 24 18" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="3" rx="1.5" fill="currentColor"/><rect y="7.5" width="24" height="3" rx="1.5" fill="currentColor"/><rect y="15" width="24" height="3" rx="1.5" fill="currentColor"/></svg></button>' +
+    '<span class="hbrow"><button class="hamburger" data-action="toggleSidebar" aria-label="Menu">\u2630</button>' +
     '<h1 class="title">' + (inScheduler ? title : sectionTitles[currentSection]) + '</h1></span>' +
-    (inScheduler ? '<div class="wk">' + (S.settings.schedulingMode === "rolling" ? S.weeksCompleted + " weeks taught" : S.weeksCompleted + " of " + termWeeks() + " weeks done") + '</div>' : '<span></span>') +
+    (inScheduler ? '<div class="wk">' + S.weeksCompleted + " of " + termWeeks() + ' weeks done</div>' : '<span></span>') +
     '</div>';
   if (inScheduler) {
     header += '<div class="tabs">' +
@@ -2748,17 +1407,9 @@ function renderHeader() {
 }
 
 function renderSidebarItems() {
-  const icons = {
-    scheduler: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M10 6V10L12.6 12.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    profile: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="10" cy="7" r="3.2" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 17c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
-    students: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 3L17 5.8L10 8.6L3 5.8L10 3Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6 6.6V9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="10" cy="10.5" r="2.3" stroke="currentColor" stroke-width="1.5"/><path d="M4.5 17.5c0-2.9 2.5-4.8 5.5-4.8s5.5 1.9 5.5 4.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
-    termdates: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="3" y="4.5" width="14" height="12" rx="1.8" stroke="currentColor" stroke-width="1.5"/><path d="M3 8H17" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 2.5V5.5M13.5 2.5V5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
-    settings: '<svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M10 6.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Zm0 2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6Z"/><rect x="9" y="3.8" width="2" height="3.6" rx="0.8"/><rect x="9" y="3.8" width="2" height="3.6" rx="0.8" transform="rotate(45 10 10)"/><rect x="9" y="3.8" width="2" height="3.6" rx="0.8" transform="rotate(90 10 10)"/><rect x="9" y="3.8" width="2" height="3.6" rx="0.8" transform="rotate(135 10 10)"/><rect x="9" y="3.8" width="2" height="3.6" rx="0.8" transform="rotate(180 10 10)"/><rect x="9" y="3.8" width="2" height="3.6" rx="0.8" transform="rotate(225 10 10)"/><rect x="9" y="3.8" width="2" height="3.6" rx="0.8" transform="rotate(270 10 10)"/><rect x="9" y="3.8" width="2" height="3.6" rx="0.8" transform="rotate(315 10 10)"/></svg>',
-  };
   const items = [["scheduler", "Scheduler"], ["profile", "Profile"], ["students", "Students"], ["termdates", "Term Dates"], ["settings", "Settings"]];
-  return '<div class="sidebar-brand"><svg class="brand-mark" width="17" height="23" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="3" y="3" width="4" height="18" rx="1.5" fill="currentColor"/><rect x="11" y="3" width="9" height="18" rx="2" fill="currentColor"/></svg>Cadence.</div>' +
-    items.map(([k, label]) => '<button class="sidebar-item' + (currentSection === k ? " sel" : "") + '" data-section="' + k + '">' + icons[k] + '<span>' + label + '</span></button>').join("") +
-    '<button class="sidebar-signout" data-sidebar-action="signOut">Sign out</button>';
+  return '<div class="sidebar-head">Menu</div>' +
+    items.map(([k, label]) => '<button class="sidebar-item' + (currentSection === k ? " sel" : "") + '" data-section="' + k + '">' + label + "</button>").join("");
 }
 
 // The panel and backdrop live outside #app's innerHTML churn deliberately —
@@ -2787,25 +1438,10 @@ function syncSidebarDOM() {
 
 function toggleSidebar() { sidebarOpen = !sidebarOpen; syncSidebarDOM(); }
 function closeSidebar() { sidebarOpen = false; syncSidebarDOM(); }
-
-async function signOut() {
-  try {
-    await fetch("/api/logout", { method: "POST" });
-  } catch (e) {
-    // Still leave the protected app; if the request failed, the login page
-    // is the safest destination and a retry can happen from there.
-  }
-  window.location.href = "/login.html";
-}
-
 function goSection(section) {
-  const fromDepth = currentSection === "scheduler" ? 0 : 1;
-  const toDepth = section === "scheduler" ? 0 : 1;
   currentSection = section;
   if (section === "termdates") openTermDatesDraft();
-  if (section === "settings") { openSettingsDraft(); settingsTab = "general"; }
-  sidebarOpen = false; syncSidebarDOM();
-  animatedRender(toDepth >= fromDepth ? 1 : -1);
+  sidebarOpen = false; syncSidebarDOM(); render();
 }
 
 function renderProfileSection() {
@@ -2814,45 +1450,31 @@ function renderProfileSection() {
     '<div class="field"><label>Your name</label><input type="text" data-bind="profileName" value="' + escapeHTML(ME.name || "") + '"></div>' +
     '<div class="field"><label>Instrument</label><input type="text" data-bind="profileInstrument" value="' + escapeHTML(ME.instrument || "") + '"></div>' +
     '<div class="btnrow"><button class="btn sig" data-action="saveProfile">Save changes</button></div>' +
-    '<div class="panel" style="border-color:var(--sig);margin-top:24px">' +
-    '<h3 style="color:var(--sig)">Account deletion</h3>' +
-    '<p class="lede" style="margin-bottom:12px">Deleting your account removes your profile, students, schedules and hours from Cadence, and frees up this email address. Visit the login page again after that and it\u2019ll treat you as a brand new sign-up. This can\u2019t be undone.</p>' +
-    (confirmingDeleteAccount
-      ? '<p class="lede" style="color:var(--sig);font-weight:600;margin-bottom:10px">Are you absolutely sure? This can\u2019t be undone.</p>' +
-        '<div class="btnrow"><button class="btn" data-action="cancelDeleteAccount">Cancel</button>' +
-        '<button class="btn sig" data-action="confirmDeleteAccount">Yes, delete my account</button></div>'
-      : '<div class="btnrow"><button class="btn outline-sig" data-action="requestDeleteAccount">Delete my account</button></div>') +
-    "</div></div>";
+    "</div>";
 }
 
 function renderStudentsSection() {
-  const studentRows = S.students.map((s) =>
+  const studentRows = S.students.map(s =>
     '<div class="student-edit-row">' +
     '<input type="text" data-bind="studentName" data-id="' + s.id + '" value="' + escapeHTML(s.name) + '" aria-label="Student name">' +
     '<div class="student-hours-wrap"><input type="number" step="0.5" min="0" data-bind="studentHours" data-id="' + s.id + '" value="' + s.allocated + '" aria-label="Allocated hours"></div>' +
-    '<button class="x student-delete" data-action="removeStudent" data-id="' + s.id + '" aria-label="Remove ' + escapeHTML(s.name) + '"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>' +
+    '<button class="x student-delete" data-action="removeStudent" data-id="' + s.id + '" aria-label="Remove ' + escapeHTML(s.name) + '">×</button>' +
     "</div>"
   ).join("");
   return '<div class="pad">' +
-    '<p class="lede">Edit names or allocated hours here. Removing someone stops them appearing in future weeks, though hours already logged for them stay on record.</p>' +
+    '<p class="lede">Edit names or allocated hours here. Removing someone stops them appearing in future weeks — hours already logged for them stay on record.</p>' +
     '<div class="panel students-panel">' + studentRows +
     '<div class="student-add-row"><input type="text" data-bind="newStudentName" value="' + escapeHTML(newStudentDraft.name) + '" placeholder="New student\u2019s name">' +
     '<div class="student-hours-wrap"><input type="number" step="0.5" min="0" data-bind="newStudentAllocated" value="' + newStudentDraft.allocated + '" placeholder="Hours" aria-label="Allocated hours"></div>' +
-    '<button class="student-add-btn" data-action="addStudent" aria-label="Add student"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 2V14M2 8H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>' +
+    '<button class="btn primary" data-action="addStudent">Add</button></div>' +
     "</div></div>";
 }
 
 function renderTermDatesSection() {
-  if (S.settings.schedulingMode === "rolling") {
-    return '<div class="pad">' +
-      '<p class="lede">You\u2019re using rolling weeks \u2014 there are no term dates to set. Weeks just keep counting up, and any break is marked as \u201cNot teaching this week\u201d from the Offer tab when it comes round.</p>' +
-      '<div class="btnrow"><button class="btn sig" data-action="switchToTermsFromTermDates">Use term dates instead</button></div>' +
-      "</div>";
-  }
   const d = termDraft;
   const rows = d.ranges.map((r, i) =>
     '<div class="term-card">' +
-      '<div class="term-card-head"><h3>Term ' + (i + 1) + '</h3></div>' +
+      '<div class="term-card-head"><h3>Term ' + (i + 1) + '</h3><span>Teaching dates</span></div>' +
       '<div class="term-date-grid">' +
         '<div class="field"><label>Start date</label><input type="date" data-bind="termStart" data-idx="' + i + '" value="' + (r.start || "") + '"></div>' +
         '<div class="field"><label>End date</label><input type="date" data-bind="termEnd" data-idx="' + i + '" value="' + (r.end || "") + '"></div>' +
@@ -2867,101 +1489,9 @@ function renderTermDatesSection() {
     "</div>";
 }
 
-function priorityMeta(key) {
-  return {
-    days: { label: "Fewest days", desc: "Fit everyone into as few teaching days as possible" },
-    gaps: { label: "No gaps", desc: "Keep each teaching day tightly packed, with no idle time between lessons" },
-    preference: { label: "Preferred days", desc: "Favour the days you\u2019ve marked as preferred, and steer clear of the ones you\u2019ve marked to avoid" },
-    placement: { label: "Preferred block placement", desc: "Honour the Early or Late choices set on your offered availability blocks" },
-    latest: { label: "Earliest finish", desc: "Prefer schedules whose final lesson finishes earlier in the day" },
-    latestStart: { label: "Latest start", desc: "Prefer schedules whose first lesson begins later in the day" },
-  }[key];
-}
-
-function renderPrioritiesTab() {
-  const order = normalisePriorityOrder(settingsDraft.priorityOrder);
-  const excluded = PRIORITY_KEYS.filter(key => !order.includes(key));
-  const rows = order.map((k, i) => {
-    const m = priorityMeta(k);
-    return '<div class="priority-row" data-key="' + k + '" data-idx="' + i + '">' +
-      '<span class="priority-rank">' + (i + 1) + '</span>' +
-      '<span class="priority-label"><strong>' + m.label + '</strong><span>' + m.desc + '</span></span>' +
-      '<button type="button" class="priority-toggle" data-action="excludePriority" data-key="' + k + '">Exclude</button>' +
-      '<span class="priority-handle" aria-hidden="true">\u2630</span>' +
-      '</div>';
-  }).join("");
-  const excludedRows = excluded.map(k => {
-    const m = priorityMeta(k);
-    return '<div class="priority-row" data-key="' + k + '">' +
-      '<span class="priority-rank" aria-hidden="true">–</span>' +
-      '<span class="priority-label"><strong>' + m.label + '</strong><span>' + m.desc + '</span></span>' +
-      '<button type="button" class="priority-toggle include" data-action="includePriority" data-key="' + k + '">Include</button>' +
-      '</div>';
-  }).join("");
-  return '<p class="lede">Cadence only considers included priorities. Drag them into order: it satisfies whatever\u2019s nearer the top first, only falling back to the next one when there\u2019s a genuine tie.</p>' +
-    '<div class="priority-section-title"><span>Included priorities</span><span>' + order.length + '</span></div>' +
-    '<div class="priority-list" id="priorityList">' + rows + '</div>' +
-    '<div class="priority-section-title"><span>Excluded</span><span>' + excluded.length + '</span></div>' +
-    '<div class="priority-list excluded">' + (excludedRows || '<div class="priority-row"><span class="priority-label"><strong>Nothing excluded</strong><span>Use Exclude above to remove a priority from scheduling.</span></span></div>') + '</div>';
-}
-
-function renderAccentPicker() {
-  const selected = Object.prototype.hasOwnProperty.call(ACCENT_THEMES, settingsDraft.accent) ? settingsDraft.accent : "oxblood";
-  return '<div class="panel"><h3>Accent colour</h3>' +
-    '<p class="lede">Used for your studio and your students’ availability page. Choose a colour, then save changes.</p>' +
-    '<div class="accent-picker" role="group" aria-label="Accent colour">' +
-    Object.entries(ACCENT_THEMES).map(([id, theme]) =>
-      '<button type="button" class="accent-option" data-action="setAccent" data-accent="' + id +
-      '" aria-pressed="' + (id === selected) + '"><span class="accent-swatch" aria-hidden="true" style="background:' + theme.ink + '">' +
-      (id === selected ? '✓' : '') + '</span><span>' + theme.name + '</span></button>'
-    ).join('') + '</div></div>';
-}
-
-function renderGeneralSettingsTab() {
-  const d = settingsDraft;
-  const hourLabel = (h) => String(h).padStart(2, "0") + ":00";
-  const rolling = d.schedulingMode === "rolling";
-  return renderAccentPicker() + '<div class="panel">' +
-      '<h3>Scheduling</h3>' +
-      '<div class="choice-group">' +
-      '<button class="choice-btn' + (!rolling ? " sel" : "") + '" data-action="setSchedulingMode" data-mode="terms">Term dates</button>' +
-      '<button class="choice-btn' + (rolling ? " sel" : "") + '" data-action="setSchedulingMode" data-mode="rolling">Rolling weeks</button>' +
-      '</div>' +
-      '<p class="lede" style="margin:10px 0 0">' + (rolling
-        ? "Weeks just keep counting up with no end date and no holiday jumps \u2014 use \u201cNot teaching this week\u201d for any breaks."
-        : "Term dates set the teaching weeks and let the scheduler jump over holidays automatically.") + '</p>' +
-    '</div>' +
-    '<div class="panel">' +
-      '<h3>Cancellations</h3>' +
-      '<div class="field" style="margin-bottom:0"><label>Notice window</label><div class="stepper">' +
-      '<button class="step" data-action="adjustCancellationWindow" data-delta="-6" ' + (Number(d.cancellationWindowHours) <= 6 ? "disabled" : "") + '>\u2013</button>' +
-      "<b>" + Number(d.cancellationWindowHours || 24) + "h</b>" +
-      '<button class="step" data-action="adjustCancellationWindow" data-delta="6" ' + (Number(d.cancellationWindowHours) >= 72 ? "disabled" : "") + '>+</button>' +
-      "</div></div>" +
-    '</div>' +
-    '<div class="panel">' +
-      '<h3>Availability grid</h3>' +
-      '<p class="lede">Shapes the grid on the Offer tab, but only for weeks that are still completely blank. The moment you paint a block or mark a week as not teaching, that week\u2019s shape locks in for good, even if you change these again later.</p>' +
-      '<div class="field"><label>Weekends</label>' +
-      '<button class="btn' + (d.includeWeekends ? " notteaching-active" : "") + '" style="width:100%" data-action="toggleWeekendSetting">' +
-      (d.includeWeekends ? "Weekends included. Tap to go back to weekdays only" : "Weekdays only. Tap to include Saturday and Sunday") + '</button></div>' +
-      '<div class="field"><label>Grid starts at</label><div class="stepper">' +
-      '<button class="step" data-action="adjustSettingsHour" data-which="start" data-delta="-1" ' + (d.dayStartHour <= 6 ? "disabled" : "") + '>\u2013</button>' +
-      "<b>" + hourLabel(d.dayStartHour) + "</b>" +
-      '<button class="step" data-action="adjustSettingsHour" data-which="start" data-delta="1" ' + (d.dayStartHour >= d.dayEndHour - 1 ? "disabled" : "") + '>+</button>' +
-      "</div></div>" +
-      '<div class="field" style="margin-bottom:0"><label>Grid ends at</label><div class="stepper">' +
-      '<button class="step" data-action="adjustSettingsHour" data-which="end" data-delta="-1" ' + (d.dayEndHour <= d.dayStartHour + 1 ? "disabled" : "") + '>\u2013</button>' +
-      "<b>" + hourLabel(d.dayEndHour) + "</b>" +
-      '<button class="step" data-action="adjustSettingsHour" data-which="end" data-delta="1" ' + (d.dayEndHour >= 22 ? "disabled" : "") + '>+</button>' +
-      "</div></div>" +
-    '</div>';
-}
-
-function renderSettingsBody() {
-  const body = settingsTab === "priorities" ? renderPrioritiesTab() : renderGeneralSettingsTab();
-  return '<div class="pad" style="padding-top:0">' + body +
-    '<div class="btnrow" style="margin-top:16px"><button class="btn sig" data-action="saveSettings">Save changes</button></div>' +
+function renderSettingsSection() {
+  return '<div class="pad">' +
+    '<p class="lede">Not built yet — I want to check exactly what you mean by \u201cweek start date\u201d before doing this one, since it changes how the grid and solver both work underneath. \u201cInclude weekends\u201d is clear and is next once that\u2019s settled.</p>' +
     "</div>";
 }
 
@@ -2978,60 +1508,44 @@ function renderTabContent() {
 // starting — or nudge with the arrows.
 function renderWeekPicker() {
   const rnd = activeRound();
-  const rolling = S.settings.schedulingMode === "rolling";
   return '<div class="weekpicker">' +
     '<button class="step" data-action="prevWeek" ' + (S.week <= 1 ? "disabled" : "") + '>\u2039</button>' +
-    '<div class="weekpicker-mid"><label>Week <input type="number" inputmode="numeric" min="1" ' + (rolling ? "" : 'max="' + termWeeks() + '"') + ' data-bind="week" value="' + S.week + '">' + (rolling ? "" : " of " + termWeeks()) + '</label>' +
+    '<div class="weekpicker-mid"><label>Week <input type="number" inputmode="numeric" min="1" max="' + termWeeks() + '" data-bind="week" value="' + S.week + '"> of ' + termWeeks() + '</label>' +
     '<span>' + (weekRangeLabel(rnd.weekStart) || "") + '</span></div>' +
-    '<button class="step" data-action="nextWeek" ' + (!rolling && S.week >= termWeeks() ? "disabled" : "") + '>\u203a</button>' +
+    '<button class="step" data-action="nextWeek" ' + (S.week >= termWeeks() ? "disabled" : "") + '>\u203a</button>' +
     "</div>";
-}
-
-function buildOfferActionsHTML(rnd) {
-  const editing = '<div class="btnrow"><button class="btn sig" data-action="sendToStudents" ' +
-    (rnd.offered.size && !rnd.notTeaching ? '' : 'disabled') + '>Lock &amp; copy link</button></div>' +
-    '<div class="btnrow"><button class="btn" data-action="clearOffer">Clear grid</button>' +
-    '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
-    '</div>';
-  const locked = '<div class="btnrow"><button class="btn sig" data-action="copyStudentLink"' +
-    (linkFeedback && linkFeedback.round === rnd && linkFeedback.pending ? ' disabled' : '') + '>Copy link</button></div>' +
-    '<div class="btnrow"><button class="btn" data-action="editAvailability">Edit availability</button></div>';
-  return '<div class="offer-actions" id="offerActions">' +
-    '<div class="offer-mode' + (!rnd.sent ? ' active' : '') + '" data-mode="editing"' + (rnd.sent ? ' inert aria-hidden="true"' : '') + '>' + editing + '</div>' +
-    '<div class="offer-mode' + (rnd.sent ? ' active' : '') + '" data-mode="locked"' + (!rnd.sent ? ' inert aria-hidden="true"' : '') + '>' + locked + '</div></div>' +
-    '<div id="linkFeedback" class="link-feedback" role="status" aria-live="polite" aria-atomic="true">' + linkFeedbackHTML(rnd) + '</div>';
 }
 
 function renderOfferTab() {
   const rnd = activeRound();
-  const hours = (rnd.offered.size * GRID_SLOT_MIN) / 60;
-  const grid = buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour });
+  const hours = (rnd.offered.size * SLOT_MIN) / 60;
   const gridBlock = rnd.notTeaching
-    ? '<div class="grid-locked">Marked as not teaching this week.<br>Tap \u201cNot teaching this week\u201d again, or \u201cClear grid\u201d, to paint times.</div>'
-    : '<div id="offerGrid"' + (rnd.sent ? ' class="offer-locked"' : "") + '>' + grid + "</div>";
-  return '<div class="pad" style="padding-top:0">' +
+    ? '<div class="grid-locked">Marked as not teaching this week.<br>Tap \u201cNot teaching this week\u201d again, or \u201cClear\u201d, to paint times.</div>'
+    : buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null });
+  return '<div class="pad">' +
+    renderWeekPicker() +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
-    '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + '. Check this matches the week you mean, and correct it if a reading week or anything else has thrown it off.</p>' +
+    '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">' + (weekRangeLabel(rnd.weekStart) || "") + ' — check this matches the week you mean; correct it if a reading week or anything else has thrown it off.</p>' +
+    '<p class="lede">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
     '<div class="dayprefs"><div class="dayprefs-head"><b>Teaching day preference</b><span>Tap to cycle Neutral → Preferred → Avoid</span></div>' +
-    '<div class="dayprefs-grid" style="grid-template-columns:repeat(' + roundDays(rnd).length + ',minmax(0,1fr))">' + roundDays(rnd).map((d, i) => {
+    '<div class="dayprefs-grid">' + DAYS.map((d, i) => {
       const v = Number((rnd.dayPreferences && rnd.dayPreferences[i]) || 0);
       const cls = v === -1 ? " preferred" : v === 1 ? " avoid" : "";
       return '<button class="daypref' + cls + '" data-action="cycleDayPref" data-day="' + i + '"><strong>' + d + '</strong><span>' + preferenceLabel(v) + '</span></button>';
     }).join("") + '</div></div>' +
-    '<div class="field"><label>Note for this week\u2019s message (optional)</label><input type="text" data-bind="weekNote" value="' + escapeHTML(rnd.note || "") + '" placeholder="e.g. half term next week"></div>' +
-    '<p class="lede" style="margin-bottom:8px">Drag to paint the times you could teach this week. Students only ever see these.</p>' +
-    '<p style="text-align:center;font-weight:700;font-size:15px;margin:0 0 8px">' + (weekRangeLabel(rnd.weekStart) || "") + '</p>' +
+    '<div class="btnrow"><button class="btn" data-action="clearOffer">Clear</button>' +
+    '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
+    '</div>' +
     gridBlock +
-    '<p id="placementHelp" class="placement-help">After locking, choose Any, Early or Late for each block. Students still see your full availability.</p>' +
     '<div class="meter"><span>Offered this week</span><b>' + hours + 'h</b></div>' +
-    buildOfferActionsHTML(rnd) +
+    '<div class="btnrow" style="margin-top:16px"><button class="btn primary" data-action="goReplies" ' + (rnd.offered.size && !rnd.notTeaching ? "" : "disabled") + '>Send to students</button></div>' +
     "</div>";
 }
 
 function renderRepliesTab() {
   const rnd = activeRound();
   if (rnd.notTeaching) {
-    return '<div class="pad" style="padding-top:0"><p class="empty">This week is marked as not teaching, so there\u2019s nothing to collect. Undo it on the Offer tab if that\u2019s changed.</p></div>';
+    return '<div class="pad">' + renderWeekPicker() + '<p class="empty">This week is marked as not teaching — nothing to collect. Undo it on the Offer tab if that\u2019s changed.</p></div>';
   }
   const heat = getHeat(rnd);
   let body;
@@ -3042,38 +1556,27 @@ function renderRepliesTab() {
       const r = rnd.replies[s.id];
       const st = r ? r.status : "waiting";
       const isStudentReply = !!r && r.source !== "admin";
-      const ownerText = !r ? "" : isStudentReply ? " (from the student)" : " (you entered this)";
-      const validAvailCount = r && r.avail ? [...r.avail].filter(k => rnd.offered.has(k)).length : 0;
-      const statusText = (st === "in" ? (validAvailCount + " slots free") : st === "skip" ? "Not this week" : st === "none" ? "Nothing works" : "Waiting") + ownerText;
-      const canExpand = !isStudentReply || (st === "in" && validAvailCount > 0);
-      const isExpanded = canExpand && S.openStudent === s.id;
-      const curLesson = lessonMinutesFor(rnd, s.id);
+      const ownerText = !r ? "" : isStudentReply ? " · submitted by student" : " · entered by you";
+      const statusText = (st === "in" ? (r.avail.size + " slots free") : st === "skip" ? "Not this week" : st === "none" ? "Nothing works" : "Waiting") + ownerText;
+      const curLesson = lessonFor(rnd, s.id);
       let lenrow = "";
       if (st === "in") {
-        const dec = curLesson <= MIN_LESSON_MINUTES;
-        const inc = curLesson >= MAX_LESSON_MINUTES || curLesson + SCHEDULE_SLOT_MIN > (s.allocated - taughtFor(s.id)) * 60;
+        const dec = curLesson <= 1;
+        const inc = curLesson >= 4 || (curLesson + 1) * 0.5 > s.allocated - taughtFor(s.id);
         lenrow = '<div class="lenrow"><span>Lesson length</span><div class="stepper">' +
-          '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="-1" ' + (dec ? "disabled" : "") + ">–</button>" +
-          "<b>" + curLesson + " min</b>" +
-          '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="1" ' + (inc ? "disabled" : "") + ">+</button>" +
+          '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="-1" ' + (dec || isStudentReply ? "disabled" : "") + ">–</button>" +
+          "<b>" + (curLesson * SLOT_MIN) + " min</b>" +
+          '<button class="step" data-action="adjustLength" data-id="' + s.id + '" data-delta="1" ' + (inc || isStudentReply ? "disabled" : "") + ">+</button>" +
           "</div></div>";
       }
       let gridBlock = "";
-      if (isExpanded) {
+      if (!isStudentReply && S.openStudent === s.id) {
         const avail = (r && r.avail) || new Set();
-        gridBlock = isStudentReply
-          ? '<div class="readonly-availability"><p class="readonly-note">Submitted availability · Read only</p>' +
-            buildGridHTML("readonly", { selected: avail, offered: rnd.offered, studentId: s.id, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour }) + "</div>"
-          : '<div style="padding:4px 0 14px">' + buildGridHTML("reply", { selected: avail, offered: rnd.offered, studentId: s.id, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour }) + "</div>";
+        gridBlock = '<div style="padding:4px 0 14px">' + buildGridHTML("reply", { selected: avail, offered: rnd.offered, studentId: s.id }) + "</div>";
       }
-      const nameContent = "<strong>" + s.name + "</strong><span>" + statusText + "</span>" +
-        (canExpand ? '<span class="reply-chevron" aria-hidden="true">⌄</span>' : "");
-      const nameCell = canExpand
-        ? '<button type="button" class="sname sname-toggle" data-action="toggleStudentOpen" data-id="' + s.id +
-          '" aria-expanded="' + isExpanded + '">' + nameContent + "</button>"
-        : '<div class="sname">' + nameContent + "</div>";
       return '<div class="srow-group">' +
-        '<div class="srow">' + nameCell +
+        '<div class="srow"><div class="sname"' + (!isStudentReply ? ' data-action="toggleStudentOpen" data-id="' + s.id + '" style="cursor:pointer"' : '') + '>' +
+        "<strong>" + s.name + "</strong><span>" + statusText + "</span></div>" +
         '<div class="chips">' +
         '<button class="chip' + (st === "in" ? " sel" : "") + '" data-action="setStatus" data-id="' + s.id + '" data-status="in" ' + (isStudentReply ? "disabled" : "") + '>In</button>' +
         '<button class="chip' + (st === "skip" ? " sel grey" : "") + '" data-action="setStatus" data-id="' + s.id + '" data-status="skip" ' + (isStudentReply ? "disabled" : "") + '>Skip</button>' +
@@ -3084,85 +1587,25 @@ function renderRepliesTab() {
 
   let heatPanel = "";
   if (rnd.offered.size > 0 && Object.keys(heat).length > 0) {
-    heatPanel = '<div class="panel overlay-panel"><button type="button" class="overlay-toggle" data-action="toggleRepliesOverlay" aria-expanded="' + repliesOverlayOpen + '">' +
-      '<strong>Everyone, overlaid</strong><span class="reply-chevron" aria-hidden="true">⌄</span></button>' +
-      (repliesOverlayOpen ? '<div class="overlay-content">' + buildGridHTML("heat", { selected: new Set(), offered: rnd.offered, heat, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour }) + "</div>" : "") + "</div>";
+    heatPanel = '<div class="panel"><h3>Everyone, overlaid</h3>' + buildGridHTML("heat", { selected: new Set(), offered: rnd.offered, heat }) + "</div>";
   }
 
   const participants = getParticipants(rnd);
   const lede = rnd.offered.size
-    ? '<p class="lede">Each student says whether they want a lesson, then paints inside your blocks. Tap a name to view their times; replies entered by you remain editable.</p>'
+    ? '<p class="lede">Each student says whether they want a lesson, then paints inside your blocks. Tap a name to edit their grid.</p>'
     : "";
-  return '<div class="pad" style="padding-top:0">' +
+  return '<div class="pad">' + renderWeekPicker() +
     lede +
     (DEV_MODE ? '<div class="btnrow"><button class="btn sig" data-action="sampleReplies" ' + (rnd.offered.size ? "" : "disabled") + ">Load sample replies</button></div>" : "") +
     body + heatPanel +
-    '<div class="btnrow"><button class="btn sig" data-action="runSolver" ' + (participants.length ? "" : "disabled") + ">Work out the schedule</button></div>" +
+    '<div class="btnrow"><button class="btn primary" data-action="runSolver" ' + (participants.length ? "" : "disabled") + ">Work out the schedule</button></div>" +
     "</div>";
-}
-
-function renderScheduleViewSwitch() {
-  return '<div class="schedule-view-switch" role="group" aria-label="Schedule view">' +
-    ["timetable", "agenda"].map(view => '<button type="button" data-action="setScheduleView" data-view="' + view +
-      '" aria-pressed="' + (S.scheduleView === view) + '">' + (view === "agenda" ? "Agenda" : "Options") + '</button>').join("") + '</div>';
-}
-
-function agendaLessonColour(lesson) {
-  // Stable across rearrangements, cancellations and weeks; independent of lesson status.
-  let hash = 0;
-  for (const character of String(lesson.id || lesson.name)) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  return ["sand", "rose", "sage"][hash % 3];
-}
-
-function renderAgenda(assignments, weekNo, weekStart, startHour, confirmed) {
-  const by = groupByDay(assignments);
-  const count = assignments.length;
-  const minutes = assignments.reduce((total, lesson) => total + lesson.lesson * SCHEDULE_SLOT_MIN, 0);
-  const duration = minutes < 60 ? minutes + " min" : Math.floor(minutes / 60) + "h" + (minutes % 60 ? " " + minutes % 60 + " min" : "");
-  const days = Object.keys(by).sort((a, b) => Number(a) - Number(b)).map(d => {
-    const lessons = by[d];
-    const rows = lessons.map(lesson => {
-      const start = scheduleTimeFor(startHour, lesson.start);
-      const end = scheduleTimeFor(startHour, lesson.start + lesson.lesson);
-      const line = '<span class="agenda-name">' + escapeHTML(lesson.name) + '</span><span class="agenda-duration">' +
-        (lesson.lesson * SCHEDULE_SLOT_MIN) + ' min</span>';
-      // Dataset keys can contain student IDs: escape quotes as well as HTML markup.
-      const lessonKey = escapeHTML(lesson.key || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-      const card = confirmed
-        ? '<details class="agenda-lesson ' + agendaLessonColour(lesson) + '"><summary class="agenda-lesson-line">' + line + '</summary>' +
-          '<div class="agenda-controls"><p>' + start + '–' + end + '</p><div class="cancels">' +
-          '<button class="mini" data-action="cancelEarly" data-id="' + lessonKey + '">Cancelled, ' + (S.settings.cancellationWindowHours || 24) + 'h+ notice</button>' +
-          '<button class="mini warnb" data-action="cancelLate" data-id="' + lessonKey + '">Cancelled late</button></div></div></details>'
-        : '<div class="agenda-lesson ' + agendaLessonColour(lesson) + '"><div class="agenda-lesson-line">' + line + '</div></div>';
-      return '<div class="agenda-row"><time class="agenda-time" datetime="' + start + '">' + start + '</time>' + card + '</div>';
-    }).join("");
-    return '<section class="agenda-day"><div class="agenda-day-heading"><h3>' + escapeHTML(dayDateLong(weekStart, Number(d))) +
-      '</h3><span>' + lessons.length + ' lesson' + (lessons.length === 1 ? '' : 's') + '</span></div>' + rows + '</section>';
-  }).join("");
-  return '<section class="agenda" aria-label="Weekly lesson agenda"><div class="agenda-head">' +
-    '<div class="agenda-heading"><h2>Your week</h2><span class="agenda-week">Week ' + escapeHTML(weekNo) + '</span></div>' +
-    '<p>' + count + ' lesson' + (count === 1 ? '' : 's') + ' · ' + duration +
-    ' teaching · ' + (confirmed ? 'Confirmed' : 'Draft arrangement') + '</p></div><div class="agenda-body">' +
-    (days || '<p class="empty">No lessons scheduled.</p>') +
-    '<p class="agenda-foot"><span class="agenda-dot" aria-hidden="true"></span>' +
-    (confirmed ? (count ? 'Your confirmed week. Tap a lesson to manage cancellations.' : 'Cancelled lessons are listed below.') : 'A preview of your selected arrangement. Confirm when you’re ready.') +
-    '</p></div></section>';
-}
-
-function renderAgendaOptionPicker(result, rnd) {
-  const days = roundDays(rnd);
-  return '<label class="agenda-choice">Arrangement<select data-bind="agendaOption">' + result.options.map((option, index) => {
-    const dayLabel = [...new Set(option.assign.map(a => a.d))].sort((a, b) => a - b).map(d => days[d]).join(" + ");
-    const gaps = option.gaps ? (option.gaps * SCHEDULE_SLOT_MIN) + ' min idle' : 'no gaps';
-    return '<option value="' + index + '"' + (index === rnd.chosen ? ' selected' : '') + '>Option ' + (index + 1) + ' · ' +
-      escapeHTML(dayLabel) + ' · ' + gaps + '</option>';
-  }).join("") + '</select></label>';
 }
 
 function renderPreConfirmPlanTab() {
   const rnd = activeRound();
   if (!rnd.result) {
-    return '<div class="pad" style="padding-top:0"><p class="empty">Nothing solved yet. Collect replies, then tap “Work out the schedule”.</p></div>';
+    return '<div class="pad">' + renderWeekPicker() + '<p class="empty">Nothing solved yet. Collect replies, then tap “Work out the schedule”.</p></div>';
   }
   const r = rnd.result;
   let intro;
@@ -3173,12 +1616,12 @@ function renderPreConfirmPlanTab() {
     intro = '<p class="lede">Can’t fit everyone.' + (r.unplaced.length ? " Left out: " + r.unplaced.join(", ") + "." : "") + "</p>";
   }
 
-  const days = roundDays(rnd);
-  const renderOption = (opt) => {
+  const visibleOptions = rnd.optionsExpanded ? r.options : r.options.slice(0, 3);
+  const optionsHTML = visibleOptions.map((opt, idx) => {
     const actualIdx = r.options.indexOf(opt);
     const dayNums = [...new Set(opt.assign.map(a => a.d))].sort();
-    const daysLabel = dayNums.map(d => days[d]).join(" + ");
-    const gapsLabel = opt.gaps === 0 ? "no gaps" : ((opt.gaps * SCHEDULE_SLOT_MIN) / 60) + "h idle";
+    const daysLabel = dayNums.map(d => DAYS[d]).join(" + ");
+    const gapsLabel = opt.gaps === 0 ? "no gaps" : ((opt.gaps * SLOT_MIN) / 60) + "h idle";
     const prefValues = dayNums.map(d => Number((rnd.dayPreferences && rnd.dayPreferences[d]) || 0));
     const allPreferred = prefValues.length && prefValues.every(v => v === -1);
     const hasAvoid = prefValues.some(v => v === 1);
@@ -3188,23 +1631,16 @@ function renderPreConfirmPlanTab() {
         ? '<span class="prefavoid">Includes an avoided day</span>'
         : 'Neutral day preference';
     const lines = opt.assign.slice().sort((a, b) => a.d - b.d || a.start - b.start).map(a =>
-      '<div class="line"><span>' + days[a.d] + " " + scheduleTimeFor(rnd.dayStartHour, a.start) + "–" + scheduleTimeFor(rnd.dayStartHour, a.start + a.lesson) + "</span><span>" + a.name + "</span></div>"
+      '<div class="line"><span>' + DAYS[a.d] + " " + slotTime(a.start) + "–" + slotTime(a.start + a.lesson) + "</span><span>" + a.name + "</span></div>"
     ).join("");
     return '<div class="opt' + (actualIdx === rnd.chosen ? " sel" : "") + '" data-action="chooseOption" data-idx="' + actualIdx + '">' +
       '<div class="opthead"><b>' + daysLabel + "</b><span>" + gapsLabel + "</span></div>" + lines +
-      '<div class="option-reason">' + prefText + ', ' + opt.days + ' teaching day' + (opt.days === 1 ? "" : "s") + '</div></div>';
-  };
-
-  const optionsHTML = r.options.slice(0, 3).map(renderOption).join("");
-  const extraOptionsHTML = r.options.slice(3).map(renderOption).join("");
+      '<div class="option-reason">' + prefText + ' · ' + opt.days + ' teaching day' + (opt.days === 1 ? "" : "s") + '</div></div>';
+  }).join("");
 
   const moreOptionsHTML = r.options.length > 3
-    ? '<div id="moreOptionsExpander" class="more-options-expander' + (rnd.optionsExpanded ? " open" : "") + '">' +
-        '<div class="more-options-expander-inner">' + extraOptionsHTML + '</div>' +
-      '</div>' +
-      '<div class="btnrow more-options"><button class="btn" data-action="toggleMoreOptions" aria-expanded="' +
-        (rnd.optionsExpanded ? "true" : "false") + '">' +
-        (rnd.optionsExpanded ? "Show fewer options" : "Show more options (" + (r.options.length - 3) + ")") +
+    ? '<div class="btnrow more-options"><button class="btn" data-action="toggleMoreOptions">' +
+      (rnd.optionsExpanded ? "Show fewer options" : "Show more options (" + (r.options.length - 3) + ")") +
       "</button></div>"
     : "";
 
@@ -3223,15 +1659,10 @@ function renderPreConfirmPlanTab() {
       (S.fallbackText ? '<textarea class="fallback" readonly rows="' + (S.fallbackText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.fallbackText) + "</textarea>" : "") +
       (S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + S.week + '.png">Save image</a></div>' : "") +
       "</div>";
-    confirmBtn = '<div class="btnrow"><button class="btn sig" data-action="confirmSchedule">Confirm schedule</button></div>';
+    confirmBtn = '<div class="btnrow"><button class="btn sig" data-action="confirmSchedule">Confirm and log hours</button></div>';
   }
 
-  const selected = r.options[rnd.chosen];
-  const agendaMode = S.scheduleView === "agenda" && selected;
-  const arrangement = agendaMode
-    ? renderAgendaOptionPicker(r, rnd) + renderAgenda(selected.assign, S.week, rnd.weekStart, rnd.dayStartHour, false)
-    : optionsHTML + moreOptionsHTML;
-  return '<div class="pad" style="padding-top:0">' + (selected ? renderScheduleViewSwitch() : "") + intro + arrangement + blockersHTML + sharePanel + confirmBtn + "</div>";
+  return '<div class="pad">' + renderWeekPicker() + intro + optionsHTML + moreOptionsHTML + blockersHTML + sharePanel + confirmBtn + "</div>";
 }
 
 function renderLivePlanTab() {
@@ -3247,8 +1678,8 @@ function renderLivePlanTab() {
 
   const dayPanels = Object.keys(by).sort().map(d => {
     const lessons = by[d].map(l =>
-      '<div class="live"><div class="livetop"><b>' + l.name.split(" ")[0] + "</b><span>" + scheduleTimeFor(rnd.dayStartHour, l.start) + "–" + scheduleTimeFor(rnd.dayStartHour, l.start + l.lesson) + "</span></div>" +
-      '<div class="cancels"><button class="mini" data-action="cancelEarly" data-id="' + l.key + '">Cancelled, ' + (S.settings.cancellationWindowHours || 24) + 'h+ notice</button>' +
+      '<div class="live"><div class="livetop"><b>' + l.name.split(" ")[0] + "</b><span>" + slotTime(l.start) + "–" + slotTime(l.start + l.lesson) + "</span></div>" +
+      '<div class="cancels"><button class="mini" data-action="cancelEarly" data-id="' + l.key + '">Cancelled, 24h+ notice</button>' +
       '<button class="mini warnb" data-action="cancelLate" data-id="' + l.key + '">Cancelled late</button></div></div>'
     ).join("");
     return '<div class="panel"><h3>' + dayDateLong(plan.weekStart, +d) + "</h3>" + lessons + "</div>";
@@ -3258,99 +1689,47 @@ function renderLivePlanTab() {
 
   let cancelledPanel = "";
   if (cancelled.length > 0) {
-    const days = roundDays(rnd);
     cancelledPanel = '<div class="panel"><h3>Cancelled</h3>' + cancelled.map(l =>
-      '<div class="entry"><span class="struck">' + days[l.d] + " " + scheduleTimeFor(rnd.dayStartHour, l.start) + " · " + l.name.split(" ")[0] +
+      '<div class="entry"><span class="struck">' + DAYS[l.d] + " " + slotTime(l.start) + " · " + l.name.split(" ")[0] +
       '<i class="tag">' + (l.status === "cancelled_late" ? "charged" : "slot freed") + "</i></span>" +
       '<button class="x" data-action="uncancel" data-id="' + l.key + '">↺</button></div>'
     ).join("") + "</div>";
   }
 
   const actionRow = '<div class="btnrow">' +
-    (freed.length > 0 ? '<button class="btn sig" data-action="closeGaps">Close the gaps</button>' : "") +
+    (freed.length > 0 ? '<button class="btn primary" data-action="closeGaps">Close the gaps</button>' : "") +
     '<button class="btn" data-action="copyLive" ' + (live.length ? "" : "disabled") + ">Copy as text</button>" +
-    '<button class="btn" data-action="imageLive" ' + (live.length ? "" : "disabled") + ">Make an image</button>" +
-    '<button class="btn" data-action="undoConfirmSchedule">Undo confirmation</button></div>';
+    '<button class="btn" data-action="imageLive" ' + (live.length ? "" : "disabled") + ">Make an image</button></div>";
 
   const fallback = S.fallbackText ? '<textarea class="fallback" readonly rows="' + (S.fallbackText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.fallbackText) + "</textarea>" : "";
   const imgBlock = S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + plan.weekNo + '.png">Save image</a></div>' : "";
   const endRow = '<div class="btnrow"><button class="btn sig" data-action="endWeek">End week and log hours</button></div>';
 
-  const schedule = S.scheduleView === "agenda"
-    ? renderAgenda(live, plan.weekNo, plan.weekStart, rnd.dayStartHour, true)
-    : dayPanels + emptyMsg;
-  return '<div class="pad" style="padding-top:0">' + renderScheduleViewSwitch() + intro + schedule + cancelledPanel + actionRow + fallback + imgBlock + endRow + "</div>";
+  return '<div class="pad">' + renderWeekPicker() + intro + dayPanels + emptyMsg + cancelledPanel + actionRow + fallback + imgBlock + endRow + "</div>";
 }
 
 function renderHoursTab() {
-  const rolling = S.settings.schedulingMode === "rolling";
   const weeksLeft = Math.max(1, termWeeks() - S.weeksCompleted);
   const totalTaught = S.students.reduce((s, x) => s + taughtFor(x.id), 0);
-  const totalScheduled = S.students.reduce((s, x) => s + scheduledFor(x.id), 0);
   const totalAllocated = S.students.reduce((s, x) => s + x.allocated, 0);
 
-  const firstName = (name) => (name || "").trim().split(/\s+/)[0] || "";
-  const surname = (name) => {
-    const parts = (name || "").trim().split(/\s+/);
-    return parts.length > 1 ? parts[parts.length - 1] : parts[0] || "";
-  };
-
-  const sortedStudents = S.students.slice().sort((a, b) => {
-    const sort = S.hoursSort || "first";
-    if (sort === "surname") {
-      return surname(a.name).localeCompare(surname(b.name), "en", { sensitivity: "base" }) ||
-        firstName(a.name).localeCompare(firstName(b.name), "en", { sensitivity: "base" });
-    }
-    if (sort === "allocated") {
-      return (Number(b.allocated) || 0) - (Number(a.allocated) || 0) ||
-        firstName(a.name).localeCompare(firstName(b.name), "en", { sensitivity: "base" });
-    }
-    if (sort === "remaining") {
-      const aRemaining = (Number(a.allocated) || 0) - taughtFor(a.id);
-      const bRemaining = (Number(b.allocated) || 0) - taughtFor(b.id);
-      return bRemaining - aRemaining ||
-        firstName(a.name).localeCompare(firstName(b.name), "en", { sensitivity: "base" });
-    }
-    return firstName(a.name).localeCompare(firstName(b.name), "en", { sensitivity: "base" }) ||
-      surname(a.name).localeCompare(surname(b.name), "en", { sensitivity: "base" });
-  });
-
-  const rows = sortedStudents.map(s => {
+  const rows = S.students.map(s => {
     const taught = taughtFor(s.id);
-    const scheduledLessons = scheduledLessonsFor(s.id);
-    const scheduled = scheduledLessons.reduce((sum, item) => sum + (item.lesson.lesson * SCHEDULE_SLOT_MIN) / 60, 0);
     const remaining = s.allocated - taught;
     const perWeek = remaining / weeksLeft;
-    const behind = !rolling && perWeek > 1.05;
-    const allocation = Number(s.allocated) || 0;
-    const pct = allocation > 0 ? Math.min(100, Math.max(0, (taught / allocation) * 100)) : 0;
-    const scheduledEndPct = allocation > 0 ? Math.min(100, Math.max(pct, ((taught + scheduled) / allocation) * 100)) : 0;
-    const scheduledPct = Math.max(0, scheduledEndPct - pct);
+    const behind = perWeek > 1.05;
+    const pct = Math.min(100, (taught / s.allocated) * 100);
     const lessonsLeft = Math.max(1, Math.round(remaining));
     const entries = S.log.filter(e => e.studentId === s.id).sort((a, b) => (a.date < b.date ? 1 : -1));
-    const manualDate = manualDateDrafts[s.id] || "";
-    const manualEntryOpen = manualEntryOpenId === s.id;
     const open = S.openHours === s.id;
 
     const note = remaining <= 0 ? "Allocation complete"
       : behind ? "Needs " + perWeek.toFixed(1) + "h a week to finish in time"
-      : remaining + "h left, roughly " + lessonsLeft + " more hour-long lesson" + (lessonsLeft === 1 ? "" : "s");
+      : remaining + "h left — roughly " + lessonsLeft + " more hour-long lesson" + (lessonsLeft === 1 ? "" : "s");
 
     let ledger = "";
     if (open) {
-      const scheduledRows = scheduledLessons.length === 0
-        ? '<div class="ledger-empty">No lessons currently scheduled</div>'
-        : scheduledLessons.map(item => {
-          const l = item.lesson;
-          const hours = (l.lesson * SCHEDULE_SLOT_MIN) / 60;
-          const statusTag = l.status === "cancelled_late" ? "Late cancellation" : "Scheduled";
-          return '<div class="scheduled-entry"><div class="scheduled-entry-main"><strong>' +
-            dayDateLong(item.plan.weekStart, l.d) + '</strong><span>' +
-            scheduleTimeFor(item.startHour, l.start) + '–' + scheduleTimeFor(item.startHour, l.start + l.lesson) +
-            ' · Week ' + escapeHTML(item.plan.weekNo) + '<i class="tag">' + statusTag + '</i></span></div>' +
-            '<span class="scheduled-entry-hours">' + compactHours(hours) + 'h</span></div>';
-        }).join("");
-      const entryRows = entries.length === 0 ? '<div class="ledger-empty">No completed hours yet</div>' :
+      const entryRows = entries.length === 0 ? '<div class="entry faint">Nothing logged yet</div>' :
         entries.map(e => {
           if (editingEntryId === e.id) {
             return '<div class="entry"><input type="date" data-bind="editDate" value="' + editDraft.date + '" style="flex:1;margin-right:6px">' +
@@ -3364,58 +1743,21 @@ function renderHoursTab() {
             '<span class="entryright">' + e.hours + 'h<button class="x" data-action="editEntry" data-id="' + e.id + '" title="Edit">\u270E</button>' +
             '<button class="x" data-action="removeEntry" data-id="' + e.id + '">×</button></span></div>';
         }).join("");
-      ledger = '<div class="ledger"><section class="scheduled-hours"><div class="ledger-heading"><span>Scheduled</span><span>' +
-        compactHours(scheduled) + 'h</span></div>' + scheduledRows +
-        '<p class="scheduled-note">These hours will move to completed when you end the week.</p></section>' +
-        '<div class="ledger-heading"><span>Completed hours</span><span>' + compactHours(taught) + 'h</span></div>' + entryRows +
-        '<button type="button" class="btn manual-entry-toggle" data-action="toggleManualEntry" data-id="' + s.id +
-        '" aria-expanded="' + manualEntryOpen + '">' + (manualEntryOpen ? 'Cancel manual entry' : '+ Add hours manually') + '</button>' +
-        '<div class="manual-entry-expander' + (manualEntryOpen ? ' open' : '') + '" data-manual-entry="' + s.id + '">' +
-        '<div class="manual-entry-expander-inner"><div class="addrow"><div class="manual-date-field' + (manualDate ? '' : ' empty') + '"><span>' +
-        (manualDate ? fmtDateShort(manualDate) : 'Select date') + '</span><input type="date" data-bind="draftDate" data-id="' + s.id + '" value="' +
-        manualDate + '" aria-label="Select date for manual teaching hours" required></div>' +
+      ledger = '<div class="ledger">' + entryRows +
+        '<div class="addrow"><input type="date" data-bind="draftDate" value="' + S.draft.date + '">' +
         '<select data-bind="draftHours">' + [0.5, 1, 1.5, 2, 2.5, 3].map(h =>
           '<option value="' + h + '" ' + (parseFloat(S.draft.hours) === h ? "selected" : "") + ">" + h + "h</option>").join("") + "</select>" +
-        '<button class="btn" data-action="addEntry" data-id="' + s.id + '">Add</button></div></div></div></div>';
+        '<button class="btn" data-action="addEntry" data-id="' + s.id + '">Add</button></div></div>';
     }
 
     return '<div class="hrow"><div class="htop" style="cursor:pointer" data-action="toggleHoursOpen" data-id="' + s.id + '">' +
       "<b>" + s.name + "</b><em>" + taught + " / " + s.allocated + "h</em></div>" +
-      '<div class="track">' + (scheduledPct > 0 ? '<div class="fill scheduled combined-end" style="left:' + pct + '%;width:' + scheduledPct + '%"></div>' : '') +
-      '<div class="fill' + (behind ? " behind" : "") + (scheduledPct > 0 ? "" : " combined-end") + '" style="width:' + pct + '%"></div></div>' +
-      '<div class="hours-breakdown">' + compactHours(taught) + 'h taught' + (scheduled > 0 ? ' · ' + compactHours(scheduled) + 'h scheduled' : '') + '</div>' +
+      '<div class="track"><div class="fill' + (behind ? " behind" : "") + '" style="width:' + pct + '%"></div></div>' +
       '<div class="hnote' + (behind ? " warn" : "") + '">' + note + "</div>" + ledger + "</div>";
   }).join("");
 
-  const exportOptions = [
-    ["week", "This week"],
-    ["month", "This month"],
-    ["term", "This term"],
-    ["year", "This year"],
-  ].filter(([val]) => val !== "term" || !rolling);
-  const exportPanel = '<div class="hours-sort" style="flex-direction:column;align-items:stretch;gap:10px">' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px">' +
-    '<label for="hoursExportSelect">Export hours for</label>' +
-    '<select id="hoursExportSelect" data-bind="hoursExportTimeframe">' +
-    exportOptions.map(([val, label]) => '<option value="' + val + '" ' + ((S.hoursExportTimeframe || "week") === val ? "selected" : "") + '>' + label + '</option>').join("") +
-    '</select></div>' +
-    '<button class="btn sig" data-action="exportHours">Copy summary</button>' +
-    (S.hoursExportText ? '<textarea class="fallback" readonly rows="' + (S.hoursExportText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.hoursExportText) + "</textarea>" : "") +
-    "</div>";
-
-  return '<div class="pad"><p class="lede">' + compactHours(totalTaught) + "h taught" +
-    (totalScheduled > 0 ? " · " + compactHours(totalScheduled) + "h scheduled" : "") + " of " + totalAllocated + "h allocated" +
-    (rolling ? "" : ", with " + weeksLeft + " weeks left") + '. Tap a name to see scheduled and completed lessons.</p>' +
-    '<div class="hours-legend" aria-label="Hours progress legend"><span><i class="hours-key" aria-hidden="true"></i>Taught</span>' +
-    '<span><i class="hours-key scheduled" aria-hidden="true"></i>Scheduled</span></div>' +
-    '<div class="hours-sort"><label for="hoursSort">Sort by</label><select id="hoursSort" data-bind="hoursSort">' +
-      '<option value="first" ' + ((S.hoursSort || "first") === "first" ? "selected" : "") + '>First name</option>' +
-      '<option value="surname" ' + (S.hoursSort === "surname" ? "selected" : "") + '>Surname</option>' +
-      '<option value="allocated" ' + (S.hoursSort === "allocated" ? "selected" : "") + '>Hours Allocated</option>' +
-      '<option value="remaining" ' + (S.hoursSort === "remaining" ? "selected" : "") + '>Hours Remaining</option>' +
-    '</select></div>' +
-    '<div class="panel">' + rows + "</div>" +
-    exportPanel +
+  return '<div class="pad"><p class="lede">' + totalTaught + "h taught of " + totalAllocated + "h allocated, with " + weeksLeft +
+    ' weeks left. Tap a name to see or add individual lessons.</p><div class="panel">' + rows + "</div>" +
     '<div class="btnrow"><button class="btn' + (confirmingReset ? " confirm-pending" : "") + '" data-action="resetYearConfirm">' +
     (confirmingReset ? "Tap again to confirm" : "Reset year") + '</button></div></div>';
 }
@@ -3424,17 +1766,7 @@ function renderHoursTab() {
 /*  Delegated event handling                                           */
 /* ================================================================== */
 
-document.getElementById("app").addEventListener("pointerdown", (e) => {
-  const input = e.target.closest('.manual-date-field input[type="date"]');
-  if (!input) return;
-  // Let Safari perform its normal trusted input click. This guard only stops
-  // the native picker's focus transition from triggering a DOM refresh.
-  suppressStateRefreshUntil = Date.now() + 2000;
-});
-
 document.getElementById("app").addEventListener("click", (e) => {
-  if (!stateReady || stateBlocked) return;
-  if (offerTransitionBusy && e.target.closest("#offerActions")) return;
   const el = e.target.closest("[data-action]");
   if (!el) return;
   const action = el.dataset.action;
@@ -3442,64 +1774,25 @@ document.getElementById("app").addEventListener("click", (e) => {
 
   if (action === "tab") {
     if (confirmingReset) { confirmingReset = false; clearTimeout(resetConfirmTimer); }
-    const tabOrder = ["week", "replies", "plan", "hours"];
-    const fromIdx = tabOrder.indexOf(S.tab);
-    const toIdx = tabOrder.indexOf(el.dataset.tab);
-    S.tab = el.dataset.tab;
-    animatedRender(toIdx >= fromIdx ? 1 : -1);
-  }
-  else if (action === "setScheduleView") {
-    if (!["timetable", "agenda"].includes(el.dataset.view)) return;
-    S.scheduleView = el.dataset.view;
-    render();
-    const selected = document.querySelector('[data-action="setScheduleView"][aria-pressed="true"]');
-    if (selected) selected.focus({ preventScroll: true });
+    S.tab = el.dataset.tab; render();
   }
   else if (action === "clearOffer") clearOffer();
   else if (action === "skipWeek") skipWeek();
   else if (action === "prevWeek") prevWeek();
   else if (action === "nextWeek") nextWeek();
-  else if (action === "sendToStudents") sendToStudents();
-  else if (action === "copyStudentLink") copyStudentLink();
-  else if (action === "editAvailability") editAvailability();
+  else if (action === "goReplies") goReplies();
   else if (action === "cycleDayPref") cycleDayPreference(Number(el.dataset.day));
   else if (action === "toggleMoreOptions") toggleMoreOptions();
   else if (action === "toggleSidebar") toggleSidebar();
   else if (action === "saveProfile") saveProfile();
-  else if (action === "requestDeleteAccount") { confirmingDeleteAccount = true; render(); }
-  else if (action === "cancelDeleteAccount") { confirmingDeleteAccount = false; render(); }
-  else if (action === "confirmDeleteAccount") deleteAccount();
   else if (action === "addStudent") addStudent();
   else if (action === "removeStudent") removeStudent(id);
   else if (action === "saveTermDates") saveTermDates();
-  else if (action === "switchToTermsFromTermDates") switchToTermsFromTermDates();
-  else if (action === "toggleWeekendSetting") toggleWeekendSetting();
-  else if (action === "setSchedulingMode") setSchedulingMode(el.dataset.mode);
-  else if (action === "adjustCancellationWindow") adjustCancellationWindow(Number(el.dataset.delta));
-  else if (action === "adjustSettingsHour") adjustSettingsHour(el.dataset.which, Number(el.dataset.delta));
-  else if (action === "excludePriority") excludePriority(el.dataset.key);
-  else if (action === "includePriority") includePriority(el.dataset.key);
-  else if (action === "setAccent") {
-    if (!Object.prototype.hasOwnProperty.call(ACCENT_THEMES, el.dataset.accent)) return;
-    settingsDraft.accent = el.dataset.accent;
-    render();
-    const selected = document.querySelector('[data-action="setAccent"][aria-pressed="true"]');
-    if (selected) selected.focus({ preventScroll: true });
-  }
-  else if (action === "saveSettings") saveSettings();
-  else if (action === "settingsTab") {
-    const order = ["general", "priorities"];
-    const dir = order.indexOf(el.dataset.tab) >= order.indexOf(settingsTab) ? 1 : -1;
-    settingsTab = el.dataset.tab;
-    animatedRender(dir);
-  }
   else if (action === "sampleReplies") sampleReplies();
   else if (action === "toggleStudentOpen") {
+    const r = activeRound().replies[id];
+    if (r && r.source !== "admin") return;
     S.openStudent = S.openStudent === id ? null : id;
-    render();
-  }
-  else if (action === "toggleRepliesOverlay") {
-    repliesOverlayOpen = !repliesOverlayOpen;
     render();
   }
   else if (action === "setStatus") {
@@ -3519,7 +1812,7 @@ document.getElementById("app").addEventListener("click", (e) => {
       rnd.replies[id] = {
         status,
         avail: (existing && existing.avail) || new Set(),
-        lessonMinutes: prevLesson * SCHEDULE_SLOT_MIN,
+        lesson: prevLesson,
         source: "admin",
       };
       if (status === "in") S.openStudent = id;
@@ -3532,64 +1825,30 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "adjustLength") adjustLength(id, Number(el.dataset.delta));
   else if (action === "runSolver") runSolver();
   else if (action === "chooseOption") { activeRound().chosen = Number(el.dataset.idx); render(); }
-  else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, rnd.dayStartHour, rnd.note); }
-  else if (action === "imageChosen") { const rnd = activeRound(); doImage(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, S.week, rnd.dayStartHour, rnd.note); }
+  else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart); }
+  else if (action === "imageChosen") { const rnd = activeRound(); doImage(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, S.week); }
   else if (action === "confirmSchedule") confirmSchedule();
-  else if (action === "undoConfirmSchedule") undoConfirmSchedule();
   else if (action === "cancelEarly") setLessonStatus(id, "cancelled_early");
   else if (action === "cancelLate") setLessonStatus(id, "cancelled_late");
   else if (action === "uncancel") setLessonStatus(id, "planned");
   else if (action === "closeGaps") rescheduleWeek();
-  else if (action === "copyLive") { const rnd = activeRound(); doCopy(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.dayStartHour, rnd.note); }
-  else if (action === "imageLive") { const rnd = activeRound(); doImage(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.plan.weekNo, rnd.dayStartHour, rnd.note); }
+  else if (action === "copyLive") { const rnd = activeRound(); doCopy(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart); }
+  else if (action === "imageLive") { const rnd = activeRound(); doImage(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.plan.weekNo); }
   else if (action === "endWeek") endWeek();
-  else if (action === "toggleHoursOpen") {
-    if (manualEntryOpenId) delete manualDateDrafts[manualEntryOpenId];
-    manualEntryOpenId = null;
-    S.openHours = S.openHours === id ? null : id;
-    render();
-  }
+  else if (action === "toggleHoursOpen") { S.openHours = S.openHours === id ? null : id; render(); }
   else if (action === "removeEntry") removeEntry(id);
   else if (action === "editEntry") startEditEntry(id);
   else if (action === "saveEditEntry") saveEditEntry(id);
   else if (action === "cancelEditEntry") cancelEditEntry();
-  else if (action === "toggleManualEntry") toggleManualEntry(id, el);
-  else if (action === "addEntry") addEntry(id, el);
+  else if (action === "addEntry") addEntry(id);
   else if (action === "resetYearConfirm") handleResetClick();
-  else if (action === "exportHours") exportHours();
 });
 
 document.getElementById("app").addEventListener("change", (e) => {
-  if (!stateReady || stateBlocked) return;
   const el = e.target.closest("[data-bind]");
   if (!el) return;
   const bind = el.dataset.bind;
-  if (bind === "blockPlacement") {
-    const rnd = activeRound();
-    if (!rnd.sent || rnd.plan || !["any", "early", "late"].includes(el.value)) return;
-    const block = reconcileBlockPreferences(rnd).find(b => b.d === Number(el.dataset.blockDay) && b.start === Number(el.dataset.blockStart));
-    if (!block) return;
-    block.placement = el.value;
-    rnd.result = null; rnd.chosen = 0; rnd.optionsExpanded = false;
-    S.imgUrl = ""; S.fallbackText = "";
-    // Update in place so keyboard focus and the native mobile picker survive.
-    const pill = el.closest('.placement-pill');
-    pill.classList.toggle('chosen', el.value !== 'any');
-    pill.querySelector('span:not(.placement-prefix)').textContent = ({any:'Any',early:'Early',late:'Late'})[el.value] + ' ⌄';
-    scheduleSave();
-  }
-  else if (bind === "weekStart") { activeRound().weekStart = el.value; S.imgUrl = ""; S.fallbackText = ""; render(); }
-  else if (bind === "agendaOption") {
-    const rnd = activeRound();
-    const chosen = Number(el.value);
-    if (!Number.isInteger(chosen) || !rnd.result || !rnd.result.options[chosen]) return;
-    rnd.chosen = chosen;
-    S.imgUrl = ""; S.fallbackText = "";
-    // Dismiss the native picker before replacing the select. Refocusing
-    // its replacement can reopen the picker on iOS Safari.
-    el.blur();
-    render();
-  }
+  if (bind === "weekStart") { activeRound().weekStart = el.value; S.imgUrl = ""; S.fallbackText = ""; render(); }
   else if (bind === "week") {
     let n = parseInt(el.value, 10);
     if (!isFinite(n)) n = S.week;
@@ -3598,10 +1857,7 @@ document.getElementById("app").addEventListener("change", (e) => {
     S.imgUrl = ""; S.fallbackText = "";
     render();
   }
-  else if (bind === "hoursSort") { S.hoursSort = el.value; render(); }
-  else if (bind === "hoursExportTimeframe") { S.hoursExportTimeframe = el.value; S.hoursExportText = ""; render(); }
-  else if (bind === "weekNote") { activeRound().note = el.value; render(); }
-  else if (bind === "draftDate") { manualDateDrafts[el.dataset.id] = el.value; render(); }
+  else if (bind === "draftDate") { S.draft.date = el.value; }
   else if (bind === "draftHours") { S.draft.hours = el.value; }
   else if (bind === "editDate") { editDraft.date = el.value; }
   else if (bind === "editHours") { editDraft.hours = el.value; }
@@ -3620,7 +1876,6 @@ document.getElementById("app").addEventListener("change", (e) => {
   else if (bind === "termCount") { setTermCount(parseInt(el.value, 10)); }
   else if (bind === "termStart") { termDraft.ranges[Number(el.dataset.idx)].start = el.value; }
   else if (bind === "termEnd") { termDraft.ranges[Number(el.dataset.idx)].end = el.value; }
-  scheduleSave();
 });
 
 /* ================================================================== */
@@ -3629,20 +1884,13 @@ document.getElementById("app").addEventListener("change", (e) => {
 
 document.getElementById("sidebarBackdrop").addEventListener("click", closeSidebar);
 document.getElementById("sidebarPanel").addEventListener("click", (e) => {
-  const signOutBtn = e.target.closest('[data-sidebar-action="signOut"]');
-  if (signOutBtn) { signOut(); return; }
-
   const btn = e.target.closest("[data-section]");
   if (btn) goSection(btn.dataset.section);
 });
 syncSidebarDOM();
-window.addEventListener("pagehide", persistLocalView);
 
 render();
-Promise.all([loadState(), loadMe()]).then(() => {
-  restoreLocalView();
-  render();
-});
+Promise.all([loadState(), loadMe()]).then(render);
 </script>
 </body>
 </html>

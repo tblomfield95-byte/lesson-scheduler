@@ -75,6 +75,8 @@
           margin-bottom:8px;border-radius:8px;border:1px solid var(--rule);background:var(--panel);
           color:var(--ink);cursor:pointer}
   .choice.sel{border-color:var(--sig);background:var(--sig);color:#fff;font-weight:560}
+  .choice.clear-choice{margin-top:18px;background:transparent;color:var(--sig)}
+  .choice:disabled{opacity:.4;cursor:default}
   .grid-wrap{border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--panel);
              touch-action:auto;user-select:none;-webkit-user-select:none;margin:14px 0}
   .grid-head{display:flex;border-bottom:1px solid var(--rule);background:var(--paper)}
@@ -577,6 +579,7 @@ function render() {
     bodyEl.innerHTML = '<div class="pad"' + bodyPadStyle + '>' +
       '<button class="choice' + (prevStatus === "skip" ? " sel" : "") + '" onclick="submitStatus(\'skip\')">Not needed this week</button>' +
       '<button class="choice' + (prevStatus === "in" ? " sel" : "") + '" onclick="goGrid()">Yes, show me the times</button>' +
+      (prevStatus ? '<button class="choice clear-choice" onclick="clearResponse()" ' + (R.submitting ? "disabled" : "") + '>Clear response</button>' : '') +
       "</div>";
     return;
   }

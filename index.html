@@ -172,6 +172,7 @@ const SLUG_WEEK = (() => {
   return m ? { slug: m[1], week: m[2] } : { slug: "", week: "" };
 })();
 const SLUG = SLUG_WEEK.slug;
+const PREVIEW = new URLSearchParams(window.location.search).get("preview") === "1";
 const WEEK = SLUG_WEEK.week;
 
 function weekRangeLabel(iso) {
@@ -209,6 +210,7 @@ async function boot() {
     R.students = data.students || [];
     R.teacherName = data.teacherName;
     R.instrument = data.instrument;
+    R.studio = data.studio || "";
     const startHour = data.dayStartHour != null ? data.dayStartHour : 9;
     const endHour = data.dayEndHour != null ? data.dayEndHour : 19;
     R.days = data.includeWeekends ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri"];
@@ -311,6 +313,7 @@ function adjustLesson(delta) {
 }
 
 async function clearResponse() {
+  if (PREVIEW) { alert("Preview only — no student replies can be changed."); return; }
   if (R.submitting) return;
   R.submitting = true; render();
   try {
@@ -339,6 +342,7 @@ async function clearResponse() {
 }
 
 async function submitStatus(status) {
+  if (PREVIEW) { alert("Preview only — nothing has been submitted."); return; }
   if (R.submitting) return;
   R.submitting = true; render();
   try {
@@ -499,7 +503,7 @@ function normalizeHTML(html) {
 function ensureAppSkeleton() {
   const app = document.getElementById("app");
   if (!document.getElementById("appBody")) {
-    app.innerHTML = '<div id="appHeader"></div><div id="appBody"></div>';
+    app.innerHTML = (PREVIEW ? '<div role="status" style="padding:12px 20px;background:var(--sig);color:white;text-align:center">Student preview · Replies cannot be submitted or cleared.</div>' : '') + '<div id="appHeader"></div><div id="appBody"></div>';
   }
 }
 
@@ -517,7 +521,8 @@ function computeStudentHeaderHTML() {
 
 function render() {
   ensureAppSkeleton();
-  const heading = (R.instrument ? R.instrument + " Lessons" : "Lessons") + (R.teacherName ? " — " + R.teacherName : "");
+  const safeText = value => String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const heading = safeText((R.instrument ? R.instrument + " Lessons" : "Lessons") + (R.teacherName ? " — " + R.teacherName : "")) + (R.studio ? '<small style="display:block;font-size:0.6em;margin-top:8px">' + safeText(R.studio) + '</small>' : '');
   const weekLabel = "Week " + R.weekNo + (R.weekStart ? " (" + weekRangeLabel(R.weekStart) + ")" : "");
   const headerEl = document.getElementById("appHeader");
   const bodyEl = document.getElementById("appBody");

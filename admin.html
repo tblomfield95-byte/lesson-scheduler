@@ -2076,7 +2076,7 @@ async function saveProfile() {
     const res = await fetch("/api/profile", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, instrument }),
+      body: JSON.stringify({ name, instrument, studio: (ME.studio || "").trim() }),
     });
     if (!res.ok) { flash("Couldn't save. Try again"); return; }
     flash("Profile updated");
@@ -2949,19 +2949,47 @@ function goSection(section) {
 
 function renderProfileSection() {
   return '<div class="pad">' +
-    '<p class="lede">This is what was collected when you first set up your account.</p>' +
+    '<p class="lede">Manage your teaching profile and account details.</p>' +
+    '<div class="field"><label for="profileEmail">Email address</label><input id="profileEmail" type="email" readonly value="' + escapeHTML(ME.email || "") + '"><p class="hint">Used to sign in. This address is read-only.</p></div>' +
     '<div class="field"><label>Your name</label><input type="text" data-bind="profileName" value="' + escapeHTML(ME.name || "") + '"></div>' +
     '<div class="field"><label>Instrument</label><input type="text" data-bind="profileInstrument" value="' + escapeHTML(ME.instrument || "") + '"></div>' +
+    '<div class="field"><label for="profileStudio">Institution or studio <span class="hint">(optional)</span></label><input id="profileStudio" type="text" maxlength="160" data-bind="profileStudio" value="' + escapeHTML(ME.studio || "") + '"></div>' +
     '<div class="btnrow"><button class="btn sig" data-action="saveProfile">Save changes</button></div>' +
-    '<div class="panel" style="border-color:var(--sig);margin-top:24px">' +
-    '<h3 style="color:var(--sig)">Account deletion</h3>' +
+    '<div class="panel" style="margin-top:24px"><h3>Your account</h3><p class="lede">Preview the student page for the selected week without changing any replies.</p><div class="btnrow"><a class="btn" target="_blank" rel="noopener" href="/s/' + encodeURIComponent(ME.slug || "") + '/' + S.week + '?preview=1">Preview student page ↗</a><button class="btn" data-action="downloadAccount">Download my data</button><button class="btn" data-action="signOutAll">Sign out of all devices</button></div><p class="hint">The download contains your saved profile, students, availability, schedules and hours. Keep it somewhere private.</p></div>' +
+    '<details class="panel" style="margin-top:24px"' + (confirmingDeleteAccount ? ' open' : '') + '><summary style="cursor:pointer;color:var(--sig);font-weight:600">Account deletion</summary>' +
     '<p class="lede" style="margin-bottom:12px">Deleting your account removes your profile, students, schedules and hours from Cadence, and frees up this email address. Visit the login page again after that and it\u2019ll treat you as a brand new sign-up. This can\u2019t be undone.</p>' +
     (confirmingDeleteAccount
       ? '<p class="lede" style="color:var(--sig);font-weight:600;margin-bottom:10px">Are you absolutely sure? This can\u2019t be undone.</p>' +
         '<div class="btnrow"><button class="btn" data-action="cancelDeleteAccount">Cancel</button>' +
         '<button class="btn sig" data-action="confirmDeleteAccount">Yes, delete my account</button></div>'
       : '<div class="btnrow"><button class="btn outline-sig" data-action="requestDeleteAccount">Delete my account</button></div>') +
-    "</div></div>";
+    "</details></div>";
+}
+
+async function downloadAccount() {
+  try {
+    if (!stateReady || stateBlocked || saveInFlight) throw new Error("Wait until your changes have saved before downloading.");
+    await saveStateNow();
+    if (stateFingerprint() !== savedFingerprint) throw new Error("Your latest changes haven't saved yet. Please retry once they have.");
+    const res = await fetch("/api/export");
+    if (!res.ok) throw new Error("Couldn't download your data. Please try again.");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = "cadence-data-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { flash(e.message || "Couldn't download. Check your connection."); }
+}
+
+async function signOutAll() {
+  if (!confirm("Sign out of all devices, including this one? You'll need a new email sign-in link to return.")) return;
+  try {
+    if (saveInFlight || (stateReady && stateFingerprint() !== savedFingerprint)) throw new Error("Please wait for your changes to save first.");
+    const res = await fetch("/api/logout-all", { method: "POST" });
+    if (!res.ok) throw new Error("Couldn't sign out all devices. Please try again.");
+    window.location.href = "/login.html";
+  } catch (e) { flash(e.message || "Couldn't sign out. Check your connection."); }
 }
 
 function renderStudentsSection() {
@@ -3608,6 +3636,8 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "toggleMoreOptions") toggleMoreOptions();
   else if (action === "toggleSidebar") toggleSidebar();
   else if (action === "saveProfile") saveProfile();
+  else if (action === "downloadAccount") downloadAccount();
+  else if (action === "signOutAll") signOutAll();
   else if (action === "requestDeleteAccount") { confirmingDeleteAccount = true; render(); }
   else if (action === "cancelDeleteAccount") { confirmingDeleteAccount = false; render(); }
   else if (action === "confirmDeleteAccount") deleteAccount();
@@ -3765,6 +3795,7 @@ document.getElementById("app").addEventListener("change", (e) => {
   else if (bind === "editHours") { editDraft.hours = el.value; }
   else if (bind === "profileName") { ME.name = el.value; }
   else if (bind === "profileInstrument") { ME.instrument = el.value; }
+  else if (bind === "profileStudio") { ME.studio = el.value; }
   else if (bind === "studentName") {
     const s = S.students.find(x => x.id === el.dataset.id);
     if (s) s.name = el.value;

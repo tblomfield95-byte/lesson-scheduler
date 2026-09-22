@@ -444,6 +444,33 @@ async function handleRound(url, env) {
   });
 }
 
+function replyNotificationHTML({ heading, intro, detail, progress, link }) {
+  const safeHeading = escapeHTML(heading);
+  const safeIntro = escapeHTML(intro);
+  const safeDetail = escapeHTML(detail);
+  const safeProgress = escapeHTML(progress);
+  const safeLink = escapeHTML(link);
+  return '<!doctype html><html><body style="margin:0;background:#F2EFE7;color:#211C17;font-family:Arial,sans-serif;padding:32px 16px">' +
+    '<div style="max-width:440px;margin:auto;background:#fff;border:1px solid #DCD5C6;border-radius:12px;padding:28px">' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 6px"><tr>' +
+    '<td width="40" height="40" style="width:40px;height:40px;background-color:#6E1423;border-radius:9px" valign="middle">' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>' +
+    '<td width="6" height="22" style="width:6px;height:22px;line-height:22px;font-size:0;background-color:#F2EFE7;border-radius:2px">&nbsp;</td>' +
+    '<td width="6" style="width:6px;font-size:0;line-height:0">&nbsp;</td>' +
+    '<td width="12" height="22" style="width:12px;height:22px;line-height:22px;font-size:0;background-color:#F2EFE7;border-radius:3px">&nbsp;</td>' +
+    '</tr></table></td><td width="10" style="width:10px;line-height:0;font-size:0">&nbsp;</td>' +
+    '<td style="font-family:Georgia,serif;font-size:30px;font-weight:bold;color:#6E1423" valign="middle">Cadence.</td>' +
+    '</tr></table>' +
+    '<h1 style="font-size:21px;margin:28px 0 10px;line-height:1.3">' + safeHeading + '</h1>' +
+    '<p style="line-height:1.6;margin:0 0 20px">' + safeIntro + '</p>' +
+    '<div style="background:#F2EFE7;border:1px solid #DCD5C6;border-radius:8px;padding:14px 16px">' +
+    '<p style="font-size:12px;font-weight:bold;letter-spacing:.04em;text-transform:uppercase;color:#6E1423;margin:0 0 6px">' + safeProgress + '</p>' +
+    '<p style="font-size:14px;line-height:1.5;margin:0;color:#211C17">' + safeDetail + '</p></div>' +
+    (link ? '<p style="margin:28px 0 4px"><a href="' + safeLink + '" style="display:inline-block;background:#6E1423;color:#fff;text-decoration:none;padding:14px 22px;border-radius:7px;font-weight:bold">View replies</a></p>' : '') +
+    '<p style="font-size:12px;line-height:1.6;color:#6B6157;margin:25px 0 0">You’re receiving this because email notifications are enabled in Cadence Settings.</p>' +
+    '</div></body></html>';
+}
+
 async function sendReplyNotifications(env, teacher, state, round, student, status, previous, week, firstComplete) {
   const prefs = state.settings?.emailNotifications || {};
   const submission = prefs.onSubmission === true;
@@ -464,10 +491,24 @@ async function sendReplyNotifications(env, teacher, state, round, student, statu
   if (submission) messages.push({
     subject: `${student.name} submitted availability · Cadence`,
     text: `${student.name} ${previous && previous.status !== "clear" ? "updated their response" : "submitted a response"} for ${weekLabel}.\nResponse: ${status === "in" ? "Available" : status === "skip" ? "Skipping this week" : "No availability"}.\n${count} of ${total} students have responded.${link ? "\n\nView replies: " + link : ""}`,
+    html: replyNotificationHTML({
+      heading: previous && previous.status !== "clear" ? `${student.name} updated their response` : `${student.name} has replied`,
+      intro: `${student.name} submitted their response for ${weekLabel}.`,
+      progress: `${count} of ${total} students responded`,
+      detail: `Response: ${status === "in" ? "Available" : status === "skip" ? "Skipping this week" : "No availability"}`,
+      link,
+    }),
   });
   if (completion) messages.push({
     subject: `All students have submitted · ${weekLabel} · Cadence`,
     text: `All ${total} students have responded for ${weekLabel}.\n\n${names.join(", ")}${link ? "\n\nView replies: " + link : ""}`,
+    html: replyNotificationHTML({
+      heading: "Everyone has replied",
+      intro: `All students have submitted their responses for ${weekLabel}.`,
+      progress: `${total} of ${total} students responded`,
+      detail: names.join(", "),
+      link,
+    }),
   });
   await Promise.all(messages.map(async message => {
     try {

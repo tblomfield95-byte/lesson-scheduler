@@ -1349,6 +1349,7 @@ function serializeState() {
       schedulerSlotMinutes: SCHEDULE_SLOT_MIN,
       offered: [...rr.offered],
       blockPreferences: reconcileBlockPreferences(rr),
+      excludedStudentIds: [...new Set(rr.excludedStudentIds || [])],
       replies: Object.fromEntries(Object.entries(rr.replies).map(([id, rep]) => [id, {
         status: rep.status,
         avail: [...rep.avail],
@@ -1417,6 +1418,7 @@ function applySavedState(saved) {
       schedulerSlotMinutes: SCHEDULE_SLOT_MIN,
       offered: new Set(rr.offered || []),
       blockPreferences: Array.isArray(rr.blockPreferences) ? rr.blockPreferences : [],
+      excludedStudentIds: Array.isArray(rr.excludedStudentIds) ? rr.excludedStudentIds.filter(id => typeof id === "string") : [],
       replies: Object.fromEntries(Object.entries(rr.replies || {}).map(([id, rep]) => [id, {
         status: rep.status,
         avail: new Set(rep.avail || []),
@@ -1456,7 +1458,7 @@ function stateFingerprint(body = serializeState()) {
   for (const [week,rnd] of Object.entries(value.rounds || {})) {
     delete rnd.chosen;
     if (!rnd.offered.length && !Object.keys(rnd.replies).length && !rnd.plan && !rnd.result &&
-        !rnd.notTeaching && !rnd.sent && !rnd.note &&
+        !rnd.notTeaching && !rnd.sent && !rnd.note && !rnd.excludedStudentIds.length &&
         !Object.values(rnd.dayPreferences || {}).some(Boolean)) delete value.rounds[week];
   }
   return JSON.stringify(value);
@@ -1570,6 +1572,7 @@ const scheduledFor = (id) => scheduledLessonsFor(id)
   .reduce((sum, item) => sum + (item.lesson.lesson * SCHEDULE_SLOT_MIN) / 60, 0);
 const compactHours = value => String(Number(Number(value || 0).toFixed(2)));
 const getParticipants = (rnd) => S.students
+  .filter(s => !(rnd.excludedStudentIds || []).includes(s.id))
   .filter(s => rnd.replies[s.id] && rnd.replies[s.id].status === "in" && rnd.replies[s.id].avail.size > 0)
   .map(s => ({ id: s.id, name: s.name, lesson: lessonFor(rnd, s.id), avail: rnd.replies[s.id].avail }));
 function solveRound(participants, rnd) {
@@ -1719,6 +1722,7 @@ function adjustLength(id, delta) {
 
 function runSolver() {
   const rnd = activeRound();
+  if (rnd.plan) { flash("Undo confirmation before calculating new options"); return; }
   if (!rnd.offered.size) { flash("Paint some blocks first"); return; }
   const participants = getParticipants(rnd);
   if (!participants.length) { flash("No students available this week"); return; }
@@ -3132,10 +3136,60 @@ function renderSettingsBody() {
     "</div>";
 }
 
+const studentFilterOpenWeeks = new Set();
+function toggleStudentFilter() {
+  const open = !studentFilterOpenWeeks.has(S.week);
+  if (open) studentFilterOpenWeeks.add(S.week); else studentFilterOpenWeeks.delete(S.week);
+  const panel = document.getElementById("studentFilterBody");
+  const button = document.getElementById("studentFilterToggle");
+  if (panel) { panel.classList.toggle("open", open); panel.inert = !open; }
+  if (button) button.setAttribute("aria-expanded", String(open));
+}
+
+function setStudentIncluded(id, included) {
+  const rnd = activeRound();
+  if (rnd.plan || !S.students.some(s => s.id === id)) return;
+  const excluded = new Set(rnd.excludedStudentIds || []);
+  if (included) excluded.delete(id); else excluded.add(id);
+  rnd.excludedStudentIds = [...excluded];
+  invalidateStudentOptions(rnd);
+}
+function invalidateStudentOptions(rnd) {
+  rnd.result = null; rnd.chosen = 0; rnd.optionsExpanded = false;
+  if (S.imgUrl) URL.revokeObjectURL(S.imgUrl);
+  S.imgUrl = ""; S.fallbackText = "";
+  scheduleSave(); render();
+}
+function includeAllStudents() {
+  const rnd = activeRound();
+  if (rnd.plan) return;
+  rnd.excludedStudentIds = [];
+  invalidateStudentOptions(rnd);
+}
+function renderStudentFilter() {
+  const rnd = activeRound();
+  const excluded = new Set(rnd.excludedStudentIds || []);
+  const excludedNames = S.students.filter(s => excluded.has(s.id)).map(s => s.name);
+  const open = studentFilterOpenWeeks.has(S.week);
+  const eligible = getParticipants(rnd).length;
+  const rows = S.students.map(s => {
+    const rep = rnd.replies[s.id];
+    const status = !rep ? "Awaiting reply" : rep.status === "skip" ? "No lesson requested" : rep.status === "none" ? "No times available" : !rep.avail.size ? "No times selected" : "Availability received";
+    return '<label style="display:flex;align-items:center;gap:12px;min-height:48px;padding:6px 0"><input type="checkbox" style="width:20px;height:20px;flex:none;accent-color:var(--sig)" data-bind="scheduleStudent" data-id="' + escapeHTML(s.id) + '" ' + (!excluded.has(s.id) ? 'checked ' : '') + (rnd.plan ? 'disabled ' : '') + '><span><strong>' + escapeHTML(s.name) + '</strong><small style="display:block;color:var(--ink-soft)">' + status + '</small></span></label>';
+  }).join('');
+  return '<div class="pad" style="padding-top:0;padding-bottom:0"><div class="panel overlay-panel"><button id="studentFilterToggle" type="button" class="overlay-toggle" data-action="toggleStudentFilter" aria-controls="studentFilterBody" aria-expanded="' + open + '"><strong>Include students · ' + (S.students.length - excludedNames.length) + '/' + S.students.length + '</strong><span class="reply-chevron" aria-hidden="true">⌄</span></button>' +
+    (excludedNames.length ? '<p class="hint" style="padding:0 16px">Excluded this week: ' + excludedNames.map(escapeHTML).join(', ') + '</p>' : '') +
+    '<div id="studentFilterBody" class="more-options-expander' + (open ? ' open' : '') + '"' + (open ? '' : ' inert') + '><div class="more-options-expander-inner"><div style="padding:12px 16px"><p class="lede">Choose who to include in this week’s calculation. Their replies and other weeks stay unchanged. Students need submitted availability to be scheduled.</p>' +
+    (rnd.plan ? '<p class="hint">Undo confirmation below to change the selection and calculate alternative schedules.</p>' : '') +
+    (rows || '<p class="empty">Add students to get started.</p>') +
+    (!rnd.plan && excludedNames.length ? '<div class="btnrow"><button class="btn" data-action="includeAllStudents">Include everyone</button></div>' : '') +
+    '</div></div></div>' + (!rnd.plan ? '<div style="padding:0 16px 12px"><p class="hint">' + eligible + ' student' + (eligible === 1 ? '' : 's') + ' with availability included.</p><button class="btn sig" data-action="runSolver" ' + (!eligible || !rnd.offered.size ? 'disabled' : '') + '>' + (rnd.result ? 'Recalculate options' : 'Calculate options') + '</button></div>' : '') + '</div></div>';
+}
+
 function renderTabContent() {
   if (S.tab === "week") return renderOfferTab();
   if (S.tab === "replies") return renderRepliesTab();
-  if (S.tab === "plan") return activeRound().plan ? renderLivePlanTab() : renderPreConfirmPlanTab();
+  if (S.tab === "plan") return renderStudentFilter() + (activeRound().plan ? renderLivePlanTab() : renderPreConfirmPlanTab());
   if (S.tab === "hours") return renderHoursTab();
   return "";
 }
@@ -3329,15 +3383,15 @@ function renderAgendaOptionPicker(result, rnd) {
 function renderPreConfirmPlanTab() {
   const rnd = activeRound();
   if (!rnd.result) {
-    return '<div class="pad" style="padding-top:0"><p class="empty">Nothing solved yet. Collect replies, then tap “Work out the schedule”.</p></div>';
+    return '<div class="pad" style="padding-top:0"><p class="empty">Choose students above, then calculate options using their latest availability.</p></div>';
   }
   const r = rnd.result;
   let intro;
   if (r.ok) {
     const days = r.options[0].days;
-    intro = '<p class="lede">Everyone fits across <b style="color:var(--ink)">' + days + " day" + (days > 1 ? "s" : "") + "</b>. Pick an arrangement.</p>";
+    intro = '<p class="lede">All included students fit across <b style="color:var(--ink)">' + days + " day" + (days > 1 ? "s" : "") + "</b>. Pick an arrangement.</p>";
   } else {
-    intro = '<p class="lede">Can’t fit everyone.' + (r.unplaced.length ? " Left out: " + r.unplaced.join(", ") + "." : "") + "</p>";
+    intro = '<p class="lede">Can’t fit all included students.' + (r.unplaced.length ? " Left out: " + r.unplaced.join(", ") + "." : "") + "</p>";
   }
 
   const days = roundDays(rnd);
@@ -3636,6 +3690,8 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "toggleMoreOptions") toggleMoreOptions();
   else if (action === "toggleSidebar") toggleSidebar();
   else if (action === "saveProfile") saveProfile();
+  else if (action === "toggleStudentFilter") toggleStudentFilter();
+  else if (action === "includeAllStudents") includeAllStudents();
   else if (action === "downloadAccount") downloadAccount();
   else if (action === "signOutAll") signOutAll();
   else if (action === "requestDeleteAccount") { confirmingDeleteAccount = true; render(); }
@@ -3741,6 +3797,13 @@ document.getElementById("app").addEventListener("change", (e) => {
   const el = e.target.closest("[data-bind]");
   if (!el) return;
   const bind = el.dataset.bind;
+  if (bind === "scheduleStudent") {
+    const id = el.dataset.id;
+    setStudentIncluded(id, el.checked);
+    const replacement = Array.from(document.querySelectorAll('[data-bind="scheduleStudent"]')).find(node => node.dataset.id === id);
+    if (replacement) replacement.focus({preventScroll:true});
+    return;
+  }
   if (bind === "blockPlacement") {
     const rnd = activeRound();
     if (!rnd.sent || rnd.plan || !["any", "early", "late"].includes(el.value)) return;

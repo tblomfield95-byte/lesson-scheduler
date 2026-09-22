@@ -272,6 +272,10 @@
   .subtab{position:relative;z-index:1;font:inherit;font-size:13px;padding:7px 16px;border:none;background:none;
           color:var(--ink-soft);border-radius:6px;cursor:pointer;transition:color .18s ease,font-weight .18s ease}
   .subtab.sel{background:none;color:#fff;font-weight:600}
+  .notification-option{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:14px 0;border-top:1px solid var(--rule);cursor:pointer}
+  .notification-option span{display:grid;gap:4px}.notification-option strong{font-size:14px}.notification-option small{color:var(--ink-soft);line-height:1.4}
+  .notification-option input{width:20px;height:20px;flex:none;accent-color:var(--sig)}
+  .subtabs{max-width:100%;overflow-x:auto}
   .choice-group{display:flex;gap:8px}
   .choice-btn{flex:1;font:inherit;font-size:13.5px;padding:11px 8px;border-radius:8px;
               border:1px solid var(--rule);background:var(--panel);color:var(--ink);
@@ -1278,7 +1282,7 @@ let S = {
   week: 1,
   weeksCompleted: 0,
   termRanges: DEFAULT_TERM_RANGES.map(r => ({ ...r })),
-  settings: { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice(), priorityOptionsVersion: PRIORITY_OPTIONS_VERSION, schedulingMode: "terms", cancellationWindowHours: 24 },
+  settings: { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice(), priorityOptionsVersion: PRIORITY_OPTIONS_VERSION, schedulingMode: "terms", cancellationWindowHours: 24, emailNotifications: { onSubmission: false, allSubmitted: false } },
   rounds: {},
   students: [],
   openStudent: null,
@@ -2304,11 +2308,11 @@ function switchToTermsFromTermDates() {
 /*  offered blocks keeps whatever shape it was created with.           */
 /* ================================================================== */
 
-let settingsDraft = { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice(), priorityOptionsVersion: PRIORITY_OPTIONS_VERSION, schedulingMode: "terms", cancellationWindowHours: 24 };
+let settingsDraft = { includeWeekends: false, dayStartHour: 9, dayEndHour: 19, priorityOrder: DEFAULT_PRIORITY_ORDER.slice(), priorityOptionsVersion: PRIORITY_OPTIONS_VERSION, schedulingMode: "terms", cancellationWindowHours: 24, emailNotifications: { onSubmission: false, allSubmitted: false } };
 // Transient — which of the two Settings sub-tabs is showing.
 let settingsTab = "general";
 function openSettingsDraft() {
-  settingsDraft = { ...S.settings, priorityOrder: normalisePriorityOrder(S.settings.priorityOrder) };
+  settingsDraft = { ...S.settings, priorityOrder: normalisePriorityOrder(S.settings.priorityOrder), emailNotifications: { onSubmission: !!S.settings.emailNotifications?.onSubmission, allSubmitted: !!S.settings.emailNotifications?.allSubmitted } };
 }
 function excludePriority(key) {
   const order = normalisePriorityOrder(settingsDraft.priorityOrder);
@@ -2362,6 +2366,7 @@ function saveSettings() {
     priorityOptionsVersion: PRIORITY_OPTIONS_VERSION,
     schedulingMode: settingsDraft.schedulingMode === "rolling" ? "rolling" : "terms",
     cancellationWindowHours: Number(settingsDraft.cancellationWindowHours) || 24,
+    emailNotifications: { onSubmission: !!settingsDraft.emailNotifications?.onSubmission, allSubmitted: !!settingsDraft.emailNotifications?.allSubmitted },
   };
   if (switchingToTerms && (!S.termRanges || !S.termRanges.length)) {
     S.termRanges = DEFAULT_TERM_RANGES.map(r => ({ ...r }));
@@ -2694,6 +2699,8 @@ function computeSubbarHTML() {
         (settingsTab === "general" ? "page" : "false") + '">General</button>' +
       '<button class="subtab' + (settingsTab === "priorities" ? " sel" : "") + '" data-action="settingsTab" data-tab="priorities" aria-current="' +
         (settingsTab === "priorities" ? "page" : "false") + '">Priorities</button>' +
+      '<button class="subtab' + (settingsTab === "notifications" ? " sel" : "") + '" data-action="settingsTab" data-tab="notifications" aria-current="' +
+        (settingsTab === "notifications" ? "page" : "false") + '">Email Notifications</button>' +
       "</div></div>";
   }
   return "";
@@ -3129,8 +3136,20 @@ function renderGeneralSettingsTab() {
     '</div>';
 }
 
+function renderEmailNotificationsTab() {
+  const d = settingsDraft.emailNotifications || {};
+  const option = (key, title, description) => '<label class="notification-option"><span><strong>' + title + '</strong><small>' + description + '</small></span>' +
+    '<input type="checkbox" data-action="toggleNotification" data-key="' + key + '" ' + (d[key] ? 'checked' : '') + '></label>';
+  return '<div class="panel"><h3>Email Notifications</h3>' +
+    '<p class="lede">Sent to your sign-in address' + (ME.email ? ' (' + escapeHTML(ME.email) + ')' : '') + '.</p>' +
+    option('onSubmission', 'Student submits availability', 'An email each time a student sends or updates their response.') +
+    option('allSubmitted', 'All students have submitted', 'An email when the last student responds for a teaching week.') +
+    '</div>';
+}
+
 function renderSettingsBody() {
-  const body = settingsTab === "priorities" ? renderPrioritiesTab() : renderGeneralSettingsTab();
+  const body = settingsTab === "priorities" ? renderPrioritiesTab() :
+    settingsTab === "notifications" ? renderEmailNotificationsTab() : renderGeneralSettingsTab();
   return '<div class="pad" style="padding-top:0">' + body +
     '<div class="btnrow" style="margin-top:16px"><button class="btn sig" data-action="saveSettings">Save changes</button></div>' +
     "</div>";
@@ -3714,9 +3733,16 @@ document.getElementById("app").addEventListener("click", (e) => {
     const selected = document.querySelector('[data-action="setAccent"][aria-pressed="true"]');
     if (selected) selected.focus({ preventScroll: true });
   }
+  else if (action === "toggleNotification") {
+    const key = el.dataset.key;
+    if (["onSubmission", "allSubmitted"].includes(key)) {
+      settingsDraft.emailNotifications = { ...settingsDraft.emailNotifications, [key]: !settingsDraft.emailNotifications?.[key] };
+      render();
+    }
+  }
   else if (action === "saveSettings") saveSettings();
   else if (action === "settingsTab") {
-    const order = ["general", "priorities"];
+    const order = ["general", "priorities", "notifications"];
     const dir = order.indexOf(el.dataset.tab) >= order.indexOf(settingsTab) ? 1 : -1;
     settingsTab = el.dataset.tab;
     animatedRender(dir);

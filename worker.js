@@ -444,14 +444,50 @@ async function handleRound(url, env) {
   });
 }
 
-async function handleReply(request, env) {
+async function sendReplyNotifications(env, teacher, state, round, student, status, previous, week, firstComplete) {
+  const prefs = state.settings?.emailNotifications || {};
+  const submission = prefs.onSubmission === true;
+  const completion = firstComplete && prefs.allSubmitted === true;
+  if ((!submission && !completion) || !teacher.email || !env.RESEND_API_KEY || !env.EMAIL_FROM) return;
+  const total = (state.students || []).length;
+  const replies = round.replies || {};
+  const count = (state.students || []).filter(s =>
+    (s.id === student.id ? status : replies[s.id]?.status) &&
+    (s.id === student.id ? status : replies[s.id]?.status) !== "clear").length;
+  const weekLabel = round.weekStart ? `Week ${week} (${round.weekStart})` : `Week ${week}`;
+  const names = (state.students || []).filter(s =>
+    (s.id === student.id ? status : replies[s.id]?.status) &&
+    (s.id === student.id ? status : replies[s.id]?.status) !== "clear").map(s => s.name);
+  const base = (() => { try { return new URL(env.APP_ORIGIN).origin; } catch { return ""; } })();
+  const link = base ? base + "/admin.html" : "";
+  const messages = [];
+  if (submission) messages.push({
+    subject: `${student.name} submitted availability · Cadence`,
+    text: `${student.name} ${previous && previous.status !== "clear" ? "updated their response" : "submitted a response"} for ${weekLabel}.\nResponse: ${status === "in" ? "Available" : status === "skip" ? "Skipping this week" : "No availability"}.\n${count} of ${total} students have responded.${link ? "\n\nView replies: " + link : ""}`,
+  });
+  if (completion) messages.push({
+    subject: `All students have submitted · ${weekLabel} · Cadence`,
+    text: `All ${total} students have responded for ${weekLabel}.\n\n${names.join(", ")}${link ? "\n\nView replies: " + link : ""}`,
+  });
+  await Promise.all(messages.map(async message => {
+    try {
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST", headers: { Authorization: "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: env.EMAIL_FROM, to: [teacher.email], ...message }),
+      });
+      if (!response.ok) console.error("Cadence reply notification failed", response.status);
+    } catch (error) { console.error("Cadence reply notification failed", error); }
+  }));
+}
+
+async function handleReply(request, env, ctx) {
   let body;
   try { body = await request.json(); } catch { return json({error:"Invalid JSON"},400); }
   const {slug,week,studentId,status,avail,lessonMinutes,lesson} = body || {};
   if (typeof slug !== "string" || typeof studentId !== "string" ||
       !Number.isSafeInteger(Number(week)) || Number(week) < 1 ||
       !["in","skip","none","clear"].includes(status) || !Array.isArray(avail)) return json({error:"Invalid reply"},400);
-  const teacher = await env.DB.prepare("SELECT id FROM teachers WHERE slug = ?").bind(slug).first();
+  const teacher = await env.DB.prepare("SELECT id, email FROM teachers WHERE slug = ?").bind(slug).first();
   if (!teacher) return json({error:"Unknown studio"},404);
   const wk = String(Number(week));
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -480,7 +516,17 @@ async function handleReply(request, env) {
     const result = await env.DB.prepare(
       "UPDATE app_state SET data = json_insert(json_set(data, ?, json(?), '$._revision', ?, '$._replyHistory', json(COALESCE(json_extract(data, '$._replyHistory'), '[]'))), '$._replyHistory[#]', json(?)), updated_at = datetime('now') WHERE id = ? AND data = ?"
     ).bind(path,JSON.stringify(reply),revisionOf(state)+1,JSON.stringify(event),teacher.id,row.data).run();
-    if (result.meta.changes === 1) return json({ok:true,updatedAt:at});
+    if (result.meta.changes === 1) {
+      if (status !== "clear") {
+        const student = state.students.find(s => s.id === studentId);
+        const allBefore = state.students.length > 0 && state.students.every(s =>
+          rnd.replies?.[s.id]?.status && rnd.replies[s.id].status !== "clear");
+        const allAfter = state.students.every(s => s.id === studentId ||
+          (rnd.replies?.[s.id]?.status && rnd.replies[s.id].status !== "clear"));
+        ctx.waitUntil(sendReplyNotifications(env, teacher, state, rnd, student, status, previous, wk, !allBefore && allAfter));
+      }
+      return json({ok:true,updatedAt:at});
+    }
     // A concurrent reply/admin save won. Re-read and retry the individual reply.
   }
   return json({error:"The schedule is busy. Please submit again."},409);
@@ -491,7 +537,7 @@ async function handleReply(request, env) {
 ================================================================== */
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -544,7 +590,7 @@ export default {
     }
 
     if (path === "/api/round" && request.method === "GET") return handleRound(url, env);
-    if (path === "/api/reply" && request.method === "POST") return handleReply(request, env);
+    if (path === "/api/reply" && request.method === "POST") return handleReply(request, env, ctx);
 
     // Protected pages — the Worker checks the session before deciding
     // whether to hand back the real page or send them to log in.

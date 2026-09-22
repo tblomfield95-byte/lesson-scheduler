@@ -444,10 +444,53 @@ async function handleRound(url, env) {
   });
 }
 
+function notificationDate(iso, dayOffset = 0, includeYear = true) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || "")) return iso || "";
+  const date = new Date(iso + "T12:00:00Z");
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== iso) return iso;
+  date.setUTCDate(date.getUTCDate() + dayOffset);
+  const day = date.getUTCDate();
+  const suffix = day % 100 >= 11 && day % 100 <= 13 ? "th" :
+    ({ 1: "st", 2: "nd", 3: "rd" }[day % 10] || "th");
+  const month = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "UTC" }).format(date);
+  return `${day}${suffix} ${month}${includeYear ? " " + date.getUTCFullYear() : ""}`;
+}
+
+function availabilityLines(round, avail) {
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const byDay = new Map();
+  for (const key of new Set(avail || [])) {
+    const match = /^(\d+)-(\d+)$/.exec(key);
+    if (!match) continue;
+    const day = Number(match[1]), slot = Number(match[2]);
+    if (day > 6 || !Number.isSafeInteger(slot) || slot < 0) continue;
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(slot);
+  }
+  const start = Number.isInteger(round.dayStartHour) ? round.dayStartHour : 9;
+  const time = slot => {
+    const minutes = start * 60 + slot * 30;
+    return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+  };
+  return [...byDay.keys()].sort((a, b) => a - b).map(day => {
+    const slots = byDay.get(day).sort((a, b) => a - b);
+    const ranges = [];
+    let first = slots[0], last = first;
+    for (const slot of slots.slice(1)) {
+      if (slot === last + 1) last = slot;
+      else { ranges.push(`${time(first)}–${time(last + 1)}`); first = last = slot; }
+    }
+    ranges.push(`${time(first)}–${time(last + 1)}`);
+    const date = round.weekStart ? ` ${notificationDate(round.weekStart, day, false)}` : "";
+    return `${days[day]}${date}: ${ranges.join(", ")}`;
+  });
+}
+
 function replyNotificationHTML({ heading, intro, detail, progress, link }) {
   const safeHeading = escapeHTML(heading);
   const safeIntro = escapeHTML(intro);
-  const safeDetail = escapeHTML(detail);
+  const details = Array.isArray(detail) ? detail : [detail];
+  const safeDetails = details.map(line => '<p style="font-size:14px;line-height:1.5;margin:0 0 5px;color:#211C17">' + escapeHTML(line) + '</p>').join("");
   const safeProgress = escapeHTML(progress);
   const safeLink = escapeHTML(link);
   return '<!doctype html><html><body style="margin:0;background:#F2EFE7;color:#211C17;font-family:Arial,sans-serif;padding:32px 16px">' +
@@ -465,13 +508,14 @@ function replyNotificationHTML({ heading, intro, detail, progress, link }) {
     '<p style="line-height:1.6;margin:0 0 20px">' + safeIntro + '</p>' +
     '<div style="background:#F2EFE7;border:1px solid #DCD5C6;border-radius:8px;padding:14px 16px">' +
     '<p style="font-size:12px;font-weight:bold;letter-spacing:.04em;text-transform:uppercase;color:#6E1423;margin:0 0 6px">' + safeProgress + '</p>' +
-    '<p style="font-size:14px;line-height:1.5;margin:0;color:#211C17">' + safeDetail + '</p></div>' +
+    safeDetails + '</div>' +
     (link ? '<p style="margin:28px 0 4px"><a href="' + safeLink + '" style="display:inline-block;background:#6E1423;color:#fff;text-decoration:none;padding:14px 22px;border-radius:7px;font-weight:bold">View replies</a></p>' : '') +
     '<p style="font-size:12px;line-height:1.6;color:#6B6157;margin:25px 0 0">You’re receiving this because email notifications are enabled in Cadence Settings.</p>' +
     '</div></body></html>';
 }
 
-async function sendReplyNotifications(env, teacher, state, round, student, status, previous, week, firstComplete) {
+async function sendReplyNotifications(env, teacher, state, round, student, submittedReply, previous, week, firstComplete) {
+  const status = submittedReply.status;
   const prefs = state.settings?.emailNotifications || {};
   const submission = prefs.onSubmission === true;
   const completion = firstComplete && prefs.allSubmitted === true;
@@ -481,21 +525,24 @@ async function sendReplyNotifications(env, teacher, state, round, student, statu
   const count = (state.students || []).filter(s =>
     (s.id === student.id ? status : replies[s.id]?.status) &&
     (s.id === student.id ? status : replies[s.id]?.status) !== "clear").length;
-  const weekLabel = round.weekStart ? `Week ${week} (${round.weekStart})` : `Week ${week}`;
+  const weekLabel = round.weekStart ? `Week ${week} (${notificationDate(round.weekStart)})` : `Week ${week}`;
   const names = (state.students || []).filter(s =>
     (s.id === student.id ? status : replies[s.id]?.status) &&
     (s.id === student.id ? status : replies[s.id]?.status) !== "clear").map(s => s.name);
   const base = (() => { try { return new URL(env.APP_ORIGIN).origin; } catch { return ""; } })();
   const link = base ? base + "/admin.html" : "";
+  const responseLabel = status === "in" ? "Available" : status === "skip" ? "Skipping this week" : "No availability";
+  const selectedTimes = status === "in" ? availabilityLines(round, submittedReply.avail) : [];
+  const responseDetails = [`Response: ${responseLabel}`, ...selectedTimes];
   const messages = [];
   if (submission) messages.push({
     subject: `${student.name} submitted availability · Cadence`,
-    text: `${student.name} ${previous && previous.status !== "clear" ? "updated their response" : "submitted a response"} for ${weekLabel}.\nResponse: ${status === "in" ? "Available" : status === "skip" ? "Skipping this week" : "No availability"}.\n${count} of ${total} students have responded.${link ? "\n\nView replies: " + link : ""}`,
+    text: `${student.name} ${previous && previous.status !== "clear" ? "updated their response" : "submitted a response"} for ${weekLabel}.\n${responseDetails.join("\n")}\n${count} of ${total} students have responded.${link ? "\n\nView replies: " + link : ""}`,
     html: replyNotificationHTML({
       heading: previous && previous.status !== "clear" ? `${student.name} updated their response` : `${student.name} has replied`,
       intro: `${student.name} submitted their response for ${weekLabel}.`,
       progress: `${count} of ${total} students responded`,
-      detail: `Response: ${status === "in" ? "Available" : status === "skip" ? "Skipping this week" : "No availability"}`,
+      detail: responseDetails,
       link,
     }),
   });
@@ -564,7 +611,7 @@ async function handleReply(request, env, ctx) {
           rnd.replies?.[s.id]?.status && rnd.replies[s.id].status !== "clear");
         const allAfter = state.students.every(s => s.id === studentId ||
           (rnd.replies?.[s.id]?.status && rnd.replies[s.id].status !== "clear"));
-        ctx.waitUntil(sendReplyNotifications(env, teacher, state, rnd, student, status, previous, wk, !allBefore && allAfter));
+        ctx.waitUntil(sendReplyNotifications(env, teacher, state, rnd, student, reply, previous, wk, !allBefore && allAfter));
       }
       return json({ok:true,updatedAt:at});
     }

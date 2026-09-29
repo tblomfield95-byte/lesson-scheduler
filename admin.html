@@ -1865,6 +1865,77 @@ function confirmSchedule() {
   render();
 }
 
+// The schedule uses local wall-clock times. Construct each lesson separately
+// before converting to UTC so the lesson date's daylight-saving offset applies.
+function calendarDate(weekStart, day, startHour, slot) {
+  const { y, m, d } = isoParts(weekStart);
+  const minutes = Number(startHour) * 60 + Number(slot) * SCHEDULE_SLOT_MIN;
+  return new Date(y, m - 1, d + Number(day), 0, minutes, 0);
+}
+
+function calendarTimestamp(date) {
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function calendarText(value) {
+  return String(value).replace(/\\/g, "\\\\").replace(/\r\n|\r|\n/g, "\\n")
+    .replace(/;/g, "\\;").replace(/,/g, "\\,");
+}
+
+function foldCalendarLine(line) {
+  // iCalendar limits physical lines to 75 UTF-8 bytes, including continuations.
+  const encoder = new TextEncoder();
+  let result = "", bytes = 0;
+  for (const character of line) {
+    const size = encoder.encode(character).length;
+    if (bytes + size > 75) { result += "\r\n "; bytes = 1; }
+    result += character;
+    bytes += size;
+  }
+  return result;
+}
+
+function buildScheduleCalendar(rnd) {
+  const plan = rnd.plan;
+  if (!plan) return "";
+  const lessons = plan.lessons.filter(l => l.status === "planned")
+    .slice().sort((a, b) => a.d - b.d || a.start - b.start);
+  if (!lessons.length) return "";
+  const stamp = calendarTimestamp(new Date());
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Cadence//Lesson Schedule//EN", "CALSCALE:GREGORIAN"];
+  lessons.forEach(lesson => {
+    const firstName = String(lesson.name || "").trim().split(/\s+/)[0] || "Student";
+    // Stable between exports of this lesson; names and times can change.
+    const identity = [ME.slug || ME.email || "teacher", plan.weekStart, plan.weekNo, lesson.id].map(value => encodeURIComponent(String(value))).join("/");
+    lines.push("BEGIN:VEVENT", "UID:" + identity + "@cadenceplanner.co.uk", "DTSTAMP:" + stamp,
+      "DTSTART:" + calendarTimestamp(calendarDate(plan.weekStart, lesson.d, rnd.dayStartHour, lesson.start)),
+      "DTEND:" + calendarTimestamp(calendarDate(plan.weekStart, lesson.d, rnd.dayStartHour, Number(lesson.start) + Number(lesson.lesson))),
+      "SUMMARY:" + calendarText(firstName + " lesson"), "STATUS:CONFIRMED", "END:VEVENT");
+  });
+  lines.push("END:VCALENDAR");
+  return lines.map(foldCalendarLine).join("\r\n") + "\r\n";
+}
+
+function addScheduleToCalendar() {
+  const rnd = activeRound();
+  try {
+    const content = buildScheduleCalendar(rnd);
+    if (!content) { flash("No confirmed lessons to add"); return; }
+    const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "cadence-lessons-" + rnd.plan.weekStart + ".ics";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    flash("Open the calendar file to add your lessons");
+  } catch (error) {
+    flash("Couldn't create the calendar file. Check the schedule dates and try again");
+  }
+}
+
 function undoConfirmSchedule() {
   const rnd = activeRound();
   if (!rnd.plan) return;
@@ -3507,6 +3578,7 @@ function renderLivePlanTab() {
   }
 
   const actionRow = '<div class="btnrow">' +
+    '<button class="btn" data-action="addScheduleToCalendar" ' + (live.length ? "" : "disabled") + '>Add to calendar</button>' +
     (freed.length > 0 ? '<button class="btn sig" data-action="closeGaps">Close the gaps</button>' : "") +
     '<button class="btn" data-action="copyLive" ' + (live.length ? "" : "disabled") + ">Copy as text</button>" +
     '<button class="btn" data-action="imageLive" ' + (live.length ? "" : "disabled") + ">Make an image</button>" +
@@ -3789,6 +3861,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, rnd.dayStartHour, rnd.note); }
   else if (action === "imageChosen") { const rnd = activeRound(); doImage(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, S.week, rnd.dayStartHour, rnd.note); }
   else if (action === "confirmSchedule") confirmSchedule();
+  else if (action === "addScheduleToCalendar") addScheduleToCalendar();
   else if (action === "undoConfirmSchedule") undoConfirmSchedule();
   else if (action === "cancelEarly") setLessonStatus(id, "cancelled_early");
   else if (action === "cancelLate") setLessonStatus(id, "cancelled_late");

@@ -78,6 +78,23 @@
   }
   .sidebar-signout:focus-visible{outline:2px solid var(--sig);outline-offset:-2px}
   .field{margin-bottom:16px}
+  .location-methods{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin:20px 0 24px;align-items:start}
+  .location-method{min-width:0;border:1px solid var(--rule);border-radius:10px;padding:18px;background:var(--paper)}
+  .location-method h4{font:600 20px var(--serif);margin:0 0 8px;color:var(--ink)}
+  .location-method .field{margin-bottom:0}
+  .location-method p.hint{margin:8px 0 12px}
+  .location-presets{background:var(--sig-soft);border-color:var(--sig)}
+  .location-presets h4{color:var(--sig)}
+  .location-picker summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border:1px solid var(--rule);border-radius:7px;background:var(--panel);color:var(--ink);font:inherit;cursor:pointer;touch-action:manipulation}
+  .location-picker summary::-webkit-details-marker{display:none}
+  .location-picker summary::after{content:'';width:8px;height:8px;flex-shrink:0;border-right:2px solid var(--sig);border-bottom:2px solid var(--sig);transform:rotate(45deg);margin:0 2px 4px 0}
+  .location-picker[open] summary::after{transform:rotate(225deg);margin-bottom:0}
+  .location-picker summary:focus-visible,.location-preset-option:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
+  .location-preset-list{margin-top:8px;padding:5px;border:1px solid var(--rule);border-radius:8px;background:var(--panel);box-shadow:0 8px 20px #211c1710;max-height:320px;overflow-y:auto}
+  .location-preset-option{display:block;width:100%;border:0;border-radius:5px;padding:12px;text-align:left;font:inherit;font-size:14px;line-height:1.4;color:var(--ink);background:transparent;cursor:pointer;touch-action:manipulation}
+  .location-preset-option:hover,.location-preset-option[aria-pressed="true"]{background:var(--sig-soft);color:var(--sig)}
+  .location-details-title{font:600 20px var(--serif);margin:0 0 16px}
+  @media(max-width:700px){.location-methods{grid-template-columns:minmax(0,1fr)}.location-method{padding:15px}}
   .field label{display:block;font-size:13px;color:var(--ink-soft);margin:0 0 5px}
   .field input{width:100%;font:inherit;font-size:15px;padding:11px 13px;border-radius:7px;
                border:1px solid var(--rule);background:var(--panel);color:var(--ink)}
@@ -2596,18 +2613,39 @@ const TEACHING_LOCATION_PRESETS = [
   {id:'ram',...RAM_TEACHING_LOCATION},
   {id:'rcm',name:'Royal College of Music',address:'Prince Consort Road, London SW7 2BS, United Kingdom',coordinates:'51.49969, -0.17712'},
   {id:'guildhall',name:'Guildhall School of Music and Drama',address:'Silk Street, Barbican, London EC2Y 8DT, United Kingdom',coordinates:'51.51954, -0.09237'},
-  {id:'trinity',label:'Trinity Laban — King Charles Court (music)',name:'Trinity Laban Conservatoire of Music and Dance',address:'King Charles Court, Old Royal Naval College, Greenwich, London SE10 9JF, United Kingdom',coordinates:'51.4833, -0.00695'},
+  {id:'trinity',label:'Trinity Laban',name:'Trinity Laban Conservatoire of Music and Dance',address:'King Charles Court, Old Royal Naval College, Greenwich, London SE10 9JF, United Kingdom',coordinates:'51.4833, -0.00695'},
   {id:'rncm',name:'Royal Northern College of Music',address:'124 Oxford Road, Manchester M13 9RD, United Kingdom',coordinates:'53.46834, -2.23718'},
   {id:'birmingham',name:'Royal Birmingham Conservatoire',address:'200 Jennens Road, Birmingham B4 7XR, United Kingdom',coordinates:'52.48399, -1.88643'},
   {id:'rwcmd',name:'Royal Welsh College of Music and Drama',address:'North Road, Cardiff CF10 3ER, United Kingdom',coordinates:'51.48603, -3.18378'},
-  {id:'rcs',label:'Royal Conservatoire of Scotland (formerly RSAMD)',name:'Royal Conservatoire of Scotland',address:'100 Renfrew Street, Glasgow G2 3DB, United Kingdom',coordinates:'55.86614, -4.257632'}
+  {id:'rcs',name:'Royal Conservatoire of Scotland',address:'100 Renfrew Street, Glasgow G2 3DB, United Kingdom',coordinates:'55.86614, -4.257632'}
 ];
 function useTeachingLocationPreset(id) {
+  if(!stateReady || stateBlocked)return;
   const preset=TEACHING_LOCATION_PRESETS.find(p=>p.id===id);
   if(!preset)return;
-  teachingLocationDraft={name:preset.name,address:preset.address,coordinates:preset.coordinates};
-  render();
-  document.getElementById('teachingPreset')?.focus({preventScroll:true});
+  fillTeachingLocation(preset);
+  document.getElementById('teachingPresetSummary')?.focus({preventScroll:true});
+}
+function updateTeachingPresetPicker() {
+  const matched=TEACHING_LOCATION_PRESETS.find(p=>['name','address','coordinates'].every(k=>teachingLocationDraft?.[k]===p[k]));
+  const label=document.getElementById('teachingPresetLabel');
+  if(label)label.textContent=matched?(matched.label||matched.name):'Choose a preset';
+  document.querySelectorAll('[data-action="useTeachingPreset"]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.preset===matched?.id)));
+}
+function fillTeachingLocation(value) {
+  teachingLocationDraft={name:value.name,address:value.address,coordinates:value.coordinates};
+  for(const key of ['name','address','coordinates']){
+    const input=document.querySelector('[data-location-field="'+key+'"]');
+    if(input)input.value=teachingLocationDraft[key];
+  }
+  const picker=document.getElementById('teachingPreset');if(picker)picker.open=false;
+  updateTeachingPresetPicker();
+  const details=document.getElementById('teachingCoordinates')?.closest('details');if(details)details.open=true;
+  const preview=document.getElementById('teachingMapPreview');if(preview)preview.innerHTML=teachingLocationMapPreview(teachingLocationDraft);
+}
+function renderTeachingPresets(d) {
+  const selected=TEACHING_LOCATION_PRESETS.find(p=>['name','address','coordinates'].every(k=>d[k]===p[k]));
+  return '<section class="location-method location-presets" aria-labelledby="locationPresetHeading"><h4 id="locationPresetHeading">Use a preset</h4><p class="hint">Choose a conservatoire with its address and map pin already filled in.</p><details class="location-picker" id="teachingPreset"><summary id="teachingPresetSummary"><span id="teachingPresetLabel">'+manualAttribute(selected?(selected.label||selected.name):'Choose a preset')+'</span></summary><div class="location-preset-list">'+TEACHING_LOCATION_PRESETS.map(p=>'<button type="button" class="location-preset-option" data-action="useTeachingPreset" data-preset="'+p.id+'" aria-pressed="'+(p.id===selected?.id)+'">'+manualAttribute(p.label||p.name)+'</button>').join('')+'</div></details></section>';
 }
 let teachingLocationDraft=null;
 // Explicit searches only; cache repeated queries and keep provider setup in one place.
@@ -2685,16 +2723,7 @@ function importTeachingSearchResult(index) {
   if(!stateReady || stateBlocked || !Number.isInteger(index))return;
   const result=teachingSearch.results[index];
   if(!result)return;
-  teachingLocationDraft={...result};
-  // Update only the location fields, preserving any unsaved profile edits.
-  for(const key of ['name','address','coordinates']){
-    const input=document.querySelector('[data-location-field="'+key+'"]');
-    if(input)input.value=result[key];
-  }
-  const preset=document.getElementById('teachingPreset');if(preset)preset.value='';
-  const coordinates=document.getElementById('teachingCoordinates');
-  const details=coordinates?.closest('details');if(details)details.open=true;
-  const preview=document.getElementById('teachingMapPreview');if(preview)preview.innerHTML=teachingLocationMapPreview(result);
+  fillTeachingLocation(result);
   teachingSearch.results=[];teachingSearch.message='Location imported. Check the details and map pin, then Save location.';
   updateTeachingSearchUI();
   document.getElementById('teachingVenue')?.focus({preventScroll:true});
@@ -2731,8 +2760,7 @@ function renderTeachingLocation() {
   if(!teachingLocationDraft)openTeachingLocationDraft();
   const d=teachingLocationDraft;
   return '<section class="panel" style="margin-top:24px"><h3>Teaching location</h3><p class="lede">Added to every lesson when you use Add to calendar. Leave blank if you teach in different places.</p>'+
-    renderTeachingSearch()+
-    '<div class="field"><label for="teachingPreset">Venue preset</label><select id="teachingPreset" data-bind="teachingLocationPreset" style="width:100%;max-width:100%;min-width:0"><option value="">Choose a preset…</option>'+TEACHING_LOCATION_PRESETS.map(p=>'<option value="'+p.id+'"'+(['name','address','coordinates'].every(k=>d[k]===p[k])?' selected':'')+'>'+manualAttribute(p.label||p.name)+'</option>').join('')+'</select><p class="hint">Fills in the venue, address and map pin. You can edit the details before saving.</p></div>'+
+    '<div class="location-methods"><section class="location-method" aria-labelledby="locationSearchHeading"><h4 id="locationSearchHeading">Find a location</h4><p class="hint">Search for any venue or address.</p>'+renderTeachingSearch()+'</section>'+renderTeachingPresets(d)+'</div><h4 class="location-details-title">Location details</h4>'+
     '<div class="field"><label for="teachingVenue">Venue name</label><input id="teachingVenue" maxlength="160" data-location-field="name" value="'+manualAttribute(d.name)+'" placeholder="Royal Academy of Music"></div>'+
     '<div class="field"><label for="teachingAddress">Address <span class="hint">(optional)</span></label><input id="teachingAddress" maxlength="300" data-location-field="address" value="'+manualAttribute(d.address)+'" placeholder="Street, city and postcode"></div>'+
     '<details'+(d.coordinates?' open':'')+'><summary style="cursor:pointer;margin-bottom:12px">Map pin <span class="hint">(optional)</span></summary><div class="field"><label for="teachingCoordinates">Latitude, longitude</label><input id="teachingCoordinates" type="text" maxlength="80" autocapitalize="off" spellcheck="false" data-location-field="coordinates" value="'+manualAttribute(d.coordinates)+'" placeholder="51.52352, -0.15188"><p class="hint">Coordinates attach a map pin, not just a text label. Every preset fills these in for you. Other venues can use coordinates copied from a map.</p></div></details>'+
@@ -4361,6 +4389,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "toggleSidebar") toggleSidebar();
   else if (action === "saveProfile") saveProfile();
   else if (action === "saveTeachingLocation") saveTeachingLocation();
+  else if (action === "useTeachingPreset") useTeachingLocationPreset(el.dataset.preset);
   else if (action === "searchTeachingLocations") searchTeachingLocations();
   else if (action === "importTeachingLocation") importTeachingSearchResult(Number(el.dataset.result));
   else if (action === "clearTeachingLocation") {teachingLocationDraft={name:'',address:'',coordinates:''};render();}
@@ -4467,7 +4496,12 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "exportHours") exportHours();
 });
 
+document.addEventListener('click', (e) => {
+  const picker=document.getElementById('teachingPreset');
+  if(picker?.open && !e.target.closest('#teachingPreset'))picker.open=false;
+});
 document.getElementById("app").addEventListener("keydown", (e) => {
+  if(e.key==='Escape' && e.target.closest('#teachingPreset')){const picker=document.getElementById('teachingPreset');if(picker)picker.open=false;document.getElementById('teachingPresetSummary')?.focus({preventScroll:true});return;}
   if(e.target.id==='teachingSearchQuery' && e.key==='Enter' && !e.isComposing){e.preventDefault();searchTeachingLocations();return;}
   if (e.key !== "Enter" && e.key !== " ") return;
   const row = e.target.closest('[data-action="toggleHoursOpen"]');
@@ -4482,6 +4516,7 @@ document.getElementById("app").addEventListener("input", (e) => {
   if(!stateReady || stateBlocked || !['name','address','coordinates'].includes(field))return;
   if(!teachingLocationDraft)openTeachingLocationDraft();
   teachingLocationDraft[field]=e.target.value;
+  updateTeachingPresetPicker();
   const preview=document.getElementById('teachingMapPreview');
   if(preview)preview.innerHTML=teachingLocationMapPreview(teachingLocationDraft);
 });
@@ -4490,7 +4525,6 @@ document.getElementById("app").addEventListener("change", (e) => {
   const el = e.target.closest("[data-bind]");
   if (!el) return;
   const bind = el.dataset.bind;
-  if (bind === "teachingLocationPreset") {useTeachingLocationPreset(el.value);return;}
   if (bind === "scheduleStudent") {
     const id = el.dataset.id;
     setStudentIncluded(id, el.checked);

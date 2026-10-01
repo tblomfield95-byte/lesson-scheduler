@@ -2610,6 +2610,98 @@ function useTeachingLocationPreset(id) {
   document.getElementById('teachingPreset')?.focus({preventScroll:true});
 }
 let teachingLocationDraft=null;
+// Explicit searches only; cache repeated queries and keep provider setup in one place.
+const TEACHING_SEARCH_ENDPOINT='https://photon.komoot.io/api/';
+const teachingSearch={query:'',results:[],message:'',busy:false,sequence:0,controller:null,lastRequest:0,cache:new Map()};
+function teachingSearchLocation(feature) {
+  const p=feature?.properties || {}, c=feature?.geometry?.coordinates;
+  if(feature?.geometry?.type!=='Point' || !Array.isArray(c) || typeof c[0]!=='number' || typeof c[1]!=='number')return null;
+  const coordinates=c[1]+', '+c[0];
+  if(!teachingCoordinates(coordinates))return null;
+  const text=v=>typeof v==='string'?v.trim():'';
+  const street=[text(p.housenumber),text(p.street)].filter(Boolean).join(' ');
+  const name=text(p.name)||street||text(p.city)||text(p.locality);
+  if(!name)return null;
+  const address=[...new Set([street,text(p.district),text(p.city)||text(p.locality),text(p.postcode),text(p.country)].filter(Boolean))].join(', ');
+  return {name:name.slice(0,160),address:address.slice(0,300),coordinates};
+}
+function teachingSearchResultsHTML() {
+  return '<p class="hint" role="status">'+manualAttribute(teachingSearch.message)+'</p>'+teachingSearch.results.map((p,i)=>
+    '<button type="button" class="btn" data-action="importTeachingLocation" data-result="'+i+'" style="display:block;width:100%;text-align:left;white-space:normal;margin-bottom:8px;padding:12px 14px"><strong style="display:block">'+manualAttribute(p.name)+'</strong><span class="hint" style="display:block;margin-top:4px">'+manualAttribute(p.address||'Address unavailable — check the map pin')+'</span></button>').join('');
+}
+function updateTeachingSearchUI() {
+  const results=document.getElementById('teachingSearchResults');
+  if(results){results.innerHTML=teachingSearchResultsHTML();results.setAttribute('aria-busy',String(teachingSearch.busy));}
+  const button=document.getElementById('teachingSearchButton');
+  if(button){button.disabled=teachingSearch.busy;button.textContent=teachingSearch.busy?'Searching…':'Search';}
+}
+function editTeachingSearch(query) {
+  teachingSearch.query=query;
+  teachingSearch.sequence++;
+  teachingSearch.controller?.abort();
+  teachingSearch.controller=null;teachingSearch.busy=false;
+  teachingSearch.results=[];teachingSearch.message='';
+  updateTeachingSearchUI();
+}
+async function searchTeachingLocations() {
+  if(!stateReady || stateBlocked || teachingSearch.busy)return;
+  const query=teachingSearch.query.trim();
+  teachingSearch.results=[];
+  if(query.length<3){teachingSearch.message='Enter at least three characters, such as a venue name and town.';updateTeachingSearchUI();return;}
+  const key=query.toLocaleLowerCase();
+  const cached=teachingSearch.cache.get(key);
+  if(!cached && Date.now()-teachingSearch.lastRequest<1200){teachingSearch.message='Please wait a moment, then search again.';updateTeachingSearchUI();return;}
+  const sequence=++teachingSearch.sequence;
+  const controller=new AbortController();
+  teachingSearch.controller=controller;teachingSearch.busy=true;teachingSearch.message='Looking for matching places…';
+  updateTeachingSearchUI();
+  const timeout=setTimeout(()=>controller.abort(),12000);
+  try {
+    let results=cached;
+    if(!results){
+      teachingSearch.lastRequest=Date.now();
+      const url=new URL(TEACHING_SEARCH_ENDPOINT);
+      url.searchParams.set('q',query);url.searchParams.set('limit','6');url.searchParams.set('lang','en');
+      const response=await fetch(url.toString(),{signal:controller.signal,credentials:'omit',referrerPolicy:'no-referrer'});
+      if(!response.ok)throw new Error('Search unavailable');
+      const data=await response.json();
+      if(!Array.isArray(data.features))throw new Error('Invalid search response');
+      results=data.features.map(teachingSearchLocation).filter(Boolean).slice(0,6);
+      if(teachingSearch.cache.size>=30)teachingSearch.cache.delete(teachingSearch.cache.keys().next().value);
+      teachingSearch.cache.set(key,results);
+    }
+    if(sequence!==teachingSearch.sequence)return;
+    teachingSearch.results=results;
+    teachingSearch.message=results.length?'Choose a place to fill in its details below.':'No places found. Try adding the town or postcode, or enter the details manually.';
+  } catch(error) {
+    if(sequence!==teachingSearch.sequence)return;
+    teachingSearch.message=error.name==='AbortError'?'The search took too long. Please try again.':'Location search is unavailable. Please try again, use a preset, or enter the details manually.';
+  } finally {
+    clearTimeout(timeout);
+    if(sequence===teachingSearch.sequence){teachingSearch.busy=false;teachingSearch.controller=null;updateTeachingSearchUI();}
+  }
+}
+function importTeachingSearchResult(index) {
+  if(!stateReady || stateBlocked || !Number.isInteger(index))return;
+  const result=teachingSearch.results[index];
+  if(!result)return;
+  teachingLocationDraft={...result};
+  // Update only the location fields, preserving any unsaved profile edits.
+  for(const key of ['name','address','coordinates']){
+    const input=document.querySelector('[data-location-field="'+key+'"]');
+    if(input)input.value=result[key];
+  }
+  const preset=document.getElementById('teachingPreset');if(preset)preset.value='';
+  const coordinates=document.getElementById('teachingCoordinates');
+  const details=coordinates?.closest('details');if(details)details.open=true;
+  const preview=document.getElementById('teachingMapPreview');if(preview)preview.innerHTML=teachingLocationMapPreview(result);
+  teachingSearch.results=[];teachingSearch.message='Location imported. Check the details and map pin, then Save location.';
+  updateTeachingSearchUI();
+  document.getElementById('teachingVenue')?.focus({preventScroll:true});
+}
+function renderTeachingSearch() {
+  return '<div class="field"><label for="teachingSearchQuery">Search for a place</label><div style="display:flex;gap:8px;align-items:stretch"><input id="teachingSearchQuery" type="search" maxlength="200" enterkeyhint="search" autocomplete="off" style="flex:1;min-width:0" placeholder="Venue name and town, or address" value="'+manualAttribute(teachingSearch.query)+'" aria-describedby="teachingSearchHint"><button type="button" class="btn" id="teachingSearchButton" data-action="searchTeachingLocations"'+(teachingSearch.busy?' disabled':'')+'>'+(teachingSearch.busy?'Searching…':'Search')+'</button></div><p class="hint" id="teachingSearchHint">Searches are sent to Photon. Place data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>.</p><div id="teachingSearchResults" aria-busy="'+teachingSearch.busy+'">'+teachingSearchResultsHTML()+'</div></div>';
+}
 function openTeachingLocationDraft() {
   teachingLocationDraft={name:'',address:'',coordinates:'',...(S.settings.teachingLocation || {})};
 }
@@ -2639,6 +2731,7 @@ function renderTeachingLocation() {
   if(!teachingLocationDraft)openTeachingLocationDraft();
   const d=teachingLocationDraft;
   return '<section class="panel" style="margin-top:24px"><h3>Teaching location</h3><p class="lede">Added to every lesson when you use Add to calendar. Leave blank if you teach in different places.</p>'+
+    renderTeachingSearch()+
     '<div class="field"><label for="teachingPreset">Venue preset</label><select id="teachingPreset" data-bind="teachingLocationPreset" style="width:100%;max-width:100%;min-width:0"><option value="">Choose a preset…</option>'+TEACHING_LOCATION_PRESETS.map(p=>'<option value="'+p.id+'"'+(['name','address','coordinates'].every(k=>d[k]===p[k])?' selected':'')+'>'+manualAttribute(p.label||p.name)+'</option>').join('')+'</select><p class="hint">Fills in the venue, address and map pin. You can edit the details before saving.</p></div>'+
     '<div class="field"><label for="teachingVenue">Venue name</label><input id="teachingVenue" maxlength="160" data-location-field="name" value="'+manualAttribute(d.name)+'" placeholder="Royal Academy of Music"></div>'+
     '<div class="field"><label for="teachingAddress">Address <span class="hint">(optional)</span></label><input id="teachingAddress" maxlength="300" data-location-field="address" value="'+manualAttribute(d.address)+'" placeholder="Street, city and postcode"></div>'+
@@ -4268,6 +4361,8 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "toggleSidebar") toggleSidebar();
   else if (action === "saveProfile") saveProfile();
   else if (action === "saveTeachingLocation") saveTeachingLocation();
+  else if (action === "searchTeachingLocations") searchTeachingLocations();
+  else if (action === "importTeachingLocation") importTeachingSearchResult(Number(el.dataset.result));
   else if (action === "clearTeachingLocation") {teachingLocationDraft={name:'',address:'',coordinates:''};render();}
   else if (action === "toggleStudentFilter") toggleStudentFilter();
   else if (action === "includeAllStudents") includeAllStudents();
@@ -4373,6 +4468,7 @@ document.getElementById("app").addEventListener("click", (e) => {
 });
 
 document.getElementById("app").addEventListener("keydown", (e) => {
+  if(e.target.id==='teachingSearchQuery' && e.key==='Enter' && !e.isComposing){e.preventDefault();searchTeachingLocations();return;}
   if (e.key !== "Enter" && e.key !== " ") return;
   const row = e.target.closest('[data-action="toggleHoursOpen"]');
   if (!row) return;
@@ -4381,6 +4477,7 @@ document.getElementById("app").addEventListener("keydown", (e) => {
 });
 
 document.getElementById("app").addEventListener("input", (e) => {
+  if(e.target.id==='teachingSearchQuery'){editTeachingSearch(e.target.value);return;}
   const field=e.target.dataset.locationField;
   if(!stateReady || stateBlocked || !['name','address','coordinates'].includes(field))return;
   if(!teachingLocationDraft)openTeachingLocationDraft();

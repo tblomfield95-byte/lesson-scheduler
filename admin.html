@@ -77,6 +77,16 @@
     cursor:pointer;
   }
   .sidebar-signout:focus-visible{outline:2px solid var(--sig);outline-offset:-2px}
+  .profile-page > .panel{padding:22px;margin:0 0 20px}
+  .profile-page > .panel h3{margin:0 0 10px}
+  .profile-page .hint{font-size:13px;line-height:1.5;color:var(--ink-soft)}
+  .profile-page p.hint{margin:8px 0 0}
+  .profile-page .hint a{color:var(--sig);text-underline-offset:3px}
+  .profile-card-footer{border-top:1px solid var(--rule);margin-top:22px;padding-top:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  .profile-card-footer .btnrow{margin:0}
+  .profile-card-footer p.hint{margin:0;flex:1 1 240px}
+  .profile-page .profile-intro{margin-bottom:22px}
+  @media(max-width:600px){.profile-page > .panel{padding:16px}.profile-card-footer{align-items:flex-start}}
   .field{margin-bottom:16px}
   .location-methods{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin:20px 0 24px;align-items:start}
   .location-method{min-width:0;border:1px solid var(--rule);border-radius:10px;padding:18px;background:var(--paper)}
@@ -2596,7 +2606,7 @@ async function saveProfile() {
       body: JSON.stringify({ name, instrument, studio: (ME.studio || "").trim() }),
     });
     if (!res.ok) { flash("Couldn't save. Try again"); return; }
-    flash("Profile updated");
+    flash("Profile details saved");
     render();
   } catch (e) {
     flash("Couldn't save. Check your connection");
@@ -2724,7 +2734,7 @@ function importTeachingSearchResult(index) {
   const result=teachingSearch.results[index];
   if(!result)return;
   fillTeachingLocation(result);
-  teachingSearch.results=[];teachingSearch.message='Location imported. Check the details and map pin, then Save location.';
+  teachingSearch.results=[];teachingSearch.message='Location imported. Check the details and map pin, then Save teaching location.';
   updateTeachingSearchUI();
   document.getElementById('teachingVenue')?.focus({preventScroll:true});
 }
@@ -2759,13 +2769,13 @@ function saveTeachingLocation() {
 function renderTeachingLocation() {
   if(!teachingLocationDraft)openTeachingLocationDraft();
   const d=teachingLocationDraft;
-  return '<section class="panel" style="margin-top:24px"><h3>Teaching location</h3><p class="lede">Added to every lesson when you use Add to calendar. Leave blank if you teach in different places.</p>'+
+  return '<section class="panel" aria-labelledby="teachingLocationHeading"><h3 id="teachingLocationHeading">Teaching location</h3><p class="lede">Added to every lesson when you use Add to calendar. Leave blank if you teach in different places.</p>'+
     '<div class="location-methods"><section class="location-method" aria-labelledby="locationSearchHeading"><h4 id="locationSearchHeading">Find a location</h4><p class="hint">Search for any venue or address.</p>'+renderTeachingSearch()+'</section>'+renderTeachingPresets(d)+'</div><h4 class="location-details-title">Location details</h4>'+
     '<div class="field"><label for="teachingVenue">Venue name</label><input id="teachingVenue" maxlength="160" data-location-field="name" value="'+manualAttribute(d.name)+'" placeholder="Royal Academy of Music"></div>'+
     '<div class="field"><label for="teachingAddress">Address <span class="hint">(optional)</span></label><input id="teachingAddress" maxlength="300" data-location-field="address" value="'+manualAttribute(d.address)+'" placeholder="Street, city and postcode"></div>'+
     '<details'+(d.coordinates?' open':'')+'><summary style="cursor:pointer;margin-bottom:12px">Map pin <span class="hint">(optional)</span></summary><div class="field"><label for="teachingCoordinates">Latitude, longitude</label><input id="teachingCoordinates" type="text" maxlength="80" autocapitalize="off" spellcheck="false" data-location-field="coordinates" value="'+manualAttribute(d.coordinates)+'" placeholder="51.52352, -0.15188"><p class="hint">Coordinates attach a map pin, not just a text label. Every preset fills these in for you. Other venues can use coordinates copied from a map.</p></div></details>'+
     '<p class="hint" id="teachingMapPreview">'+teachingLocationMapPreview(d)+'</p>'+
-    '<div class="btnrow"><button class="btn sig" data-action="saveTeachingLocation">Save location</button><button class="btn" data-action="clearTeachingLocation">Clear</button></div><p class="hint">Applies to new exports only. Existing calendar events are not changed. Map display depends on your calendar app.</p></section>';
+    '<div class="profile-card-footer"><p class="hint">Saves only your teaching location for future calendar exports.</p><div class="btnrow"><button class="btn" data-action="clearTeachingLocation">Clear fields</button><button class="btn sig" data-action="saveTeachingLocation">Save teaching location</button></div></div><p class="hint">To remove your saved location, clear the fields and save. Existing calendar events are not changed.</p></section>';
 }
 let newStudentDraft = { name: "", allocated: "" };
 function addStudent() {
@@ -3633,16 +3643,17 @@ function goSection(section) {
 }
 
 function renderProfileSection() {
-  return '<div class="pad">' +
-    '<p class="lede">Manage your teaching profile and account details.</p>' +
+  return '<div class="pad profile-page">' +
+    '<p class="lede profile-intro">Manage your teaching profile and account. Save each section separately.</p>'+
+    '<section class="panel" aria-labelledby="profileDetailsHeading"><h3 id="profileDetailsHeading">Profile details</h3><p class="lede">Your name, instrument and institution or studio.</p>' +
     '<div class="field"><label for="profileEmail">Email address</label><input id="profileEmail" type="email" readonly value="' + escapeHTML(ME.email || "") + '"><p class="hint">Used to sign in. This address is read-only.</p></div>' +
-    '<div class="field"><label>Your name</label><input type="text" data-bind="profileName" value="' + escapeHTML(ME.name || "") + '"></div>' +
-    '<div class="field"><label>Instrument</label><input type="text" data-bind="profileInstrument" value="' + escapeHTML(ME.instrument || "") + '"></div>' +
+    '<div class="field"><label for="profileName">Your name</label><input id="profileName" type="text" data-bind="profileName" value="' + escapeHTML(ME.name || "") + '"></div>' +
+    '<div class="field"><label for="profileInstrument">Instrument</label><input id="profileInstrument" type="text" data-bind="profileInstrument" value="' + escapeHTML(ME.instrument || "") + '"></div>' +
     '<div class="field"><label for="profileStudio">Institution or studio <span class="hint">(optional)</span></label><input id="profileStudio" type="text" maxlength="160" data-bind="profileStudio" value="' + escapeHTML(ME.studio || "") + '"></div>' +
-    '<div class="btnrow"><button class="btn sig" data-action="saveProfile">Save changes</button></div>' +
+    '<div class="profile-card-footer"><p class="hint">Saves only your name, instrument and institution or studio.</p><div class="btnrow"><button class="btn sig" data-action="saveProfile">Save profile details</button></div></div></section>' +
     renderTeachingLocation() +
-    '<div class="panel" style="margin-top:24px"><h3>Your account</h3><p class="lede">Preview the student page for the selected week without changing any replies.</p><div class="btnrow"><a class="btn" target="_blank" rel="noopener" href="/s/' + encodeURIComponent(ME.slug || "") + '/' + S.week + '?preview=1">Preview student page ↗</a><button class="btn" data-action="downloadAccount">Download my data</button><button class="btn" data-action="signOutAll">Sign out of all devices</button></div><p class="hint">The download contains your saved profile, students, availability, schedules and hours. Keep it somewhere private.</p></div>' +
-    '<details class="panel" style="margin-top:24px"' + (confirmingDeleteAccount ? ' open' : '') + '><summary style="cursor:pointer;color:var(--sig);font-weight:600">Account deletion</summary>' +
+    '<div class="panel"><h3>Your account</h3><p class="lede">Preview your student page, download your saved data or manage sign-ins. These actions do not need saving.</p><div class="btnrow"><a class="btn" target="_blank" rel="noopener" href="/s/' + encodeURIComponent(ME.slug || "") + '/' + S.week + '?preview=1">Preview student page ↗</a><button class="btn" data-action="downloadAccount">Download my data</button><button class="btn" data-action="signOutAll">Sign out of all devices</button></div><p class="hint">The download contains your saved profile, students, availability, schedules and hours. Keep it somewhere private.</p></div>' +
+    '<details class="panel"' + (confirmingDeleteAccount ? ' open' : '') + '><summary style="cursor:pointer;color:var(--sig);font-weight:600">Account deletion</summary>' +
     '<p class="lede" style="margin-bottom:12px">Deleting your account removes your profile, students, schedules and hours from Cadence, and frees up this email address. Visit the login page again after that and it\u2019ll treat you as a brand new sign-up. This can\u2019t be undone.</p>' +
     (confirmingDeleteAccount
       ? '<p class="lede" style="color:var(--sig);font-weight:600;margin-bottom:10px">Are you absolutely sure? This can\u2019t be undone.</p>' +

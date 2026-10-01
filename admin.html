@@ -751,7 +751,9 @@
   .manual-slot.valid{background:linear-gradient(var(--student-soft),var(--student-soft)),linear-gradient(var(--student-soft),var(--student-soft)),#fff;cursor:pointer}
   .manual-slot:focus-visible{position:relative;outline:2px solid var(--sig);outline-offset:-2px;z-index:4}
   .manual-lesson,.manual-preview{position:absolute;left:7px;right:7px;border:1px solid var(--student);border-radius:7px;background:linear-gradient(var(--student-soft),var(--student-soft)),#fff;color:var(--ink);padding:7px 10px;text-align:left;overflow:hidden;font:inherit;z-index:2}
-  .manual-lesson{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+  .manual-lesson{cursor:grab;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+  .manual-person,.manual-grip{-webkit-touch-callout:none}
+  .manual-grip{touch-action:manipulation}
   .manual-lesson strong,.manual-lesson small{display:block;overflow-wrap:anywhere}.manual-lesson strong{font-size:13px}.manual-lesson small{font-size:11px;margin-top:3px}
   .manual-lesson.selected{outline:none;box-shadow:inset 0 0 0 1px var(--student);z-index:3}
   .manual-preview{pointer-events:none;z-index:4;border:2px dashed var(--student);background:var(--student-soft);opacity:.92;font-size:12px;font-weight:600}
@@ -1822,7 +1824,7 @@ function openManualEditor() {
     if (a && !manualReason(p, a.d, a.start)) manualEditor.assign.push({id:p.id,name:p.name,lesson:p.lesson,d:a.d,start:a.start});
   }
   manualEditor.initial = manualCopy(manualEditor.assign);
-  manualDialog.innerHTML = '<div class="manual-shell"><header class="manual-head"><div><h2 id="manualTitle">Rearrange your week</h2><p>Drag a lesson, or select a student and tap a starting time.</p></div><button type="button" class="btn" data-manual="cancel" autofocus>Cancel</button></header><div class="manual-main"><aside class="manual-people" aria-label="Included students"></aside><section class="manual-workspace" aria-label="Teaching days"><div class="manual-legend">Pale colour: student availability · Deeper shading: a valid start · Grey: not offered</div><div class="manual-scroll"><div class="manual-grid"></div></div></section></div><footer class="manual-bottom"><p class="manual-status" role="status" aria-live="polite"></p><div class="manual-actions"><button type="button" class="btn" data-manual="undo">Undo</button><button type="button" class="btn" data-manual="reset">Reset</button><button type="button" class="btn" data-manual="unplace">Move to Not placed</button><button type="button" class="btn" data-manual="place" hidden>Place lesson</button><button type="button" class="btn sig manual-save" data-manual="save">Use this arrangement</button></div></footer></div>';
+  manualDialog.innerHTML = '<div class="manual-shell"><header class="manual-head"><div><h2 id="manualTitle">Rearrange your week</h2><p>Hold to drag on touchscreens; swipe to scroll. Or select a student and tap a time.</p></div><button type="button" class="btn" data-manual="cancel" autofocus>Cancel</button></header><div class="manual-main"><aside class="manual-people" aria-label="Included students"></aside><section class="manual-workspace" aria-label="Teaching days"><div class="manual-legend">Pale colour: student availability · Deeper shading: a valid start · Grey: not offered</div><div class="manual-scroll"><div class="manual-grid"></div></div></section></div><footer class="manual-bottom"><p class="manual-status" role="status" aria-live="polite"></p><div class="manual-actions"><button type="button" class="btn" data-manual="undo">Undo</button><button type="button" class="btn" data-manual="reset">Reset</button><button type="button" class="btn" data-manual="unplace">Move to Not placed</button><button type="button" class="btn" data-manual="place" hidden>Place lesson</button><button type="button" class="btn sig manual-save" data-manual="save">Use this arrangement</button></div></footer></div>';
   renderManualEditor();
   document.body.classList.add("manual-open");
   manualDialog.showModal();
@@ -1950,6 +1952,7 @@ manualDialog.addEventListener('click',e=>{
 });
 let manualPointer=null,manualSuppressClickUntil=0,manualDragGhost=null;
 function clearManualDragVisual() {
+  clearTimeout(manualHoldTimer);manualHoldTimer=null;
   if(manualDragGhost){manualDragGhost.remove();manualDragGhost=null;}
   manualDialog.querySelectorAll('.manual-drag-source').forEach(el=>el.classList.remove('manual-drag-source'));
   manualDialog.querySelector('[data-manual-tray]')?.classList.remove('manual-drop-active');
@@ -1971,6 +1974,7 @@ function moveManualDragVisual(x,y,target) {
   manualDialog.querySelector('[data-manual-tray]')?.classList.toggle('manual-drop-active',!!target?.tray);
 }
 manualDialog.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='touch') return; // Touch uses a cancellable hold before pickup.
   const card=e.target.closest('[data-person]');
   if(!manualEditor || !card || e.button!==0 || !e.isPrimary) return;
   // Leave touch swipes on the student list free to scroll; its handle starts a drag.
@@ -1989,7 +1993,7 @@ function manualPointerTarget(x,y) {
   const start=manualEditor.first+Math.floor((y-column.getBoundingClientRect().top)/32)-manualPointer.offset;
   return {d:Number(column.dataset.day),start};
 }
-manualDialog.addEventListener('pointermove',e=>{
+function moveManualPointer(e) {
   if(!manualPointer || e.pointerId!==manualPointer.id || !manualEditor) return;
   if(!manualPointer.dragging && Math.hypot(e.clientX-manualPointer.x,e.clientY-manualPointer.y)<7) return;
   e.preventDefault();
@@ -2006,28 +2010,95 @@ manualDialog.addEventListener('pointermove',e=>{
   manualEditor.pending=target && !target.tray?target:null;
   manualEditor.message=target?.tray?'Release to move this lesson to Not placed.':'';
   updateManualPreview();
-});
-manualDialog.addEventListener('pointerup',e=>{
+}
+manualDialog.addEventListener('pointermove',e=>{if(e.pointerType!=='touch')moveManualPointer(e);});
+function endManualPointer(e) {
   if(!manualPointer || e.pointerId!==manualPointer.id || !manualEditor) return;
   const pointer=manualPointer,target=pointer.dragging?manualPointerTarget(e.clientX,e.clientY):null;
   clearManualDragVisual();
   manualPointer=null;manualSuppressClickUntil=Date.now()+400;
-  if(manualDialog.hasPointerCapture(e.pointerId))manualDialog.releasePointerCapture(e.pointerId);
+  if(!pointer.touch && manualDialog.hasPointerCapture(e.pointerId))manualDialog.releasePointerCapture(e.pointerId);
   if(!pointer.dragging){manualEditor.selected=pointer.index;manualEditor.pending=null;manualEditor.message='';renderManualEditor();}
   else if(target?.tray)unplaceManualLesson();
   else if(target)placeManualLesson(target.d,target.start);
   else{manualEditor.pending=null;manualEditor.message='Lesson kept in its original position.';updateManualPreview();}
-});
-manualDialog.addEventListener('pointercancel',()=>{
+}
+manualDialog.addEventListener('pointerup',e=>{if(e.pointerType!=='touch')endManualPointer(e);});
+manualDialog.addEventListener('pointercancel',e=>{
+  if(e.pointerType==='touch') return; // Native scrolling may cancel its pointer stream.
   clearManualDragVisual();
   manualPointer=null;
   if(manualEditor){manualEditor.pending=null;manualEditor.message='Move cancelled.';updateManualPreview();}
 });
 manualDialog.addEventListener('lostpointercapture',()=>{
-  if(!manualPointer) return;
+  if(!manualPointer || manualPointer.touch) return;
   clearManualDragVisual();manualPointer=null;
   if(manualEditor){manualEditor.pending=null;manualEditor.message='Move cancelled.';updateManualPreview();}
 });
+
+// Keep the original touch target mounted for the entire gesture. Allow the
+// browser to scroll unless a stationary hold wins; then cancel touchmove's
+// default action with a non-passive listener, rather than changing touch-action
+// mid-gesture (which Safari cannot use to reclaim an already-started scroll).
+let manualHoldTimer=null;
+function cancelManualTouch() {
+  clearManualDragVisual();manualPointer=null;
+  if(manualEditor){manualEditor.pending=null;manualEditor.message='';updateManualPreview();}
+}
+manualDialog.addEventListener('touchstart',e=>{
+  if(e.touches.length!==1){if(manualPointer?.touch)cancelManualTouch();return;}
+  const card=e.target.closest('[data-person]');
+  if(!manualEditor || !card) return;
+  const t=e.touches[0],rect=card.getBoundingClientRect();
+  clearManualDragVisual();
+  const p=manualPointer={id:t.identifier,touch:true,index:Number(card.dataset.person),x:t.clientX,y:t.clientY,dragging:false,
+    grabX:Math.max(14,Math.min(200,t.clientX-rect.left)),grabY:Math.max(12,Math.min(45,t.clientY-rect.top)),
+    offset:card.hasAttribute('data-lesson-start')?Math.floor((t.clientY-rect.top)/32):0};
+  manualHoldTimer=setTimeout(()=>{
+    manualHoldTimer=null;
+    if(manualPointer!==p || !manualEditor) return;
+    p.dragging=true;manualEditor.selected=p.index;manualEditor.pending=null;
+    // Update selection and availability in place, without detaching the finger's target.
+    manualDialog.querySelectorAll('.manual-person').forEach(el=>el.setAttribute('aria-pressed',String(Number(el.dataset.person)===p.index)));
+    manualDialog.querySelectorAll('.manual-lesson').forEach(el=>el.classList.toggle('selected',Number(el.dataset.person)===p.index));
+    manualDialog.querySelectorAll('.manual-day').forEach(el=>{el.style.cssText=manualStyle(p.index);});
+    manualDialog.querySelectorAll('.manual-slot').forEach(el=>{
+      const d=Number(el.dataset.day),start=Number(el.dataset.slot);
+      el.classList.toggle('available',manualEditor.offered.has(key(d,start)) && manualCurrent().avail.has(key(d,start)));
+      el.classList.toggle('valid',!manualReason(manualCurrent(),d,start));
+    });
+    moveManualDragVisual(p.x,p.y,null);
+    manualEditor.message='Lesson picked up. Drag to a time or to Not placed.';updateManualPreview();
+  },250);
+},{passive:true});
+manualDialog.addEventListener('touchmove',e=>{
+  const p=manualPointer;
+  if(!p?.touch) return;
+  const t=Array.from(e.touches).find(t=>t.identifier===p.id);
+  if(!t || e.touches.length!==1){cancelManualTouch();return;}
+  if(!p.dragging){
+    if(Math.hypot(t.clientX-p.x,t.clientY-p.y)>8){
+      clearTimeout(manualHoldTimer);manualHoldTimer=null;manualPointer=null;
+      manualSuppressClickUntil=Date.now()+400;
+    }
+    return; // Never prevent the initial swipe: native scrolling and momentum win.
+  }
+  if(!e.cancelable){cancelManualTouch();return;} // A native scroll has already won.
+  e.preventDefault();
+  moveManualPointer({pointerId:p.id,clientX:t.clientX,clientY:t.clientY,preventDefault(){}});
+},{passive:false});
+manualDialog.addEventListener('touchend',e=>{
+  const p=manualPointer;
+  if(!p?.touch) return;
+  const t=Array.from(e.changedTouches).find(t=>t.identifier===p.id);
+  if(!t) return;
+  endManualPointer({pointerId:p.id,clientX:t.clientX,clientY:t.clientY});
+},{passive:true});
+manualDialog.addEventListener('touchcancel',()=>{if(manualPointer?.touch)cancelManualTouch();},{passive:true});
+manualDialog.addEventListener('scroll',()=>{
+  if(manualPointer?.touch && !manualPointer.dragging)cancelManualTouch();
+},true);
+manualDialog.addEventListener('contextmenu',e=>{if(e.target.closest('[data-person]'))e.preventDefault();});
 
 function runSolver() {
   const rnd = activeRound();

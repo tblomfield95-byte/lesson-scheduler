@@ -719,6 +719,15 @@
   body.manual-open{overflow:hidden}
   .manual-dialog{padding:0;border:1px solid var(--rule);border-radius:20px;background:var(--paper);color:var(--ink);width:min(1180px,96vw);max-width:none;height:min(860px,92dvh);max-height:96dvh;box-shadow:0 24px 100px #211c1740;overflow:hidden}
   .manual-dialog::backdrop{background:#211c1766;backdrop-filter:blur(3px)}
+  .manual-dialog[open]{animation:manual-appear .28s cubic-bezier(.22,.72,.16,1)}
+  .manual-dialog[open]::backdrop{animation:manual-backdrop-appear .28s ease-out}
+  @keyframes manual-appear{from{opacity:0;transform:translateY(12px) scale(.975)}to{opacity:1;transform:none}}
+  @keyframes manual-backdrop-appear{from{opacity:0}to{opacity:1}}
+  @media(prefers-reduced-motion:reduce){.manual-dialog[open],.manual-dialog[open]::backdrop{animation:none}}
+  .manual-drag-card{position:absolute;top:0;left:0;z-index:20;width:220px;padding:12px 14px;border:2px solid var(--student);border-radius:9px;background:linear-gradient(var(--student-soft),var(--student-soft)),#fff;box-shadow:0 12px 30px #211c1733;pointer-events:none;user-select:none;will-change:transform}
+  .manual-drag-card strong,.manual-drag-card small{display:block;overflow-wrap:anywhere}.manual-drag-card strong{font-size:14px}.manual-drag-card small{font-size:12px;color:var(--ink-soft);margin-top:4px}
+  .manual-lesson.manual-drag-source{opacity:.3}
+  .manual-tray.manual-drop-active{border-color:var(--sig);background:var(--sig-soft);box-shadow:inset 0 0 0 1px var(--sig)}
   .manual-shell{height:100%;display:flex;flex-direction:column;min-height:0}
   .manual-head{padding:20px 24px 14px;border-bottom:1px solid var(--rule);display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .manual-head h2{font:600 27px var(--serif);margin:0 0 5px}.manual-head p{margin:0;color:var(--ink-soft);font-size:13px}
@@ -1902,6 +1911,7 @@ function unplaceManualLesson() {
 }
 function closeManualEditor() {
   const trigger=manualEditor && manualEditor.trigger;
+  clearManualDragVisual();
   manualPointer=null;manualEditor=null;
   manualDialog.close();document.body.classList.remove('manual-open');
   if(trigger && trigger.isConnected) trigger.focus({preventScroll:true});
@@ -1938,7 +1948,28 @@ manualDialog.addEventListener('click',e=>{
   else if(action==='undo' && m.history.length){m.assign=m.history.pop();m.pending=null;m.message='Last move undone.';renderManualEditor();}
   else if(action==='reset'){manualRemember();m.assign=manualCopy(m.initial);m.pending=null;m.message='Returned to the opening arrangement.';renderManualEditor();}
 });
-let manualPointer=null,manualSuppressClickUntil=0;
+let manualPointer=null,manualSuppressClickUntil=0,manualDragGhost=null;
+function clearManualDragVisual() {
+  if(manualDragGhost){manualDragGhost.remove();manualDragGhost=null;}
+  manualDialog.querySelectorAll('.manual-drag-source').forEach(el=>el.classList.remove('manual-drag-source'));
+  manualDialog.querySelector('[data-manual-tray]')?.classList.remove('manual-drop-active');
+}
+function moveManualDragVisual(x,y,target) {
+  const p=manualPointer,person=manualCurrent();
+  if(!manualDragGhost){
+    manualDragGhost=document.createElement('div');
+    manualDragGhost.className='manual-drag-card';
+    manualDragGhost.setAttribute('aria-hidden','true');
+    manualDragGhost.style.cssText=manualStyle(p.index);
+    manualDragGhost.innerHTML='<strong>'+escapeHTML(person.name)+'</strong><small>'+person.lesson*15+' min</small>';
+    manualDialog.appendChild(manualDragGhost);
+    manualDialog.querySelector('.manual-lesson[data-person="'+p.index+'"]')?.classList.add('manual-drag-source');
+  }
+  const rect=manualDialog.getBoundingClientRect();
+  const scale=rect.width/manualDialog.offsetWidth || 1;
+  manualDragGhost.style.transform='translate3d('+((x-rect.left)/scale-p.grabX)+'px,'+((y-rect.top)/scale-p.grabY)+'px,0)';
+  manualDialog.querySelector('[data-manual-tray]')?.classList.toggle('manual-drop-active',!!target?.tray);
+}
 manualDialog.addEventListener('pointerdown',e=>{
   const card=e.target.closest('[data-person]');
   if(!manualEditor || !card || e.button!==0 || !e.isPrimary) return;
@@ -1946,6 +1977,7 @@ manualDialog.addEventListener('pointerdown',e=>{
   if(e.pointerType==='touch' && !card.hasAttribute('data-lesson-start') && !e.target.closest('.manual-grip')) return;
   const rect=card.getBoundingClientRect();
   manualPointer={id:e.pointerId,index:Number(card.dataset.person),x:e.clientX,y:e.clientY,dragging:false,
+    grabX:Math.max(14,Math.min(200,e.clientX-rect.left)),grabY:Math.max(12,Math.min(45,e.clientY-rect.top)),
     offset:card.hasAttribute('data-lesson-start')?Math.floor((e.clientY-rect.top)/32):0};
   manualDialog.setPointerCapture(e.pointerId);
 });
@@ -1970,6 +2002,7 @@ manualDialog.addEventListener('pointermove',e=>{
     if(e.clientX<rect.left+35)scroll.scrollLeft-=12;
   }
   const target=manualPointerTarget(e.clientX,e.clientY);
+  moveManualDragVisual(e.clientX,e.clientY,target);
   manualEditor.pending=target && !target.tray?target:null;
   manualEditor.message=target?.tray?'Release to move this lesson to Not placed.':'';
   updateManualPreview();
@@ -1977,6 +2010,7 @@ manualDialog.addEventListener('pointermove',e=>{
 manualDialog.addEventListener('pointerup',e=>{
   if(!manualPointer || e.pointerId!==manualPointer.id || !manualEditor) return;
   const pointer=manualPointer,target=pointer.dragging?manualPointerTarget(e.clientX,e.clientY):null;
+  clearManualDragVisual();
   manualPointer=null;manualSuppressClickUntil=Date.now()+400;
   if(manualDialog.hasPointerCapture(e.pointerId))manualDialog.releasePointerCapture(e.pointerId);
   if(!pointer.dragging){manualEditor.selected=pointer.index;manualEditor.pending=null;manualEditor.message='';renderManualEditor();}
@@ -1985,7 +2019,13 @@ manualDialog.addEventListener('pointerup',e=>{
   else{manualEditor.pending=null;manualEditor.message='Lesson kept in its original position.';updateManualPreview();}
 });
 manualDialog.addEventListener('pointercancel',()=>{
+  clearManualDragVisual();
   manualPointer=null;
+  if(manualEditor){manualEditor.pending=null;manualEditor.message='Move cancelled.';updateManualPreview();}
+});
+manualDialog.addEventListener('lostpointercapture',()=>{
+  if(!manualPointer) return;
+  clearManualDragVisual();manualPointer=null;
   if(manualEditor){manualEditor.pending=null;manualEditor.message='Move cancelled.';updateManualPreview();}
 });
 

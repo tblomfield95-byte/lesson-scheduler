@@ -728,7 +728,7 @@
   .manual-person{position:relative;display:block;width:100%;text-align:left;margin-bottom:9px;padding:11px 30px 11px 12px;background:white;border:1px solid var(--rule);border-left:5px solid var(--student);border-radius:9px;font:inherit;color:var(--ink);cursor:grab;touch-action:manipulation;user-select:none;-webkit-user-select:none}
   .manual-grip{position:absolute;right:0;top:0;bottom:0;width:28px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--ink-soft);touch-action:none;cursor:grab}
   .manual-person strong,.manual-person small{display:block;overflow-wrap:anywhere}.manual-person strong{font-size:14px}.manual-person small{font-size:12px;color:var(--ink-soft);margin-top:4px}
-  .manual-person[aria-pressed="true"]{background:var(--student-soft);outline:2px solid var(--student);outline-offset:1px}
+  .manual-person[aria-pressed="true"]{background:var(--student-soft);border-color:var(--student);outline:none}
   .manual-workspace{display:flex;flex-direction:column;min-width:0;min-height:0}
   .manual-legend{padding:10px 16px;font-size:12px;color:var(--ink-soft);border-bottom:1px solid var(--rule)}
   .manual-scroll{overflow:auto;flex:1;min-height:0;overscroll-behavior:contain}
@@ -739,13 +739,12 @@
   .manual-day{position:relative;border-left:1px solid var(--rule)}
   .manual-slot{display:block;height:32px;width:100%;padding:0;border:0;border-bottom:1px solid #e4ded4;background:#eae6de;border-radius:0;text-align:left;font:inherit;touch-action:manipulation}
   .manual-slot.offered{background:#fff}.manual-slot.available{background:var(--student-soft)}
-  .manual-slot.valid{background:var(--student-soft);box-shadow:inset 4px 0 var(--student);cursor:pointer}
-  .manual-slot.valid::after{content:'·';color:var(--student);margin-left:9px;font-size:20px}
+  .manual-slot.valid{background:linear-gradient(var(--student-soft),var(--student-soft)),linear-gradient(var(--student-soft),var(--student-soft)),#fff;cursor:pointer}
   .manual-slot:focus-visible{position:relative;outline:2px solid var(--sig);outline-offset:-2px;z-index:4}
-  .manual-lesson,.manual-preview{position:absolute;left:7px;right:7px;border:1px solid var(--student);border-left:4px solid var(--student);border-radius:7px;background:var(--student-soft);color:var(--ink);padding:7px;text-align:left;overflow:hidden;font:inherit;z-index:2}
+  .manual-lesson,.manual-preview{position:absolute;left:7px;right:7px;border:1px solid var(--student);border-radius:7px;background:linear-gradient(var(--student-soft),var(--student-soft)),#fff;color:var(--ink);padding:7px 10px;text-align:left;overflow:hidden;font:inherit;z-index:2}
   .manual-lesson{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
   .manual-lesson strong,.manual-lesson small{display:block;overflow-wrap:anywhere}.manual-lesson strong{font-size:13px}.manual-lesson small{font-size:11px;margin-top:3px}
-  .manual-lesson.selected{outline:2px solid var(--student);outline-offset:1px;z-index:3}
+  .manual-lesson.selected{outline:none;box-shadow:inset 0 0 0 1px var(--student);z-index:3}
   .manual-preview{pointer-events:none;z-index:4;border:2px dashed var(--student);background:var(--student-soft);opacity:.92;font-size:12px;font-weight:600}
   .manual-preview.invalid{border-color:#ad3030;background:#fae8e8}
   .manual-tray{border:1px dashed var(--rule);padding:12px;border-radius:10px;margin-top:18px;font-size:12px;color:var(--ink-soft)}
@@ -1814,7 +1813,7 @@ function openManualEditor() {
     if (a && !manualReason(p, a.d, a.start)) manualEditor.assign.push({id:p.id,name:p.name,lesson:p.lesson,d:a.d,start:a.start});
   }
   manualEditor.initial = manualCopy(manualEditor.assign);
-  manualDialog.innerHTML = '<div class="manual-shell"><header class="manual-head"><div><h2 id="manualTitle">Rearrange your week</h2><p>Drag a lesson, or select a student and tap a starting time.</p></div><button type="button" class="btn" data-manual="cancel" autofocus>Cancel</button></header><div class="manual-main"><aside class="manual-people" aria-label="Included students"></aside><section class="manual-workspace" aria-label="Teaching days"><div class="manual-legend">Pale colour: student availability · Coloured edge: a valid start · Grey: not offered</div><div class="manual-scroll"><div class="manual-grid"></div></div></section></div><footer class="manual-bottom"><p class="manual-status" role="status" aria-live="polite"></p><div class="manual-actions"><button type="button" class="btn" data-manual="undo">Undo</button><button type="button" class="btn" data-manual="reset">Reset</button><button type="button" class="btn" data-manual="unplace">Move to Not placed</button><button type="button" class="btn" data-manual="place" hidden>Place lesson</button><button type="button" class="btn sig manual-save" data-manual="save">Use this arrangement</button></div></footer></div>';
+  manualDialog.innerHTML = '<div class="manual-shell"><header class="manual-head"><div><h2 id="manualTitle">Rearrange your week</h2><p>Drag a lesson, or select a student and tap a starting time.</p></div><button type="button" class="btn" data-manual="cancel" autofocus>Cancel</button></header><div class="manual-main"><aside class="manual-people" aria-label="Included students"></aside><section class="manual-workspace" aria-label="Teaching days"><div class="manual-legend">Pale colour: student availability · Deeper shading: a valid start · Grey: not offered</div><div class="manual-scroll"><div class="manual-grid"></div></div></section></div><footer class="manual-bottom"><p class="manual-status" role="status" aria-live="polite"></p><div class="manual-actions"><button type="button" class="btn" data-manual="undo">Undo</button><button type="button" class="btn" data-manual="reset">Reset</button><button type="button" class="btn" data-manual="unplace">Move to Not placed</button><button type="button" class="btn" data-manual="place" hidden>Place lesson</button><button type="button" class="btn sig manual-save" data-manual="save">Use this arrangement</button></div></footer></div>';
   renderManualEditor();
   document.body.classList.add("manual-open");
   manualDialog.showModal();

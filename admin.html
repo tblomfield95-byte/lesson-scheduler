@@ -1602,16 +1602,17 @@ async function loadState() {
 async function refreshSavedState() {
   // Opening Safari's native date picker can produce a window-focus event.
   // Never let a background state refresh replace the DOM underneath it.
-  if (manualEditor || Date.now() < suppressStateRefreshUntil) return;
+  if (manualEditor || teachingLocationHasEdits() || Date.now() < suppressStateRefreshUntil) return;
   if (document.activeElement && document.activeElement.matches('.manual-date-field input[type="date"]')) return;
   if (!stateReady || stateBlocked || saveInFlight || refreshInFlight || stateFingerprint() !== savedFingerprint) return;
   refreshInFlight = true;
   try {
     const saved = await readLatestState();
     // The user may have edited while the read was in flight.
-    if (manualEditor || saveInFlight || stateBlocked || stateFingerprint() !== savedFingerprint || saved._revision <= stateRevision) return;
+    if (manualEditor || teachingLocationHasEdits() || saveInFlight || stateBlocked || stateFingerprint() !== savedFingerprint || saved._revision <= stateRevision) return;
     const view = {tab:S.tab,week:S.week,scheduleView:S.scheduleView,hoursSort:S.hoursSort,draft:S.draft};
     applySavedState(saved); Object.assign(S,view); ensureRound(S.week);
+    if(currentSection==='profile')openTeachingLocationDraft();
     stateRevision = saved._revision;
     savedFingerprint = stateFingerprint();
     render();
@@ -1622,7 +1623,7 @@ window.addEventListener("focus",refreshSavedState);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState === "visible") refreshSavedState();});
 setInterval(()=>{if(document.visibilityState === "visible") refreshSavedState();},30000);
 window.addEventListener("beforeunload",e=>{
-  if (manualDirty() || (stateReady && stateFingerprint() !== savedFingerprint)) { e.preventDefault(); e.returnValue=""; }
+  if (manualDirty() || teachingLocationHasEdits() || (stateReady && stateFingerprint() !== savedFingerprint)) { e.preventDefault(); e.returnValue=""; }
 });
 
 const taughtFor = (id) => S.log.filter(e => e.studentId === id).reduce((s, e) => s + e.hours, 0);
@@ -2273,6 +2274,34 @@ function calendarText(value) {
     .replace(/;/g, "\\;").replace(/,/g, "\\,");
 }
 
+// RFC 6868 escaping for quoted iCalendar parameter values (not TEXT values).
+function calendarParameter(value) {
+  return '"' + String(value).replace(/\^/g, '^^').replace(/\r\n|\r|\n/g, '^n').replace(/"/g, "^'").replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '') + '"';
+}
+function teachingCoordinates(value) {
+  const text=String(value || '').trim();
+  if(!text) return null;
+  const match=text.match(/^([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)$/);
+  if(!match) return null;
+  const latitude=Number(match[1]),longitude=Number(match[2]);
+  if(!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude)>90 || Math.abs(longitude)>180) return null;
+  return {latitude,longitude};
+}
+function calendarLocationLines(location = S.settings.teachingLocation) {
+  if(!location || !String(location.name || '').trim()) return [];
+  const name=String(location.name).trim(),address=String(location.address || '').trim();
+  const lines=['LOCATION:'+calendarText(name+(address?'\n'+address:''))];
+  const geo=teachingCoordinates(location.coordinates);
+  if(geo){
+    const coordinates=geo.latitude+','+geo.longitude;
+    lines.push('GEO:'+geo.latitude+';'+geo.longitude,
+      'X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100;X-TITLE='+calendarParameter(name)+
+      (address?';X-ADDRESS='+calendarParameter(address):'')+':geo:'+coordinates,
+      'URL:https://maps.apple.com/?ll='+coordinates+'&q='+encodeURIComponent(name));
+  }
+  return lines;
+}
+
 function foldCalendarLine(line) {
   // iCalendar limits physical lines to 75 UTF-8 bytes, including continuations.
   const encoder = new TextEncoder();
@@ -2302,7 +2331,7 @@ function buildScheduleCalendar(rnd) {
     lines.push("BEGIN:VEVENT", "UID:" + identity + "@cadenceplanner.co.uk", "DTSTAMP:" + stamp,
       "DTSTART;TZID=Europe/London:" + calendarLessonTimestamp(plan.weekStart, lesson.d, rnd.dayStartHour, lesson.start),
       "DTEND;TZID=Europe/London:" + calendarLessonTimestamp(plan.weekStart, lesson.d, rnd.dayStartHour, Number(lesson.start) + Number(lesson.lesson)),
-      "SUMMARY:" + calendarText(firstName + " lesson"), "STATUS:CONFIRMED", "END:VEVENT");
+      "SUMMARY:" + calendarText(firstName + " lesson"), ...calendarLocationLines(), "STATUS:CONFIRMED", "END:VEVENT");
   });
   lines.push("END:VCALENDAR");
   return lines.map(foldCalendarLine).join("\r\n") + "\r\n";
@@ -2558,6 +2587,48 @@ async function saveProfile() {
 }
 
 // Transient — the "add a student" row on the Students page, cleared once added.
+// Location uses the existing revision-protected state store, not the profile
+// database table, so no worker/schema change is needed.
+const RAM_TEACHING_LOCATION = {
+  name:'Royal Academy of Music',address:'Marylebone Road, London NW1 5HT, United Kingdom',coordinates:'51.52352, -0.15188'
+};
+let teachingLocationDraft=null;
+function openTeachingLocationDraft() {
+  teachingLocationDraft={name:'',address:'',coordinates:'',...(S.settings.teachingLocation || {})};
+}
+function teachingLocationHasEdits() {
+  return currentSection==='profile' && teachingLocationDraft &&
+    JSON.stringify(teachingLocationDraft)!==JSON.stringify({name:'',address:'',coordinates:'',...(S.settings.teachingLocation || {})});
+}
+function teachingLocationMapPreview(d) {
+  const geo=teachingCoordinates(d.coordinates);
+  return geo?'<a target="_blank" rel="noopener" href="https://maps.apple.com/?ll='+geo.latitude+','+geo.longitude+'&amp;q='+encodeURIComponent(d.name)+'">Check map pin ↗</a>':'Without valid coordinates, the calendar receives the venue name and address as text.';
+}
+function saveTeachingLocation() {
+  if(!stateReady || stateBlocked) return;
+  const value={};
+  for(const key of ['name','address','coordinates']) value[key]=String(document.querySelector('[data-location-field="'+key+'"]')?.value ?? teachingLocationDraft?.[key] ?? '').trim();
+  if(!value.name && (value.address || value.coordinates)){flash('Enter a venue name, or clear all fields to remove the location');return;}
+  if(value.name.length>160 || value.address.length>300 || value.coordinates.length>80){flash('Please shorten the location details');return;}
+  const geo=teachingCoordinates(value.coordinates);
+  if(value.coordinates && !geo){flash('Enter latitude, longitude — for example 51.52352, -0.15188');return;}
+  if(geo)value.coordinates=geo.latitude+', '+geo.longitude;
+  S.settings.teachingLocation=value.name?value:null;
+  teachingLocationDraft={...value};
+  render(); // Queues the normal revision-protected save and shows save errors if needed.
+  flash(value.name?'Teaching location updated':'Teaching location removed');
+}
+function renderTeachingLocation() {
+  if(!teachingLocationDraft)openTeachingLocationDraft();
+  const d=teachingLocationDraft;
+  return '<section class="panel" style="margin-top:24px"><h3>Teaching location</h3><p class="lede">Added to every lesson when you use Add to calendar. Leave blank if you teach in different places.</p>'+
+    '<div class="btnrow"><button class="btn" data-action="useRAMLocation">Use Royal Academy of Music</button></div>'+
+    '<div class="field"><label for="teachingVenue">Venue name</label><input id="teachingVenue" maxlength="160" data-location-field="name" value="'+manualAttribute(d.name)+'" placeholder="Royal Academy of Music"></div>'+
+    '<div class="field"><label for="teachingAddress">Address <span class="hint">(optional)</span></label><input id="teachingAddress" maxlength="300" data-location-field="address" value="'+manualAttribute(d.address)+'" placeholder="Street, city and postcode"></div>'+
+    '<details'+(d.coordinates?' open':'')+'><summary style="cursor:pointer;margin-bottom:12px">Map pin <span class="hint">(optional)</span></summary><div class="field"><label for="teachingCoordinates">Latitude, longitude</label><input id="teachingCoordinates" type="text" maxlength="80" autocapitalize="off" spellcheck="false" data-location-field="coordinates" value="'+manualAttribute(d.coordinates)+'" placeholder="51.52352, -0.15188"><p class="hint">Coordinates attach a map pin, not just a text label. The Academy preset fills these in for you. Other venues can use coordinates copied from a map.</p></div></details>'+
+    '<p class="hint" id="teachingMapPreview">'+teachingLocationMapPreview(d)+'</p>'+
+    '<div class="btnrow"><button class="btn sig" data-action="saveTeachingLocation">Save location</button><button class="btn" data-action="clearTeachingLocation">Clear</button></div><p class="hint">Applies to new exports only. Existing calendar events are not changed. Map display depends on your calendar app.</p></section>';
+}
 let newStudentDraft = { name: "", allocated: "" };
 function addStudent() {
   const name = (newStudentDraft.name || "").trim();
@@ -2821,6 +2892,7 @@ function saveSettings() {
   if (!(end > start)) { flash("End time must be after start time"); return; }
   const switchingToTerms = settingsDraft.schedulingMode === "terms" && S.settings.schedulingMode === "rolling";
   S.settings = {
+    teachingLocation: S.settings.teachingLocation || null,
     accent: Object.prototype.hasOwnProperty.call(ACCENT_THEMES, settingsDraft.accent) ? settingsDraft.accent : "oxblood",
     includeWeekends: !!settingsDraft.includeWeekends,
     dayStartHour: start,
@@ -3415,6 +3487,7 @@ function goSection(section) {
   const fromDepth = currentSection === "scheduler" ? 0 : 1;
   const toDepth = section === "scheduler" ? 0 : 1;
   currentSection = section;
+  if (section === "profile") openTeachingLocationDraft();
   if (section === "termdates") openTermDatesDraft();
   if (section === "settings") { openSettingsDraft(); settingsTab = "general"; }
   sidebarOpen = false; syncSidebarDOM();
@@ -3429,6 +3502,7 @@ function renderProfileSection() {
     '<div class="field"><label>Instrument</label><input type="text" data-bind="profileInstrument" value="' + escapeHTML(ME.instrument || "") + '"></div>' +
     '<div class="field"><label for="profileStudio">Institution or studio <span class="hint">(optional)</span></label><input id="profileStudio" type="text" maxlength="160" data-bind="profileStudio" value="' + escapeHTML(ME.studio || "") + '"></div>' +
     '<div class="btnrow"><button class="btn sig" data-action="saveProfile">Save changes</button></div>' +
+    renderTeachingLocation() +
     '<div class="panel" style="margin-top:24px"><h3>Your account</h3><p class="lede">Preview the student page for the selected week without changing any replies.</p><div class="btnrow"><a class="btn" target="_blank" rel="noopener" href="/s/' + encodeURIComponent(ME.slug || "") + '/' + S.week + '?preview=1">Preview student page ↗</a><button class="btn" data-action="downloadAccount">Download my data</button><button class="btn" data-action="signOutAll">Sign out of all devices</button></div><p class="hint">The download contains your saved profile, students, availability, schedules and hours. Keep it somewhere private.</p></div>' +
     '<details class="panel" style="margin-top:24px"' + (confirmingDeleteAccount ? ' open' : '') + '><summary style="cursor:pointer;color:var(--sig);font-weight:600">Account deletion</summary>' +
     '<p class="lede" style="margin-bottom:12px">Deleting your account removes your profile, students, schedules and hours from Cadence, and frees up this email address. Visit the login page again after that and it\u2019ll treat you as a brand new sign-up. This can\u2019t be undone.</p>' +
@@ -4176,6 +4250,9 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "toggleMoreOptions") toggleMoreOptions();
   else if (action === "toggleSidebar") toggleSidebar();
   else if (action === "saveProfile") saveProfile();
+  else if (action === "useRAMLocation") {teachingLocationDraft={...RAM_TEACHING_LOCATION};render();}
+  else if (action === "saveTeachingLocation") saveTeachingLocation();
+  else if (action === "clearTeachingLocation") {teachingLocationDraft={name:'',address:'',coordinates:''};render();}
   else if (action === "toggleStudentFilter") toggleStudentFilter();
   else if (action === "includeAllStudents") includeAllStudents();
   else if (action === "downloadAccount") downloadAccount();
@@ -4287,6 +4364,14 @@ document.getElementById("app").addEventListener("keydown", (e) => {
   toggleHoursPanel(row.dataset.id, row);
 });
 
+document.getElementById("app").addEventListener("input", (e) => {
+  const field=e.target.dataset.locationField;
+  if(!stateReady || stateBlocked || !['name','address','coordinates'].includes(field))return;
+  if(!teachingLocationDraft)openTeachingLocationDraft();
+  teachingLocationDraft[field]=e.target.value;
+  const preview=document.getElementById('teachingMapPreview');
+  if(preview)preview.innerHTML=teachingLocationMapPreview(teachingLocationDraft);
+});
 document.getElementById("app").addEventListener("change", (e) => {
   if (!stateReady || stateBlocked) return;
   const el = e.target.closest("[data-bind]");

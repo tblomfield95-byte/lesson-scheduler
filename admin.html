@@ -715,6 +715,55 @@
   .accent-option{display:flex;align-items:center;gap:9px;min-height:52px;padding:10px;border:1px solid var(--rule);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
   .accent-option[aria-pressed="true"]{border-color:var(--sig);background:var(--sig-soft);box-shadow:inset 0 0 0 1px var(--sig)}
   .accent-swatch{display:flex;align-items:center;justify-content:center;flex:none;width:26px;height:26px;border-radius:50%;color:white;font-weight:700}
+  /* Manual arrangement editor */
+  body.manual-open{overflow:hidden}
+  .manual-dialog{padding:0;border:1px solid var(--rule);border-radius:20px;background:var(--paper);color:var(--ink);width:min(1180px,96vw);max-width:none;height:min(860px,92dvh);max-height:96dvh;box-shadow:0 24px 100px #211c1740;overflow:hidden}
+  .manual-dialog::backdrop{background:#211c1766;backdrop-filter:blur(3px)}
+  .manual-shell{height:100%;display:flex;flex-direction:column;min-height:0}
+  .manual-head{padding:20px 24px 14px;border-bottom:1px solid var(--rule);display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .manual-head h2{font:600 27px var(--serif);margin:0 0 5px}.manual-head p{margin:0;color:var(--ink-soft);font-size:13px}
+  .manual-main{display:grid;grid-template-columns:230px minmax(0,1fr);flex:1;min-height:0}
+  .manual-people{padding:16px;overflow:auto;border-right:1px solid var(--rule)}
+  .manual-people h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin:4px 0 12px;color:var(--ink-soft)}
+  .manual-person{position:relative;display:block;width:100%;text-align:left;margin-bottom:9px;padding:11px 30px 11px 12px;background:white;border:1px solid var(--rule);border-left:5px solid var(--student);border-radius:9px;font:inherit;color:var(--ink);cursor:grab;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+  .manual-grip{position:absolute;right:0;top:0;bottom:0;width:28px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--ink-soft);touch-action:none;cursor:grab}
+  .manual-person strong,.manual-person small{display:block;overflow-wrap:anywhere}.manual-person strong{font-size:14px}.manual-person small{font-size:12px;color:var(--ink-soft);margin-top:4px}
+  .manual-person[aria-pressed="true"]{background:var(--student-soft);outline:2px solid var(--student);outline-offset:1px}
+  .manual-workspace{display:flex;flex-direction:column;min-width:0;min-height:0}
+  .manual-legend{padding:10px 16px;font-size:12px;color:var(--ink-soft);border-bottom:1px solid var(--rule)}
+  .manual-scroll{overflow:auto;flex:1;min-height:0;overscroll-behavior:contain}
+  .manual-grid{display:grid;grid-template-columns:62px repeat(var(--day-count),minmax(130px,1fr));min-width:calc(62px + var(--day-count)*130px);position:relative}
+  .manual-day-title{position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--rule);padding:8px 5px;text-align:center;font-size:12px;font-weight:600;height:56px;display:flex;align-items:center;justify-content:center}
+  .manual-time-column{position:relative;background:var(--paper)}
+  .manual-time{position:absolute;left:0;width:100%;padding:3px 6px;text-align:right;font-size:11px;color:var(--ink-soft);height:32px}
+  .manual-day{position:relative;border-left:1px solid var(--rule)}
+  .manual-slot{display:block;height:32px;width:100%;padding:0;border:0;border-bottom:1px solid #e4ded4;background:#eae6de;border-radius:0;text-align:left;font:inherit;touch-action:manipulation}
+  .manual-slot.offered{background:#fff}.manual-slot.available{background:var(--student-soft)}
+  .manual-slot.valid{background:var(--student-soft);box-shadow:inset 4px 0 var(--student);cursor:pointer}
+  .manual-slot.valid::after{content:'·';color:var(--student);margin-left:9px;font-size:20px}
+  .manual-slot:focus-visible{position:relative;outline:2px solid var(--sig);outline-offset:-2px;z-index:4}
+  .manual-lesson,.manual-preview{position:absolute;left:7px;right:7px;border:1px solid var(--student);border-left:4px solid var(--student);border-radius:7px;background:var(--student-soft);color:var(--ink);padding:7px;text-align:left;overflow:hidden;font:inherit;z-index:2}
+  .manual-lesson{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+  .manual-lesson strong,.manual-lesson small{display:block;overflow-wrap:anywhere}.manual-lesson strong{font-size:13px}.manual-lesson small{font-size:11px;margin-top:3px}
+  .manual-lesson.selected{outline:2px solid var(--student);outline-offset:1px;z-index:3}
+  .manual-preview{pointer-events:none;z-index:4;border:2px dashed var(--student);background:var(--student-soft);opacity:.92;font-size:12px;font-weight:600}
+  .manual-preview.invalid{border-color:#ad3030;background:#fae8e8}
+  .manual-tray{border:1px dashed var(--rule);padding:12px;border-radius:10px;margin-top:18px;font-size:12px;color:var(--ink-soft)}
+  .manual-tray .manual-person:last-child{margin-bottom:0}.manual-tray p{margin:0}
+  .manual-bottom{padding:12px 24px max(14px,env(safe-area-inset-bottom));border-top:1px solid var(--rule);background:var(--paper)}
+  .manual-status{font-size:13px;margin:0 0 10px;min-height:19px}.manual-status strong{font-weight:600}
+  .manual-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.manual-actions .manual-save{margin-left:auto}
+  .manual-dialog .btn{min-height:42px;font-size:13px}.manual-dialog button:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
+  .manual-dialog button:disabled{opacity:.45;cursor:default}.manual-dialog .manual-slot:disabled{opacity:1}
+  @media(max-width:650px){
+    .manual-dialog{width:100%;height:100dvh;max-height:100dvh;max-width:100%;margin:0;border:0;border-radius:0}
+    .manual-head{padding:max(14px,env(safe-area-inset-top)) 14px 12px}.manual-head h2{font-size:23px}.manual-head p{font-size:12px}
+    .manual-main{display:flex;flex-direction:column}.manual-people{padding:10px 12px;display:flex;gap:9px;overflow:auto;flex-shrink:0;max-height:135px;border-right:0;border-bottom:1px solid var(--rule)}
+    .manual-people>h3{display:none}.manual-people .manual-person{width:158px;min-width:158px;margin:2px 0}.manual-tray{display:flex;align-items:center;gap:9px;margin:0;padding:3px 8px}.manual-tray h3{min-width:64px;margin:0}.manual-tray p{min-width:95px}
+    .manual-workspace{flex:1}.manual-legend{padding:7px 12px;font-size:11px}.manual-bottom{padding:10px 12px max(12px,env(safe-area-inset-bottom))}
+    .manual-actions{gap:6px}.manual-dialog .btn{padding:8px 10px;font-size:12px}.manual-status{font-size:12px;margin-bottom:8px}.manual-actions .manual-save{margin-left:0}
+  }
+
 </style>
 <style>
   #syncNotice{padding:12px 16px;background:#FFF2D8;border-bottom:1px solid #D5B580;color:#503C1D}
@@ -738,6 +787,7 @@
 <div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
 <div id="sidebarPanel" class="sidebar-panel"></div>
 <div id="toast" class="toast" hidden></div>
+<dialog id="manualDialog" class="manual-dialog" aria-labelledby="manualTitle"></dialog>
 <script>
 const ACCENT_THEMES = {
   oxblood: { name: "Oxblood", ink: "#6E1423", soft: "#EDDEDD" },
@@ -1542,14 +1592,14 @@ async function loadState() {
 async function refreshSavedState() {
   // Opening Safari's native date picker can produce a window-focus event.
   // Never let a background state refresh replace the DOM underneath it.
-  if (Date.now() < suppressStateRefreshUntil) return;
+  if (manualEditor || Date.now() < suppressStateRefreshUntil) return;
   if (document.activeElement && document.activeElement.matches('.manual-date-field input[type="date"]')) return;
   if (!stateReady || stateBlocked || saveInFlight || refreshInFlight || stateFingerprint() !== savedFingerprint) return;
   refreshInFlight = true;
   try {
     const saved = await readLatestState();
     // The user may have edited while the read was in flight.
-    if (saveInFlight || stateBlocked || stateFingerprint() !== savedFingerprint || saved._revision <= stateRevision) return;
+    if (manualEditor || saveInFlight || stateBlocked || stateFingerprint() !== savedFingerprint || saved._revision <= stateRevision) return;
     const view = {tab:S.tab,week:S.week,scheduleView:S.scheduleView,hoursSort:S.hoursSort,draft:S.draft};
     applySavedState(saved); Object.assign(S,view); ensureRound(S.week);
     stateRevision = saved._revision;
@@ -1562,7 +1612,7 @@ window.addEventListener("focus",refreshSavedState);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState === "visible") refreshSavedState();});
 setInterval(()=>{if(document.visibilityState === "visible") refreshSavedState();},30000);
 window.addEventListener("beforeunload",e=>{
-  if (stateReady && stateFingerprint() !== savedFingerprint) { e.preventDefault(); e.returnValue=""; }
+  if (manualDirty() || (stateReady && stateFingerprint() !== savedFingerprint)) { e.preventDefault(); e.returnValue=""; }
 });
 
 const taughtFor = (id) => S.log.filter(e => e.studentId === id).reduce((s, e) => s + e.hours, 0);
@@ -1723,6 +1773,222 @@ function adjustLength(id, delta) {
   rnd.result = null;
   render();
 }
+
+/* Manual editing is an isolated draft; only Apply changes saved schedule data. */
+let manualEditor = null;
+const manualDialog = document.getElementById("manualDialog");
+const manualColours = ["#9B354C", "#32679A", "#38765B", "#86569C", "#A86620", "#267F84", "#6C7131", "#8B5843"];
+const manualAttribute = value => escapeHTML(value).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+const manualCopy = assignments => assignments.map(a => ({ ...a }));
+function manualStyle(index) {
+  const hue = Math.round(index * 137.508) % 360;
+  const colour = manualColours[index] || "hsl(" + hue + ",42%,38%)";
+  const soft = manualColours[index] ? colour + "20" : "hsl(" + hue + ",42%,92%)";
+  return '--student:' + colour + ';--student-soft:' + soft;
+}
+function manualReason(person, day, start, assignments = manualEditor.assign) {
+  const m = manualEditor;
+  if (!person || !Number.isInteger(day) || !Number.isInteger(start) || day < 0 || day >= roundDays(m.rnd).length || start < 0 || start + person.lesson > roundSlots(m.rnd) * 2) return "The whole lesson must fit in the day.";
+  for (let i = start; i < start + person.lesson; i++) {
+    if (!m.offered.has(key(day, i))) return "Outside your offered teaching time.";
+    if (!person.avail.has(key(day, i))) return "This student is not available for the whole lesson.";
+  }
+  if (assignments.some(a => a.id !== person.id && a.d === day && start < a.start + a.lesson && start + person.lesson > a.start)) return "This would overlap another lesson.";
+  return "";
+}
+function manualCurrent() { return manualEditor && manualEditor.people[manualEditor.selected]; }
+function manualDirty() { return manualEditor && JSON.stringify(manualEditor.assign) !== JSON.stringify(manualEditor.initial); }
+function openManualEditor() {
+  const rnd = activeRound(), people = getParticipants(rnd).map(p => ({ ...p, avail: expandGridAvailability(p.avail) }));
+  if (!stateReady || stateBlocked || rnd.plan || !people.length || !rnd.offered.size) return;
+  const selected = rnd.result && rnd.result.options[rnd.chosen];
+  const offered = expandGridAvailability(rnd.offered);
+  const cells = [...offered].map(k => k.split("-").map(Number));
+  manualEditor = { rnd, week:S.week, people, offered, days:[...new Set(cells.map(c => c[0]))].sort((a,b)=>a-b),
+    first:Math.floor(Math.min(...cells.map(c=>c[1])) / 4) * 4,
+    last:Math.min(roundSlots(rnd)*2, Math.ceil((Math.max(...cells.map(c=>c[1]))+1)/4)*4),
+    assign:[], initial:[], history:[], selected:0, pending:null, message:"", trigger:document.activeElement };
+  // Revalidate cached options against the current inclusion, duration and availability.
+  for (const p of people) {
+    const a = selected && selected.assign.find(a => a.id === p.id);
+    if (a && !manualReason(p, a.d, a.start)) manualEditor.assign.push({id:p.id,name:p.name,lesson:p.lesson,d:a.d,start:a.start});
+  }
+  manualEditor.initial = manualCopy(manualEditor.assign);
+  manualDialog.innerHTML = '<div class="manual-shell"><header class="manual-head"><div><h2 id="manualTitle">Rearrange your week</h2><p>Drag a lesson, or select a student and tap a starting time.</p></div><button type="button" class="btn" data-manual="cancel" autofocus>Cancel</button></header><div class="manual-main"><aside class="manual-people" aria-label="Included students"></aside><section class="manual-workspace" aria-label="Teaching days"><div class="manual-legend">Pale colour: student availability · Coloured edge: a valid start · Grey: not offered</div><div class="manual-scroll"><div class="manual-grid"></div></div></section></div><footer class="manual-bottom"><p class="manual-status" role="status" aria-live="polite"></p><div class="manual-actions"><button type="button" class="btn" data-manual="undo">Undo</button><button type="button" class="btn" data-manual="reset">Reset</button><button type="button" class="btn" data-manual="unplace">Move to Not placed</button><button type="button" class="btn" data-manual="place" hidden>Place lesson</button><button type="button" class="btn sig manual-save" data-manual="save">Use this arrangement</button></div></footer></div>';
+  renderManualEditor();
+  document.body.classList.add("manual-open");
+  manualDialog.showModal();
+}
+function renderManualEditor() {
+  const m = manualEditor, selected = manualCurrent();
+  const focused = document.activeElement;
+  const focusKey = focused && focused.dataset.manualFocus;
+  const peoplePanel = manualDialog.querySelector('.manual-people');
+  const peopleScroll = [peoplePanel.scrollLeft, peoplePanel.scrollTop];
+  const personCard = (p, index) => {
+    const a = m.assign.find(a => a.id === p.id);
+    const time = a ? roundDays(m.rnd)[a.d] + ' ' + scheduleTimeFor(m.rnd.dayStartHour,a.start) : 'Not placed';
+    return '<button type="button" class="manual-person" data-person="'+index+'" data-manual-focus="person-'+index+'" aria-pressed="'+(index===m.selected)+'" style="'+manualStyle(index)+'"><strong>'+escapeHTML(p.name)+'</strong><small>'+p.lesson*15+' min · '+time+'</small><span class="manual-grip" aria-hidden="true">⠿</span></button>';
+  };
+  peoplePanel.innerHTML = '<h3>Included students</h3>' + m.people.map((p,i)=>m.assign.some(a=>a.id===p.id)?personCard(p,i):'').join('') +
+    '<div class="manual-tray" data-manual-tray><h3>Not placed</h3>' + (m.people.map((p,i)=>!m.assign.some(a=>a.id===p.id)?personCard(p,i):'').join('') || '<p>Drop a lesson here to free its slot.</p>') + '</div>';
+  peoplePanel.scrollLeft=peopleScroll[0]; peoplePanel.scrollTop=peopleScroll[1];
+  const grid = manualDialog.querySelector('.manual-grid');
+  grid.style.setProperty('--day-count',m.days.length);
+  let html = '<div class="manual-day-title">Time</div>' + m.days.map(d=>'<div class="manual-day-title">'+escapeHTML(dayDateLong(m.rnd.weekStart,d))+'</div>').join('');
+  html += '<div class="manual-time-column" style="height:'+((m.last-m.first)*32)+'px">';
+  for(let i=m.first;i<m.last;i++) html += '<div class="manual-time" style="top:'+((i-m.first)*32)+'px">'+scheduleTimeFor(m.rnd.dayStartHour,i)+'</div>';
+  html+='</div>';
+  for(const d of m.days) {
+    html+='<div class="manual-day" data-day="'+d+'" style="'+manualStyle(m.selected)+'">';
+    for(let i=m.first;i<m.last;i++) {
+      const offered=m.offered.has(key(d,i)), available=offered && selected.avail.has(key(d,i));
+      const reason=manualReason(selected,d,i), valid=!reason;
+      html+='<button type="button" class="manual-slot'+(offered?' offered':'')+(available?' available':'')+(valid?' valid':'')+'" data-slot="'+i+'" data-day="'+d+'" data-manual-focus="slot-'+d+'-'+i+'" aria-label="'+escapeHTML(roundDays(m.rnd)[d]+' '+scheduleTimeFor(m.rnd.dayStartHour,i)+(valid?' — preview lesson':': '+reason))+'" '+(!offered?'disabled':'')+'></button>';
+    }
+    m.assign.filter(a=>a.d===d).forEach(a=>{
+      const index=m.people.findIndex(p=>p.id===a.id);
+      html+='<button type="button" class="manual-lesson'+(index===m.selected?' selected':'')+'" data-person="'+index+'" data-lesson-start="'+a.start+'" data-manual-focus="lesson-'+index+'" style="'+manualStyle(index)+';top:'+((a.start-m.first)*32+2)+'px;height:'+(a.lesson*32-4)+'px" aria-label="'+manualAttribute(a.name+', '+roundDays(m.rnd)[d]+' '+scheduleTimeFor(m.rnd.dayStartHour,a.start)+', '+a.lesson*15+' minutes. Select or drag to move.')+'"><strong>'+escapeHTML(a.name)+'</strong><small>'+scheduleTimeFor(m.rnd.dayStartHour,a.start)+'–'+scheduleTimeFor(m.rnd.dayStartHour,a.start+a.lesson)+'</small></button>';
+    });
+    html+='</div>';
+  }
+  grid.innerHTML=html;
+  manualDialog.querySelector('[data-manual="undo"]').disabled=!m.history.length;
+  manualDialog.querySelector('[data-manual="reset"]').disabled=!manualDirty();
+  manualDialog.querySelector('[data-manual="unplace"]').disabled=!m.assign.some(a=>a.id===selected.id);
+  manualDialog.querySelector('[data-manual="save"]').disabled=m.assign.length!==m.people.length;
+  updateManualPreview();
+  if(focusKey) manualDialog.querySelector('[data-manual-focus="'+focusKey+'"]')?.focus({preventScroll:true});
+}
+function updateManualPreview() {
+  const m=manualEditor,p=manualCurrent();
+  manualDialog.querySelectorAll('.manual-preview').forEach(el=>el.remove());
+  let description=m.message;
+  if(m.pending) {
+    const {d,start}=m.pending,reason=manualReason(p,d,start);
+    const time=roundDays(m.rnd)[d]+' '+scheduleTimeFor(m.rnd.dayStartHour,start)+'–'+scheduleTimeFor(m.rnd.dayStartHour,start+p.lesson);
+    description=reason || p.name+' · '+time;
+    const column=manualDialog.querySelector('.manual-day[data-day="'+d+'"]');
+    if(column) {
+      const ghost=document.createElement('div');
+      ghost.className='manual-preview'+(reason?' invalid':'');
+      ghost.style.cssText=manualStyle(m.selected)+';top:'+((start-m.first)*32+2)+'px;height:'+(p.lesson*32-4)+'px';
+      ghost.textContent=time;
+      column.appendChild(ghost);
+    }
+  }
+  manualDialog.querySelector('.manual-status').textContent=m.assign.length+' of '+m.people.length+' students placed. '+(description || (m.assign.length<m.people.length ? 'Place every included student before using this arrangement.' : 'Select a lesson to see where it can move.'));
+  const place=manualDialog.querySelector('[data-manual="place"]');
+  place.hidden=!m.pending;place.disabled=!m.pending || !!manualReason(p,m.pending.d,m.pending.start);
+}
+function manualRemember() {
+  manualEditor.history.push(manualCopy(manualEditor.assign));
+  if(manualEditor.history.length>50) manualEditor.history.shift();
+}
+function placeManualLesson(d,start) {
+  const m=manualEditor,p=manualCurrent(),reason=manualReason(p,d,start);
+  if(reason){m.message=reason;m.pending=null;updateManualPreview();return;}
+  const existing=m.assign.find(a=>a.id===p.id);
+  if(!existing || existing.d!==d || existing.start!==start) {
+    manualRemember();
+    m.assign=m.assign.filter(a=>a.id!==p.id).concat({id:p.id,name:p.name,lesson:p.lesson,d,start});
+  }
+  m.pending=null;m.message=p.name+' placed on '+roundDays(m.rnd)[d]+' at '+scheduleTimeFor(m.rnd.dayStartHour,start)+'.';
+  renderManualEditor();
+}
+function unplaceManualLesson() {
+  const m=manualEditor,p=manualCurrent();
+  if(m.assign.some(a=>a.id===p.id)){manualRemember();m.assign=m.assign.filter(a=>a.id!==p.id);}
+  m.pending=null;m.message=p.name+' moved to Not placed.';renderManualEditor();
+}
+function closeManualEditor() {
+  const trigger=manualEditor && manualEditor.trigger;
+  manualPointer=null;manualEditor=null;
+  manualDialog.close();document.body.classList.remove('manual-open');
+  if(trigger && trigger.isConnected) trigger.focus({preventScroll:true});
+}
+function saveManualEditor() {
+  const m=manualEditor;
+  if(stateBlocked){m.message='Saving is paused because newer changes exist elsewhere. Cancel and reload the latest schedule.';updateManualPreview();return;}
+  if(!stateReady || activeRound()!==m.rnd || m.rnd.plan || m.assign.length!==m.people.length || m.people.some(p=>{
+    const a=m.assign.find(a=>a.id===p.id);return !a || manualReason(p,a.d,a.start);
+  })) return;
+  const rnd=m.rnd;
+  if(!rnd.result) rnd.result={ok:true,options:[],unplaced:[],blockers:[]};
+  const custom={custom:true,assign:manualCopy(m.assign),...scoreSolution(m.assign,rnd.dayPreferences,solverBlockPreferences(rnd))};
+  rnd.result.options=rnd.result.options.filter(o=>!o.custom).concat(custom);
+  rnd.chosen=rnd.result.options.length-1;rnd.optionsExpanded=true;
+  S.imgUrl='';S.fallbackText='';
+  closeManualEditor();render();flash('Custom arrangement selected. Confirm when you’re ready.');
+  document.querySelector('[data-action="manualRearrange"]')?.focus({preventScroll:true});
+}
+manualDialog.addEventListener('cancel',e=>{e.preventDefault();closeManualEditor();});
+manualDialog.addEventListener('click',e=>{
+  if(!manualEditor) return;
+  if(Date.now()<manualSuppressClickUntil){manualSuppressClickUntil=0;return;}
+  const person=e.target.closest('[data-person]');
+  if(person){manualEditor.selected=Number(person.dataset.person);manualEditor.pending=null;manualEditor.message='';renderManualEditor();return;}
+  const slot=e.target.closest('[data-slot]');
+  if(slot){manualEditor.pending={d:Number(slot.dataset.day),start:Number(slot.dataset.slot)};manualEditor.message='';updateManualPreview();return;}
+  const action=e.target.closest('[data-manual]')?.dataset.manual;
+  const m=manualEditor;
+  if(action==='cancel') closeManualEditor();
+  else if(action==='save') saveManualEditor();
+  else if(action==='unplace') unplaceManualLesson();
+  else if(action==='place' && m.pending) placeManualLesson(m.pending.d,m.pending.start);
+  else if(action==='undo' && m.history.length){m.assign=m.history.pop();m.pending=null;m.message='Last move undone.';renderManualEditor();}
+  else if(action==='reset'){manualRemember();m.assign=manualCopy(m.initial);m.pending=null;m.message='Returned to the opening arrangement.';renderManualEditor();}
+});
+let manualPointer=null,manualSuppressClickUntil=0;
+manualDialog.addEventListener('pointerdown',e=>{
+  const card=e.target.closest('[data-person]');
+  if(!manualEditor || !card || e.button!==0 || !e.isPrimary) return;
+  // Leave touch swipes on the student list free to scroll; its handle starts a drag.
+  if(e.pointerType==='touch' && !card.hasAttribute('data-lesson-start') && !e.target.closest('.manual-grip')) return;
+  const rect=card.getBoundingClientRect();
+  manualPointer={id:e.pointerId,index:Number(card.dataset.person),x:e.clientX,y:e.clientY,dragging:false,
+    offset:card.hasAttribute('data-lesson-start')?Math.floor((e.clientY-rect.top)/32):0};
+  manualDialog.setPointerCapture(e.pointerId);
+});
+function manualPointerTarget(x,y) {
+  const hit=document.elementFromPoint(x,y);
+  if(hit?.closest('[data-manual-tray]')) return {tray:true};
+  const column=hit?.closest('.manual-day');
+  if(!column) return null;
+  const start=manualEditor.first+Math.floor((y-column.getBoundingClientRect().top)/32)-manualPointer.offset;
+  return {d:Number(column.dataset.day),start};
+}
+manualDialog.addEventListener('pointermove',e=>{
+  if(!manualPointer || e.pointerId!==manualPointer.id || !manualEditor) return;
+  if(!manualPointer.dragging && Math.hypot(e.clientX-manualPointer.x,e.clientY-manualPointer.y)<7) return;
+  e.preventDefault();
+  if(!manualPointer.dragging){manualPointer.dragging=true;manualEditor.selected=manualPointer.index;manualEditor.pending=null;renderManualEditor();}
+  const scroll=manualDialog.querySelector('.manual-scroll'),rect=scroll.getBoundingClientRect();
+  if(e.clientX>=rect.left && e.clientX<=rect.right && e.clientY>=rect.top && e.clientY<=rect.bottom){
+    if(e.clientY>rect.bottom-45)scroll.scrollTop+=14;
+    if(e.clientY<rect.top+65)scroll.scrollTop-=14;
+    if(e.clientX>rect.right-35)scroll.scrollLeft+=12;
+    if(e.clientX<rect.left+35)scroll.scrollLeft-=12;
+  }
+  const target=manualPointerTarget(e.clientX,e.clientY);
+  manualEditor.pending=target && !target.tray?target:null;
+  manualEditor.message=target?.tray?'Release to move this lesson to Not placed.':'';
+  updateManualPreview();
+});
+manualDialog.addEventListener('pointerup',e=>{
+  if(!manualPointer || e.pointerId!==manualPointer.id || !manualEditor) return;
+  const pointer=manualPointer,target=pointer.dragging?manualPointerTarget(e.clientX,e.clientY):null;
+  manualPointer=null;manualSuppressClickUntil=Date.now()+400;
+  if(manualDialog.hasPointerCapture(e.pointerId))manualDialog.releasePointerCapture(e.pointerId);
+  if(!pointer.dragging){manualEditor.selected=pointer.index;manualEditor.pending=null;manualEditor.message='';renderManualEditor();}
+  else if(target?.tray)unplaceManualLesson();
+  else if(target)placeManualLesson(target.d,target.start);
+  else{manualEditor.pending=null;manualEditor.message='Lesson kept in its original position.';updateManualPreview();}
+});
+manualDialog.addEventListener('pointercancel',()=>{
+  manualPointer=null;
+  if(manualEditor){manualEditor.pending=null;manualEditor.message='Move cancelled.';updateManualPreview();}
+});
 
 function runSolver() {
   const rnd = activeRound();
@@ -3465,7 +3731,7 @@ function renderAgendaOptionPicker(result, rnd) {
   return '<label class="agenda-choice">Arrangement<select data-bind="agendaOption">' + result.options.map((option, index) => {
     const dayLabel = [...new Set(option.assign.map(a => a.d))].sort((a, b) => a - b).map(d => days[d]).join(" + ");
     const gaps = option.gaps ? (option.gaps * SCHEDULE_SLOT_MIN) + ' min idle' : 'no gaps';
-    return '<option value="' + index + '"' + (index === rnd.chosen ? ' selected' : '') + '>Option ' + (index + 1) + ' · ' +
+    return '<option value="' + index + '"' + (index === rnd.chosen ? ' selected' : '') + '>' + (option.custom ? 'Custom' : 'Option ' + (index + 1)) + ' · ' +
       escapeHTML(dayLabel) + ' · ' + gaps + '</option>';
   }).join("") + '</select></label>';
 }
@@ -3477,7 +3743,9 @@ function renderPreConfirmPlanTab() {
   }
   const r = rnd.result;
   let intro;
-  if (r.ok) {
+  if (r.options[rnd.chosen]?.custom) {
+    intro = '<p class="lede">Your custom arrangement. Confirm when you’re ready.</p>';
+  } else if (r.ok) {
     const days = r.options[0].days;
     intro = '<p class="lede">All included students fit across <b style="color:var(--ink)">' + days + " day" + (days > 1 ? "s" : "") + "</b>. Pick an arrangement.</p>";
   } else {
@@ -3502,7 +3770,7 @@ function renderPreConfirmPlanTab() {
       '<div class="line"><span>' + days[a.d] + " " + scheduleTimeFor(rnd.dayStartHour, a.start) + "–" + scheduleTimeFor(rnd.dayStartHour, a.start + a.lesson) + "</span><span>" + a.name + "</span></div>"
     ).join("");
     return '<div class="opt' + (actualIdx === rnd.chosen ? " sel" : "") + '" data-action="chooseOption" data-idx="' + actualIdx + '">' +
-      '<div class="opthead"><b>' + daysLabel + "</b><span>" + gapsLabel + "</span></div>" + lines +
+      '<div class="opthead"><b>' + (opt.custom ? 'Custom · ' : '') + daysLabel + "</b><span>" + gapsLabel + "</span></div>" + lines +
       '<div class="option-reason">' + prefText + ', ' + opt.days + ' teaching day' + (opt.days === 1 ? "" : "s") + '</div></div>';
   };
 
@@ -3519,7 +3787,7 @@ function renderPreConfirmPlanTab() {
       "</button></div>"
     : "";
 
-  const alreadyOneDay = r.options.length > 0 && r.options[0].days <= 1;
+  const alreadyOneDay = r.options.length > 0 && (r.options[rnd.chosen] || r.options[0]).days <= 1;
   const blockersHTML = alreadyOneDay ? "" : '<div class="panel"><h3>If you want it down to one day</h3>' + r.blockers.map(b =>
     '<div class="blocker"><b>' + b.day + "</b> " + (b.blocked.length === 0 ? '<span class="clear">works for everyone</span>' : "works for everyone except " + b.blocked.join(", ")) + "</div>"
   ).join("") + "</div>";
@@ -3542,7 +3810,8 @@ function renderPreConfirmPlanTab() {
   const arrangement = agendaMode
     ? renderAgendaOptionPicker(r, rnd) + renderAgenda(selected.assign, S.week, rnd.weekStart, rnd.dayStartHour, false)
     : optionsHTML + moreOptionsHTML;
-  return '<div class="pad" style="padding-top:0">' + (selected ? renderScheduleViewSwitch() : "") + intro + arrangement + blockersHTML + sharePanel + confirmBtn + "</div>";
+  const manualButton = '<div class="btnrow" style="margin:12px 0"><button class="btn" data-action="manualRearrange">Rearrange manually</button></div>';
+  return '<div class="pad" style="padding-top:0">' + (selected ? renderScheduleViewSwitch() : "") + intro + manualButton + arrangement + blockersHTML + sharePanel + confirmBtn + "</div>";
 }
 
 function renderLivePlanTab() {
@@ -3856,6 +4125,7 @@ document.getElementById("app").addEventListener("click", (e) => {
     render();
   }
   else if (action === "adjustLength") adjustLength(id, Number(el.dataset.delta));
+  else if (action === "manualRearrange") openManualEditor();
   else if (action === "runSolver") runSolver();
   else if (action === "chooseOption") { activeRound().chosen = Number(el.dataset.idx); render(); }
   else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, rnd.dayStartHour, rnd.note); }

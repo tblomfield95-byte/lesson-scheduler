@@ -2592,6 +2592,23 @@ async function saveProfile() {
 const RAM_TEACHING_LOCATION = {
   name:'Royal Academy of Music',address:'Marylebone Road, London NW1 5HT, United Kingdom',coordinates:'51.52352, -0.15188'
 };
+const TEACHING_LOCATION_PRESETS = [
+  {id:'ram',...RAM_TEACHING_LOCATION},
+  {id:'rcm',name:'Royal College of Music',address:'Prince Consort Road, London SW7 2BS, United Kingdom',coordinates:'51.49969, -0.17712'},
+  {id:'guildhall',name:'Guildhall School of Music and Drama',address:'Silk Street, Barbican, London EC2Y 8DT, United Kingdom',coordinates:'51.51954, -0.09237'},
+  {id:'trinity',label:'Trinity Laban — King Charles Court (music)',name:'Trinity Laban Conservatoire of Music and Dance',address:'King Charles Court, Old Royal Naval College, Greenwich, London SE10 9JF, United Kingdom',coordinates:'51.4833, -0.00695'},
+  {id:'rncm',name:'Royal Northern College of Music',address:'124 Oxford Road, Manchester M13 9RD, United Kingdom',coordinates:'53.46834, -2.23718'},
+  {id:'birmingham',name:'Royal Birmingham Conservatoire',address:'200 Jennens Road, Birmingham B4 7XR, United Kingdom',coordinates:'52.48399, -1.88643'},
+  {id:'rwcmd',name:'Royal Welsh College of Music and Drama',address:'North Road, Cardiff CF10 3ER, United Kingdom',coordinates:'51.48603, -3.18378'},
+  {id:'rcs',label:'Royal Conservatoire of Scotland (formerly RSAMD)',name:'Royal Conservatoire of Scotland',address:'100 Renfrew Street, Glasgow G2 3DB, United Kingdom',coordinates:'55.86614, -4.257632'}
+];
+function useTeachingLocationPreset(id) {
+  const preset=TEACHING_LOCATION_PRESETS.find(p=>p.id===id);
+  if(!preset)return;
+  teachingLocationDraft={name:preset.name,address:preset.address,coordinates:preset.coordinates};
+  render();
+  document.getElementById('teachingPreset')?.focus({preventScroll:true});
+}
 let teachingLocationDraft=null;
 function openTeachingLocationDraft() {
   teachingLocationDraft={name:'',address:'',coordinates:'',...(S.settings.teachingLocation || {})};
@@ -2622,10 +2639,10 @@ function renderTeachingLocation() {
   if(!teachingLocationDraft)openTeachingLocationDraft();
   const d=teachingLocationDraft;
   return '<section class="panel" style="margin-top:24px"><h3>Teaching location</h3><p class="lede">Added to every lesson when you use Add to calendar. Leave blank if you teach in different places.</p>'+
-    '<div class="btnrow"><button class="btn" data-action="useRAMLocation">Use Royal Academy of Music</button></div>'+
+    '<div class="field"><label for="teachingPreset">Venue preset</label><select id="teachingPreset" data-bind="teachingLocationPreset" style="width:100%;max-width:100%;min-width:0"><option value="">Choose a preset…</option>'+TEACHING_LOCATION_PRESETS.map(p=>'<option value="'+p.id+'"'+(['name','address','coordinates'].every(k=>d[k]===p[k])?' selected':'')+'>'+manualAttribute(p.label||p.name)+'</option>').join('')+'</select><p class="hint">Fills in the venue, address and map pin. You can edit the details before saving.</p></div>'+
     '<div class="field"><label for="teachingVenue">Venue name</label><input id="teachingVenue" maxlength="160" data-location-field="name" value="'+manualAttribute(d.name)+'" placeholder="Royal Academy of Music"></div>'+
     '<div class="field"><label for="teachingAddress">Address <span class="hint">(optional)</span></label><input id="teachingAddress" maxlength="300" data-location-field="address" value="'+manualAttribute(d.address)+'" placeholder="Street, city and postcode"></div>'+
-    '<details'+(d.coordinates?' open':'')+'><summary style="cursor:pointer;margin-bottom:12px">Map pin <span class="hint">(optional)</span></summary><div class="field"><label for="teachingCoordinates">Latitude, longitude</label><input id="teachingCoordinates" type="text" maxlength="80" autocapitalize="off" spellcheck="false" data-location-field="coordinates" value="'+manualAttribute(d.coordinates)+'" placeholder="51.52352, -0.15188"><p class="hint">Coordinates attach a map pin, not just a text label. The Academy preset fills these in for you. Other venues can use coordinates copied from a map.</p></div></details>'+
+    '<details'+(d.coordinates?' open':'')+'><summary style="cursor:pointer;margin-bottom:12px">Map pin <span class="hint">(optional)</span></summary><div class="field"><label for="teachingCoordinates">Latitude, longitude</label><input id="teachingCoordinates" type="text" maxlength="80" autocapitalize="off" spellcheck="false" data-location-field="coordinates" value="'+manualAttribute(d.coordinates)+'" placeholder="51.52352, -0.15188"><p class="hint">Coordinates attach a map pin, not just a text label. Every preset fills these in for you. Other venues can use coordinates copied from a map.</p></div></details>'+
     '<p class="hint" id="teachingMapPreview">'+teachingLocationMapPreview(d)+'</p>'+
     '<div class="btnrow"><button class="btn sig" data-action="saveTeachingLocation">Save location</button><button class="btn" data-action="clearTeachingLocation">Clear</button></div><p class="hint">Applies to new exports only. Existing calendar events are not changed. Map display depends on your calendar app.</p></section>';
 }
@@ -4250,7 +4267,6 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "toggleMoreOptions") toggleMoreOptions();
   else if (action === "toggleSidebar") toggleSidebar();
   else if (action === "saveProfile") saveProfile();
-  else if (action === "useRAMLocation") {teachingLocationDraft={...RAM_TEACHING_LOCATION};render();}
   else if (action === "saveTeachingLocation") saveTeachingLocation();
   else if (action === "clearTeachingLocation") {teachingLocationDraft={name:'',address:'',coordinates:''};render();}
   else if (action === "toggleStudentFilter") toggleStudentFilter();
@@ -4377,6 +4393,7 @@ document.getElementById("app").addEventListener("change", (e) => {
   const el = e.target.closest("[data-bind]");
   if (!el) return;
   const bind = el.dataset.bind;
+  if (bind === "teachingLocationPreset") {useTeachingLocationPreset(el.value);return;}
   if (bind === "scheduleStudent") {
     const id = el.dataset.id;
     setStudentIncluded(id, el.checked);

@@ -2241,16 +2241,31 @@ function confirmSchedule() {
   render();
 }
 
-// The schedule uses local wall-clock times. Construct each lesson separately
-// before converting to UTC so the lesson date's daylight-saving offset applies.
+// Teaching times are UK wall-clock times, regardless of the exporting device's
+// time zone. UTC arithmetic here only normalises the date and minute fields;
+// the resulting lesson timestamp is labelled Europe/London, not UTC.
 function calendarDate(weekStart, day, startHour, slot) {
   const { y, m, d } = isoParts(weekStart);
   const minutes = Number(startHour) * 60 + Number(slot) * SCHEDULE_SLOT_MIN;
-  return new Date(y, m - 1, d + Number(day), 0, minutes, 0);
+  return new Date(Date.UTC(y, m - 1, d + Number(day), 0, minutes, 0));
 }
 
 function calendarTimestamp(date) {
   return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function calendarLessonTimestamp(weekStart, day, startHour, slot) {
+  return calendarTimestamp(calendarDate(weekStart, day, startHour, slot)).replace(/Z$/, "");
+}
+
+function calendarLondonTimezone() {
+  // UK daylight-saving rules in use since 1996. Embedding both observances
+  // makes the export self-contained for calendar importers.
+  return ["BEGIN:VTIMEZONE", "TZID:Europe/London",
+    "BEGIN:DAYLIGHT", "DTSTART:19960331T010000", "TZOFFSETFROM:+0000", "TZOFFSETTO:+0100",
+    "TZNAME:BST", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU", "END:DAYLIGHT",
+    "BEGIN:STANDARD", "DTSTART:19961027T020000", "TZOFFSETFROM:+0100", "TZOFFSETTO:+0000",
+    "TZNAME:GMT", "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU", "END:STANDARD", "END:VTIMEZONE"];
 }
 
 function calendarText(value) {
@@ -2278,14 +2293,15 @@ function buildScheduleCalendar(rnd) {
     .slice().sort((a, b) => a.d - b.d || a.start - b.start);
   if (!lessons.length) return "";
   const stamp = calendarTimestamp(new Date());
-  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Cadence//Lesson Schedule//EN", "CALSCALE:GREGORIAN"];
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Cadence//Lesson Schedule//EN", "CALSCALE:GREGORIAN",
+    "X-WR-TIMEZONE:Europe/London", ...calendarLondonTimezone()];
   lessons.forEach(lesson => {
     const firstName = String(lesson.name || "").trim().split(/\s+/)[0] || "Student";
     // Stable between exports of this lesson; names and times can change.
     const identity = [ME.slug || ME.email || "teacher", plan.weekStart, plan.weekNo, lesson.id].map(value => encodeURIComponent(String(value))).join("/");
     lines.push("BEGIN:VEVENT", "UID:" + identity + "@cadenceplanner.co.uk", "DTSTAMP:" + stamp,
-      "DTSTART:" + calendarTimestamp(calendarDate(plan.weekStart, lesson.d, rnd.dayStartHour, lesson.start)),
-      "DTEND:" + calendarTimestamp(calendarDate(plan.weekStart, lesson.d, rnd.dayStartHour, Number(lesson.start) + Number(lesson.lesson))),
+      "DTSTART;TZID=Europe/London:" + calendarLessonTimestamp(plan.weekStart, lesson.d, rnd.dayStartHour, lesson.start),
+      "DTEND;TZID=Europe/London:" + calendarLessonTimestamp(plan.weekStart, lesson.d, rnd.dayStartHour, Number(lesson.start) + Number(lesson.lesson)),
       "SUMMARY:" + calendarText(firstName + " lesson"), "STATUS:CONFIRMED", "END:VEVENT");
   });
   lines.push("END:VCALENDAR");

@@ -343,6 +343,15 @@
   .weekpicker-mid input::-webkit-outer-spin-button,
   .weekpicker-mid input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   .weekpicker-mid span{display:block;font-size:12px;color:var(--ink-soft);margin-top:2px}
+  .week-context-pill{
+    display:inline-flex!important;align-items:center;justify-content:center;width:max-content;
+    margin:5px auto 3px!important;padding:3px 9px 4px;border-radius:999px;
+    font-size:10.5px!important;line-height:1;font-weight:600;letter-spacing:.01em;
+    border:1px solid transparent;white-space:nowrap
+  }
+  .week-context-pill.current{color:var(--sig);background:var(--sig-soft);border-color:var(--sig)}
+  .week-context-pill.previous{color:var(--ink-soft);background:var(--paper);border-color:var(--rule)}
+  .week-context-pill.next{color:var(--warn);background:var(--warn-soft);border-color:#E7CDBE}
 
   .grid-wrap{border:1px solid var(--rule);border-radius:7px;overflow:hidden;background:var(--panel);
              touch-action:auto;user-select:none;-webkit-user-select:none}
@@ -998,7 +1007,7 @@ function nextWeekStart(iso) {
 
 function weekRangeLabel(iso) {
   if (!iso) return "";
-  const { y, m, d } = isoParts(iso);
+const { y, m, d } = isoParts(iso);
   const mon = new Date(Date.UTC(y, m - 1, d));
   const fri = new Date(Date.UTC(y, m - 1, d + 4));
   const sameMonth = mon.getUTCMonth() === fri.getUTCMonth() && mon.getUTCFullYear() === fri.getUTCFullYear();
@@ -1007,6 +1016,22 @@ function weekRangeLabel(iso) {
   return sameMonth
     ? mon.getUTCDate() + "\u2013" + fri.getUTCDate() + " " + friMonth + " " + fri.getUTCFullYear()
     : mon.getUTCDate() + " " + monMonth + " \u2013 " + fri.getUTCDate() + " " + friMonth + " " + fri.getUTCFullYear();
+}
+
+function weekContext(weekStart) {
+  if (!weekStart) return { label: "", cls: "" };
+
+  // Work entirely with UTC calendar dates so BST/GMT changes cannot move the
+  // current-week boundary by a day.
+  const { y, m, d } = isoParts(todayISO());
+  const today = new Date(Date.UTC(y, m - 1, d));
+  const weekday = today.getUTCDay();
+  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+  const currentMonday = new Date(Date.UTC(y, m - 1, d + mondayOffset)).toISOString().slice(0, 10);
+
+  if (weekStart === currentMonday) return { label: "Current week", cls: "current" };
+  if (weekStart < currentMonday) return { label: "Previous week", cls: "previous" };
+  return { label: "Next week", cls: "next" };
 }
 
 function escapeHTML(s) {
@@ -1998,7 +2023,7 @@ function moveManualDragVisual(x,y,target) {
   }
   const rect=manualDialog.getBoundingClientRect();
   const scale=rect.width/manualDialog.offsetWidth || 1;
-  manualDragGhost.style.transform='translate3d('+((x-rect.left)/scale-p.grabX)+'px,'+((y-rect.top)/scale-p.grabY)+'px,0)';
+manualDragGhost.style.transform='translate3d('+((x-rect.left)/scale-p.grabX)+'px,'+((y-rect.top)/scale-p.grabY)+'px,0)';
   manualDialog.querySelector('[data-manual-tray]')?.classList.toggle('manual-drop-active',!!target?.tray);
 }
 manualDialog.addEventListener('pointerdown',e=>{
@@ -2998,7 +3023,7 @@ function openSettingsDraft() {
 }
 function excludePriority(key) {
   const order = normalisePriorityOrder(settingsDraft.priorityOrder);
-  if (!order.includes(key)) return;
+if (!order.includes(key)) return;
   if (order.length === 1) { flash("Keep at least one active priority"); return; }
   settingsDraft.priorityOrder = order.filter(item => item !== key);
   render();
@@ -3905,9 +3930,11 @@ function renderTabContent() {
 function renderWeekPicker() {
   const rnd = activeRound();
   const rolling = S.settings.schedulingMode === "rolling";
+  const context = weekContext(rnd.weekStart);
   return '<div class="weekpicker">' +
     '<button class="step" data-action="prevWeek" ' + (S.week <= 1 ? "disabled" : "") + '>\u2039</button>' +
     '<div class="weekpicker-mid"><label>Week <input type="number" inputmode="numeric" min="1" ' + (rolling ? "" : 'max="' + termWeeks() + '"') + ' data-bind="week" value="' + S.week + '">' + (rolling ? "" : " of " + termWeeks()) + '</label>' +
+    (context.label ? '<span class="week-context-pill ' + context.cls + '">' + context.label + '</span>' : '') +
     '<span>' + (weekRangeLabel(rnd.weekStart) || "") + '</span></div>' +
     '<button class="step" data-action="nextWeek" ' + (!rolling && S.week >= termWeeks() ? "disabled" : "") + '>\u203a</button>' +
     "</div>";
@@ -3998,7 +4025,7 @@ function renderRepliesTab() {
         ? '<button type="button" class="sname sname-toggle" data-action="toggleStudentOpen" data-id="' + s.id +
           '" aria-expanded="' + isExpanded + '">' + nameContent + "</button>"
         : '<div class="sname">' + nameContent + "</div>";
-      return '<div class="srow-group">' +
+return '<div class="srow-group">' +
         '<div class="srow">' + nameCell +
         '<div class="chips">' +
         '<button class="chip' + (st === "in" ? " sel" : "") + '" data-action="setStatus" data-id="' + s.id + '" data-status="in" ' + (isStudentReply ? "disabled" : "") + '>In</button>' +

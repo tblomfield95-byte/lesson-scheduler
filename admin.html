@@ -343,6 +343,29 @@
   .weekpicker-mid input::-webkit-outer-spin-button,
   .weekpicker-mid input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   .weekpicker-mid span{display:block;font-size:12px;color:var(--ink-soft);margin-top:2px}
+
+  .completed-week-banner{
+    display:flex;align-items:center;gap:9px;
+    margin:0 0 14px;padding:10px 12px;
+    border:1px solid var(--sig);border-radius:8px;
+    background:var(--sig-soft);color:var(--sig);
+    font-size:12.5px;font-weight:600;
+  }
+  .completed-week-banner .completed-tick{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:20px;height:20px;border-radius:50%;
+    background:var(--sig);color:#fff;font-size:12px;flex:none;
+  }
+  .completed-readonly{position:relative}
+  .completed-readonly::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+  }
+  .completed-summary{
+    border-color:var(--sig);
+    background:var(--sig-soft);
+  }
+  .completed-summary h3{color:var(--sig)}
+  .completed-summary p{margin:0 0 12px;color:var(--ink-soft);font-size:13px;line-height:1.5}
   .week-context-pill{
     display:inline-flex!important;align-items:center;justify-content:center;width:max-content;
     margin:5px auto 3px!important;padding:3px 9px 4px;border-radius:999px;
@@ -1369,6 +1392,9 @@ function blankRound(weekStart) {
     result: null,
     chosen: 0,
     notTeaching: false,
+    completed: false,
+    completionId: null,
+    completedAt: null,
     sent: false,
     note: "",
     dayPreferences: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
@@ -1467,6 +1493,9 @@ function serializeState() {
       result: rr.result,
       chosen: rr.chosen,
       notTeaching: !!rr.notTeaching,
+      completed: !!rr.completed,
+      completionId: rr.completionId || null,
+      completedAt: rr.completedAt || null,
       sent: !!rr.sent,
       note: rr.note || "",
       dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
@@ -1539,6 +1568,9 @@ function applySavedState(saved) {
       result: usesQuarterHours ? (rr.result || null) : null,
       chosen: rr.chosen || 0,
       notTeaching: !!rr.notTeaching,
+      completed: !!rr.completed,
+      completionId: rr.completionId || null,
+      completedAt: rr.completedAt || null,
       sent: !!rr.sent,
       dayPreferences: rr.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
       note: rr.note || "",
@@ -1671,7 +1703,7 @@ window.addEventListener("beforeunload",e=>{
 
 const taughtFor = (id) => S.log.filter(e => e.studentId === id).reduce((s, e) => s + e.hours, 0);
 const scheduledLessonsFor = (id) => Object.values(S.rounds || {}).flatMap(rnd => {
-  if (!rnd.plan || !Array.isArray(rnd.plan.lessons)) return [];
+  if (rnd.completed || !rnd.plan || !Array.isArray(rnd.plan.lessons)) return [];
   return rnd.plan.lessons
     .filter(lesson => lesson.id === id && (lesson.status === "planned" || lesson.status === "cancelled_late"))
     .map(lesson => ({ lesson, plan: rnd.plan, startHour: rnd.dayStartHour != null ? rnd.dayStartHour : 9 }));
@@ -1792,6 +1824,7 @@ function flash(msg) {
 
 function clearOffer() {
   const rnd = activeRound();
+  if (rnd.completed) return;
   if (rnd.notTeaching) { rnd.notTeaching = false; S.weeksCompleted = Math.max(0, S.weeksCompleted - 1); }
   rnd.sent = false;
   rnd.offered = new Set(); rnd.blockPreferences = []; rnd.result = null;
@@ -1817,6 +1850,7 @@ function sampleReplies() {
 
 function adjustLength(id, delta) {
   const rnd = activeRound();
+  if (rnd.completed) return;
   const s = S.students.find(x => x.id === id);
   if (!s || !rnd.replies[id]) return;
   const remainingMinutes = Math.max(0, (s.allocated - taughtFor(id)) * 60);
@@ -2146,6 +2180,7 @@ manualDialog.addEventListener('contextmenu',e=>{if(e.target.closest('[data-perso
 
 function runSolver() {
   const rnd = activeRound();
+  if (rnd.completed) return;
   if (rnd.plan) { flash("Undo confirmation before calculating new options"); return; }
   if (!rnd.offered.size) { flash("Paint some blocks first"); return; }
   const participants = getParticipants(rnd);
@@ -2161,6 +2196,7 @@ function runSolver() {
 
 function cycleDayPreference(day) {
   const rnd = activeRound();
+  if (rnd.completed) return;
   rnd.dayPreferences = rnd.dayPreferences || { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
   const cur = Number(rnd.dayPreferences[day] || 0);
   rnd.dayPreferences[day] = cur === 0 ? -1 : cur === -1 ? 1 : 0;
@@ -2402,6 +2438,7 @@ function addScheduleToCalendar() {
 
 function undoConfirmSchedule() {
   const rnd = activeRound();
+  if (rnd.completed) return;
   if (!rnd.plan) return;
 
   // If this round came from an older saved state where result was cleared
@@ -2439,6 +2476,7 @@ function undoConfirmSchedule() {
 
 function setLessonStatus(k, status) {
   const rnd = activeRound();
+  if (rnd.completed) return;
   rnd.plan.lessons = rnd.plan.lessons.map(l => l.key === k ? { ...l, status } : l);
   S.imgUrl = ""; S.fallbackText = "";
   render();
@@ -2446,6 +2484,7 @@ function setLessonStatus(k, status) {
 
 function rescheduleWeek() {
   const rnd = activeRound();
+  if (rnd.completed) return;
   const staying = rnd.plan.lessons.filter(l => l.status === "planned");
   const pool = staying.map(l => ({
     id: l.id, name: l.name, lesson: l.lesson,
@@ -2463,25 +2502,54 @@ function rescheduleWeek() {
 
 function endWeek() {
   const rnd = activeRound();
-  if (!rnd.plan) return;
+  if (!rnd.plan || rnd.completed) return;
+
+  const completionId = "week-" + S.week + "-" + Date.now().toString(36);
   const { y, m, d } = isoParts(rnd.plan.weekStart);
   const billable = rnd.plan.lessons.filter(l => l.status === "planned" || l.status === "cancelled_late");
-  const entries = billable.map(l => {
+  const entries = billable.map((l, index) => {
     const dateISO = new Date(Date.UTC(y, m - 1, d + l.d)).toISOString().slice(0, 10);
     return {
-      id: "s" + Date.now() + "-" + l.key, studentId: l.id,
-      date: dateISO, hours: (l.lesson * SCHEDULE_SLOT_MIN) / 60,
-      manual: false, lateCancel: l.status === "cancelled_late",
+      id: "s" + Date.now() + "-" + index + "-" + l.key,
+      studentId: l.id,
+      date: dateISO,
+      hours: (l.lesson * SCHEDULE_SLOT_MIN) / 60,
+      manual: false,
+      lateCancel: l.status === "cancelled_late",
+      completionId,
+      sourceWeek: S.week,
     };
   });
+
   S.log.push(...entries);
-  delete S.rounds[String(S.week)];
+  rnd.completed = true;
+  rnd.completionId = completionId;
+  rnd.completedAt = new Date().toISOString();
   S.weeksCompleted++;
-  S.week = Math.min(termWeeks(), S.week + 1);
-  ensureRound(S.week);
-  S.imgUrl = ""; S.fallbackText = ""; S.tab = "hours";
-  flash(entries.length + " lessons logged");
+  S.imgUrl = "";
+  S.fallbackText = "";
+  S.tab = "hours";
+  flash(entries.length + " lesson" + (entries.length === 1 ? "" : "s") + " logged · Week " + S.week + " completed");
   animatedRender(1);
+}
+
+function undoEndWeek() {
+  const rnd = activeRound();
+  if (!rnd.completed || !rnd.completionId) return;
+
+  const completionId = rnd.completionId;
+  const removed = S.log.filter(entry => entry.completionId === completionId).length;
+  S.log = S.log.filter(entry => entry.completionId !== completionId);
+
+  rnd.completed = false;
+  rnd.completionId = null;
+  rnd.completedAt = null;
+  S.weeksCompleted = Math.max(0, S.weeksCompleted - 1);
+  S.imgUrl = "";
+  S.fallbackText = "";
+  S.tab = "plan";
+  flash("Week " + S.week + " reopened · " + removed + " logged " + (removed === 1 ? "entry" : "entries") + " removed");
+  animatedRender(-1);
 }
 
 // A toggle now, not a one-shot jump — tapping it marks the CURRENT week
@@ -2490,6 +2558,7 @@ function endWeek() {
 // just a tally, not a gate.
 function skipWeek() {
   const rnd = activeRound();
+  if (rnd.completed) return;
   if (rnd.plan) { flash("Finish or clear this week's schedule first"); return; }
   if (rnd.notTeaching) {
     rnd.notTeaching = false;
@@ -3869,7 +3938,7 @@ function toggleStudentFilter() {
 
 function setStudentIncluded(id, included) {
   const rnd = activeRound();
-  if (rnd.plan || !S.students.some(s => s.id === id)) return;
+  if (rnd.completed || rnd.plan || !S.students.some(s => s.id === id)) return;
   const excluded = new Set(rnd.excludedStudentIds || []);
   if (included) excluded.delete(id); else excluded.add(id);
   rnd.excludedStudentIds = [...excluded];
@@ -3883,7 +3952,7 @@ function invalidateStudentOptions(rnd) {
 }
 function includeAllStudents() {
   const rnd = activeRound();
-  if (rnd.plan) return;
+  if (rnd.completed || rnd.plan) return;
   rnd.excludedStudentIds = [];
   invalidateStudentOptions(rnd);
 }
@@ -3907,12 +3976,22 @@ function renderStudentFilter() {
     '</div></div></div>' + (!rnd.plan ? '<div style="padding:0 16px 12px"><p class="hint">' + eligible + ' student' + (eligible === 1 ? '' : 's') + ' with availability included.</p><button class="btn sig" data-action="runSolver" ' + (!eligible || !rnd.offered.size ? 'disabled' : '') + '>' + (rnd.result ? 'Recalculate options' : 'Calculate options') + '</button></div>' : '') + '</div></div>';
 }
 
+function renderCompletedWeekBanner() {
+  return '<div class="completed-week-banner"><span class="completed-tick" aria-hidden="true">✓</span><span>Week completed · Hours logged</span></div>';
+}
+
 function renderTabContent() {
-  if (S.tab === "week") return renderOfferTab();
-  if (S.tab === "replies") return renderRepliesTab();
-  if (S.tab === "plan") return renderStudentFilter() + (activeRound().plan ? renderLivePlanTab() : renderPreConfirmPlanTab());
-  if (S.tab === "hours") return renderHoursTab();
-  return "";
+  const rnd = activeRound();
+  let content = "";
+  if (S.tab === "week") content = renderOfferTab();
+  else if (S.tab === "replies") content = renderRepliesTab();
+  else if (S.tab === "plan") content = renderStudentFilter() + (rnd.plan ? renderLivePlanTab() : renderPreConfirmPlanTab());
+  else if (S.tab === "hours") return renderHoursTab();
+  else return "";
+
+  if (!rnd.completed) return content;
+  return '<div class="pad" style="padding-bottom:0">' + renderCompletedWeekBanner() + '</div>' +
+    '<div class="completed-readonly" inert aria-label="Completed week, read only">' + content + '</div>';
 }
 
 // The one and only week control. Type directly into the number to jump
@@ -4267,7 +4346,9 @@ function renderLivePlanTab() {
 
   const fallback = S.fallbackText ? '<textarea class="fallback" readonly rows="' + (S.fallbackText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.fallbackText) + "</textarea>" : "";
   const imgBlock = S.imgUrl ? '<div class="imgwrap"><img src="' + S.imgUrl + '" alt="Schedule card"><a class="btn" href="' + S.imgUrl + '" download="lessons-week-' + plan.weekNo + '.png">Save image</a></div>' : "";
-  const endRow = '<div class="btnrow"><button class="btn sig" data-action="endWeek">End week and log hours</button></div>';
+  const endRow = rnd.completed
+    ? ''
+    : '<div class="btnrow"><button class="btn sig" data-action="endWeek">End week and log hours</button></div>';
 
   const schedule = S.scheduleView === "agenda"
     ? renderAgenda(live, plan.weekNo, plan.weekStart, rnd.dayStartHour, true)
@@ -4276,7 +4357,18 @@ function renderLivePlanTab() {
 }
 
 function renderHoursTab() {
+  const rnd = activeRound();
   const rolling = S.settings.schedulingMode === "rolling";
+  const completionEntries = rnd.completed && rnd.completionId
+    ? S.log.filter(entry => entry.completionId === rnd.completionId)
+    : [];
+  const completionHours = completionEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
+  const completionPanel = rnd.completed
+    ? '<div class="panel completed-summary"><h3>✓ Week completed</h3><p>' +
+      completionEntries.length + ' logged ' + (completionEntries.length === 1 ? 'entry' : 'entries') +
+      ' · ' + compactHours(completionHours) + 'h moved to completed hours. Offer, Replies and Schedule are now kept as a read-only record of this week.</p>' +
+      '<div class="btnrow" style="margin-bottom:0"><button class="btn outline-sig" data-action="undoEndWeek">Undo end week</button></div></div>'
+    : "";
   const weeksLeft = Math.max(1, termWeeks() - S.weeksCompleted);
   const totalTaught = S.students.reduce((s, x) => s + taughtFor(x.id), 0);
   const totalScheduled = S.students.reduce((s, x) => s + scheduledFor(x.id), 0);
@@ -4399,7 +4491,7 @@ function renderHoursTab() {
     (S.hoursExportText ? '<textarea class="fallback" readonly rows="' + (S.hoursExportText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.hoursExportText) + "</textarea>" : "") +
     "</div>";
 
-  return '<div class="pad"><p class="lede">' + compactHours(totalTaught) + "h taught" +
+  return '<div class="pad">' + completionPanel + '<p class="lede">' + compactHours(totalTaught) + "h taught" +
     (totalScheduled > 0 ? " · " + compactHours(totalScheduled) + "h scheduled" : "") + " of " + totalAllocated + "h allocated" +
     (rolling ? "" : ", with " + weeksLeft + " weeks left") + '. Tap a name to see scheduled and completed lessons.</p>' +
     '<div class="hours-legend" aria-label="Hours progress legend"><span><i class="hours-key" aria-hidden="true"></i>Taught</span>' +
@@ -4556,6 +4648,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "copyLive") { const rnd = activeRound(); doCopy(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.dayStartHour, rnd.note); }
   else if (action === "imageLive") { const rnd = activeRound(); doImage(rnd.plan.lessons.filter(l => l.status === "planned"), rnd.plan.weekNo, rnd.plan.weekStart, rnd.plan.weekNo, rnd.dayStartHour, rnd.note); }
   else if (action === "endWeek") endWeek();
+  else if (action === "undoEndWeek") undoEndWeek();
   else if (action === "toggleHoursOpen") {
     toggleHoursPanel(id, el);
   }

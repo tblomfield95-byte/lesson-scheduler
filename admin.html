@@ -343,6 +343,10 @@
   .weekpicker-mid input::-webkit-outer-spin-button,
   .weekpicker-mid input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   .weekpicker-mid span{display:block;font-size:12px;color:var(--ink-soft);margin-top:2px}
+  .weekpicker-mid .week-context{display:table;margin:7px auto 5px;padding:3px 10px;
+    border-radius:999px;font-size:11px;line-height:1.4;font-weight:600;
+    background:var(--sig);color:#fff}
+  .weekpicker-mid .week-context.current{background:var(--sig-soft);color:var(--sig)}
 
   .grid-wrap{border:1px solid var(--rule);border-radius:7px;overflow:hidden;background:var(--panel);
              touch-action:auto;user-select:none;-webkit-user-select:none}
@@ -3909,12 +3913,27 @@ function renderTabContent() {
 // The one and only week control. Type directly into the number to jump
 // anywhere — including the very first time, to set where you're actually
 // starting — or nudge with the arrows.
+// Compare actual Monday–Sunday calendar weeks, not teaching-week numbers or
+// completion status. UTC date-only arithmetic avoids daylight-saving offsets.
+function weekContextLabel(weekStart, today = todayISO()) {
+  const monday = value => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return NaN;
+    const date = new Date(value + "T00:00:00Z");
+    if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) return NaN;
+    return date.getTime() - ((date.getUTCDay() + 6) % 7) * 86400000;
+  };
+  const offset = (monday(weekStart) - monday(today)) / 604800000;
+  return offset === -1 ? "Previous week" : offset === 0 ? "Current week" : offset === 1 ? "Next week" : "";
+}
+
 function renderWeekPicker() {
   const rnd = activeRound();
   const rolling = S.settings.schedulingMode === "rolling";
+  const context = weekContextLabel(rnd.weekStart);
   return '<div class="weekpicker">' +
     '<button class="step" data-action="prevWeek" ' + (S.week <= 1 ? "disabled" : "") + '>\u2039</button>' +
     '<div class="weekpicker-mid"><label>Week <input type="number" inputmode="numeric" min="1" ' + (rolling ? "" : 'max="' + termWeeks() + '"') + ' data-bind="week" value="' + S.week + '">' + (rolling ? "" : " of " + termWeeks()) + '</label>' +
+    (context ? '<span class="week-context' + (context === "Current week" ? ' current' : '') + '">' + context + '</span>' : '') +
     '<span>' + (weekRangeLabel(rnd.weekStart) || "") + '</span></div>' +
     '<button class="step" data-action="nextWeek" ' + (!rolling && S.week >= termWeeks() ? "disabled" : "") + '>\u203a</button>' +
     "</div>";

@@ -313,6 +313,15 @@
   .pad{padding:16px}
   .lede{font-size:14px;line-height:1.5;color:var(--ink-soft);margin:0 0 14px}
   .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .schedule-student{--reply-ink:var(--ink-soft);--reply-bg:var(--paper);display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 12px;margin:8px 0;border-radius:8px;background:var(--reply-bg);border:1px solid transparent}
+  .schedule-student.available{--reply-ink:#276345;--reply-bg:#EDF5EF}
+  .schedule-student.skipping{--reply-ink:#825515;--reply-bg:#FBF2DF}
+  .schedule-student.unavailable{--reply-ink:#A2373E;--reply-bg:#FBEDEE}
+  .schedule-student input{width:20px;height:20px;flex:none;accent-color:var(--reply-ink)}
+  .schedule-student strong{display:block;color:var(--ink)}
+  .schedule-student small{display:flex;align-items:center;gap:6px;margin-top:3px;color:var(--reply-ink);font-size:12px;line-height:1.4}
+  .schedule-student small::before{content:'';width:6px;height:6px;flex:none;border-radius:50%;background:currentColor}
+  .schedule-student:focus-within{border-color:var(--reply-ink)}
   .schedule-tools{display:flex;flex-wrap:wrap;gap:24px 36px;padding:18px 0 8px}
   .schedule-tool-group{min-width:0}
   .schedule-tool-group h3,.schedule-finish h3{font:600 14px "IBM Plex Sans",sans-serif;margin:0 0 6px;color:var(--ink)}
@@ -3973,8 +3982,9 @@ function renderStudentFilter() {
   const eligible = getParticipants(rnd).length;
   const rows = S.students.map(s => {
     const rep = rnd.replies[s.id];
-    const status = !rep ? "Awaiting reply" : rep.status === "skip" ? "No lesson requested" : rep.status === "none" ? "No times available" : !rep.avail.size ? "No times selected" : "Availability received";
-    return '<label style="display:flex;align-items:center;gap:12px;min-height:48px;padding:6px 0"><input type="checkbox" style="width:20px;height:20px;flex:none;accent-color:var(--sig)" data-bind="scheduleStudent" data-id="' + escapeHTML(s.id) + '" ' + (!excluded.has(s.id) ? 'checked ' : '') + (rnd.plan ? 'disabled ' : '') + '><span><strong>' + escapeHTML(s.name) + '</strong><small style="display:block;color:var(--ink-soft)">' + status + '</small></span></label>';
+    const tone = !rep ? 'pending' : rep.status === 'skip' ? 'skipping' : rep.status === 'none' || !rep.avail.size ? 'unavailable' : 'available';
+    const status = {pending:'Awaiting reply',skipping:'Skipping this week',unavailable:'No availability',available:'Availability given'}[tone];
+    return '<label class="schedule-student '+tone+'"><input type="checkbox" data-bind="scheduleStudent" data-id="' + escapeHTML(s.id) + '" ' + (!excluded.has(s.id) ? 'checked ' : '') + (rnd.plan ? 'disabled ' : '') + '><span><strong>' + escapeHTML(s.name) + '</strong><small>' + status + '</small></span></label>';
   }).join('');
   return '<div class="pad" style="padding-top:0;padding-bottom:0"><div class="panel overlay-panel"><button id="studentFilterToggle" type="button" class="overlay-toggle" data-action="toggleStudentFilter" aria-controls="studentFilterBody" aria-expanded="' + open + '"><strong>Include students · ' + (S.students.length - excludedNames.length) + '/' + S.students.length + '</strong><span class="reply-chevron" aria-hidden="true">⌄</span></button>' +
     (excludedNames.length ? '<p class="hint" style="padding:0 16px">Excluded this week: ' + excludedNames.map(escapeHTML).join(', ') + '</p>' : '') +

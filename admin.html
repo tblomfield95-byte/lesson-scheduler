@@ -799,6 +799,15 @@
   .accent-option{display:flex;align-items:center;gap:9px;min-height:52px;padding:10px;border:1px solid var(--rule);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
   .accent-option[aria-pressed="true"]{border-color:var(--sig);background:var(--sig-soft);box-shadow:inset 0 0 0 1px var(--sig)}
   .accent-swatch{display:flex;align-items:center;justify-content:center;flex:none;width:26px;height:26px;border-radius:50%;color:white;font-weight:700}
+  .manual-override{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;border-bottom:1px solid var(--rule)}
+  .manual-override strong,.manual-override span,.manual-override small{display:block}
+  .manual-override strong{font-size:12px;color:var(--sig);margin-bottom:3px}
+  .manual-override span{font-size:13px}.manual-override small{font-size:11px;color:var(--ink-soft);margin-top:3px}
+  .manual-switch{flex:none;width:48px;height:28px;padding:3px;border:0;border-radius:99px;background:#B8B6B0;cursor:pointer;transition:background-color 250ms ease;touch-action:manipulation}
+  .manual-switch span{display:block;width:22px;height:22px;border-radius:50%;background:white;box-shadow:0 1px 3px #0003;transition:transform 250ms cubic-bezier(.22,.72,.16,1)}
+  .manual-switch[aria-checked="true"]{background:var(--sig)}
+  .manual-switch[aria-checked="true"] span{transform:translateX(20px)}
+  .agreed-badge{display:inline-block;font-size:10px;font-weight:500;border:1px solid currentColor;border-radius:4px;padding:1px 4px;opacity:.85}
   /* Manual arrangement editor */
   body.manual-open{overflow:hidden}
   .manual-dialog{padding:0;border:1px solid var(--rule);border-radius:20px;background:var(--paper);color:var(--ink);width:min(1180px,96vw);max-width:none;height:min(860px,92dvh);max-height:96dvh;box-shadow:0 24px 100px #211c1740;overflow:hidden}
@@ -833,6 +842,11 @@
   .manual-slot{display:block;height:32px;width:100%;padding:0;border:0;border-bottom:1px solid #e4ded4;background:#eae6de;border-radius:0;text-align:left;font:inherit;touch-action:manipulation}
   .manual-slot.offered{background:#fff}.manual-slot.available{background:var(--student-soft)}
   .manual-slot.valid{background:linear-gradient(var(--student-soft),var(--student-soft)),linear-gradient(var(--student-soft),var(--student-soft)),#fff;cursor:pointer}
+  .manual-slot{transition:background-color 250ms ease,box-shadow 250ms ease}
+  .manual-slot.valid{background:color-mix(in srgb,var(--student) 24%,white)}
+  .manual-slot.unlocked{background:color-mix(in srgb,var(--student) 6%,white);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--student) 12%,transparent)}
+  .manual-slot.unlocked.valid{background:color-mix(in srgb,var(--student) 11%,white)}
+  @media(prefers-reduced-motion:reduce){.manual-slot,.manual-switch,.manual-switch span{transition:none}}
   .manual-slot:focus-visible{position:relative;outline:2px solid var(--sig);outline-offset:-2px;z-index:4}
   .manual-lesson,.manual-preview{position:absolute;left:7px;right:7px;border:1px solid var(--student);border-radius:7px;background:linear-gradient(var(--student-soft),var(--student-soft)),#fff;color:var(--ink);padding:7px 10px;text-align:left;overflow:hidden;font:inherit;z-index:2}
   .manual-lesson{cursor:grab;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
@@ -1897,10 +1911,43 @@ function manualReason(person, day, start, assignments = manualEditor.assign) {
   if (!person || !Number.isInteger(day) || !Number.isInteger(start) || day < 0 || day >= roundDays(m.rnd).length || start < 0 || start + person.lesson > roundSlots(m.rnd) * 2) return "The whole lesson must fit in the day.";
   for (let i = start; i < start + person.lesson; i++) {
     if (!m.offered.has(key(day, i))) return "Outside your offered teaching time.";
-    if (!person.avail.has(key(day, i))) return "This student is not available for the whole lesson.";
+    if (!person.override && !person.avail.has(key(day, i))) return "This student is not available for the whole lesson.";
   }
   if (assignments.some(a => a.id !== person.id && a.d === day && start < a.start + a.lesson && start + person.lesson > a.start)) return "This would overlap another lesson.";
   return "";
+}
+function manualOutside(person, day, start) {
+  return Array.from({length:person.lesson},(_,i)=>key(day,start+i)).some(k=>!person.avail.has(k));
+}
+function syncManualOverride() {
+  const m=manualEditor,p=manualCurrent();
+  // Undo/reset may restore a separately agreed placement.
+  m.assign.forEach(a=>{if(a.availabilityOverride){const person=m.people.find(p=>p.id===a.id);if(person)person.override=true;}});
+  const toggle=manualDialog.querySelector('[data-manual="override"]');
+  toggle.setAttribute('aria-checked',String(!!p.override));
+  toggle.setAttribute('aria-label','Allow outside submitted availability for '+p.name);
+  manualDialog.querySelector('.manual-override-name').textContent=p.name;
+  manualDialog.querySelector('.manual-legend').textContent=p.override
+    ? 'Move anywhere within your offered times. Strong colour: submitted availability · Pale colour: unlocked · Grey: not offered'
+    : 'Student colour: submitted availability · Deeper shading: a valid start · Grey: not offered';
+  manualDialog.querySelectorAll('.manual-slot').forEach(el=>{
+    const d=Number(el.dataset.day),start=Number(el.dataset.slot),offered=m.offered.has(key(d,start));
+    const available=offered && p.avail.has(key(d,start)),reason=manualReason(p,d,start);
+    el.classList.toggle('available',available);
+    el.classList.toggle('valid',!reason);
+    el.classList.toggle('unlocked',!!p.override && offered && !available);
+    el.setAttribute('aria-label',roundDays(m.rnd)[d]+' '+scheduleTimeFor(m.rnd.dayStartHour,start)+(reason?': '+reason:' — preview lesson'));
+  });
+}
+function toggleManualOverride() {
+  const m=manualEditor,p=manualCurrent(),a=m.assign.find(a=>a.id===p.id);
+  if(p.override && a && manualOutside(p,a.d,a.start)) {
+    m.message='Move '+p.name+' back into submitted availability before switching this off, or keep the override enabled.';
+    updateManualPreview();return;
+  }
+  p.override=!p.override;m.pending=null;m.message='';
+  // Update existing elements so the grid and switch animate together.
+  syncManualOverride();updateManualPreview();
 }
 function manualCurrent() { return manualEditor && manualEditor.people[manualEditor.selected]; }
 function manualDirty() { return manualEditor && JSON.stringify(manualEditor.assign) !== JSON.stringify(manualEditor.initial); }
@@ -1917,16 +1964,18 @@ function openManualEditor() {
   // Revalidate cached options against the current inclusion, duration and availability.
   for (const p of people) {
     const a = selected && selected.assign.find(a => a.id === p.id);
-    if (a && !manualReason(p, a.d, a.start)) manualEditor.assign.push({id:p.id,name:p.name,lesson:p.lesson,d:a.d,start:a.start});
+    p.override=!!a?.availabilityOverride;
+    if (a && !manualReason(p, a.d, a.start)) manualEditor.assign.push({id:p.id,name:p.name,lesson:p.lesson,d:a.d,start:a.start,...(p.override && manualOutside(p,a.d,a.start)?{availabilityOverride:true}:{})});
   }
   manualEditor.initial = manualCopy(manualEditor.assign);
-  manualDialog.innerHTML = '<div class="manual-shell"><header class="manual-head"><div><h2 id="manualTitle">Rearrange your week</h2><p>Hold to drag on touchscreens; swipe to scroll. Or select a student and tap a time.</p></div><button type="button" class="btn" data-manual="cancel" autofocus>Cancel</button></header><div class="manual-main"><aside class="manual-people" aria-label="Included students"></aside><section class="manual-workspace" aria-label="Teaching days"><div class="manual-legend">Pale colour: student availability · Deeper shading: a valid start · Grey: not offered</div><div class="manual-scroll"><div class="manual-grid"></div></div></section></div><footer class="manual-bottom"><p class="manual-status" role="status" aria-live="polite"></p><div class="manual-actions"><button type="button" class="btn" data-manual="undo">Undo</button><button type="button" class="btn" data-manual="reset">Reset</button><button type="button" class="btn" data-manual="unplace">Move to Not placed</button><button type="button" class="btn" data-manual="place" hidden>Place lesson</button><button type="button" class="btn sig manual-save" data-manual="save">Use this arrangement</button></div></footer></div>';
+  manualDialog.innerHTML = '<div class="manual-shell"><header class="manual-head"><div><h2 id="manualTitle">Rearrange your week</h2><p>Hold to drag on touchscreens; swipe to scroll. Or select a student and tap a time.</p></div><button type="button" class="btn" data-manual="cancel" autofocus>Cancel</button></header><div class="manual-main"><aside class="manual-people" aria-label="Included students"></aside><section class="manual-workspace" aria-label="Teaching days"><div class="manual-override"><div><strong class="manual-override-name"></strong><span id="manualOverrideLabel">Allow outside submitted availability</span><small id="manualOverrideHint">Use when you’ve agreed another time directly. This lesson and week only.</small></div><button type="button" class="manual-switch" role="switch" aria-checked="false" aria-describedby="manualOverrideHint" data-manual="override"><span></span></button></div><div class="manual-legend" aria-live="polite">Pale colour: student availability · Deeper shading: a valid start · Grey: not offered</div><div class="manual-scroll"><div class="manual-grid"></div></div></section></div><footer class="manual-bottom"><p class="manual-status" role="status" aria-live="polite"></p><div class="manual-actions"><button type="button" class="btn" data-manual="undo">Undo</button><button type="button" class="btn" data-manual="reset">Reset</button><button type="button" class="btn" data-manual="unplace">Move to Not placed</button><button type="button" class="btn" data-manual="place" hidden>Place lesson</button><button type="button" class="btn sig manual-save" data-manual="save">Use this arrangement</button></div></footer></div>';
   renderManualEditor();
   document.body.classList.add("manual-open");
   manualDialog.showModal();
 }
 function renderManualEditor() {
   const m = manualEditor, selected = manualCurrent();
+  m.assign.forEach(a=>{if(a.availabilityOverride){const p=m.people.find(p=>p.id===a.id);if(p)p.override=true;}});
   const focused = document.activeElement;
   const focusKey = focused && focused.dataset.manualFocus;
   const peoplePanel = manualDialog.querySelector('.manual-people');
@@ -1954,11 +2003,12 @@ function renderManualEditor() {
     }
     m.assign.filter(a=>a.d===d).forEach(a=>{
       const index=m.people.findIndex(p=>p.id===a.id);
-      html+='<button type="button" class="manual-lesson'+(index===m.selected?' selected':'')+'" data-person="'+index+'" data-lesson-start="'+a.start+'" data-manual-focus="lesson-'+index+'" style="'+manualStyle(index)+';top:'+((a.start-m.first)*32+2)+'px;height:'+(a.lesson*32-4)+'px" aria-label="'+manualAttribute(a.name+', '+roundDays(m.rnd)[d]+' '+scheduleTimeFor(m.rnd.dayStartHour,a.start)+', '+a.lesson*15+' minutes. Select or drag to move.')+'"><strong>'+escapeHTML(a.name)+'</strong><small>'+scheduleTimeFor(m.rnd.dayStartHour,a.start)+'–'+scheduleTimeFor(m.rnd.dayStartHour,a.start+a.lesson)+'</small></button>';
+      html+='<button type="button" class="manual-lesson'+(index===m.selected?' selected':'')+'" data-person="'+index+'" data-lesson-start="'+a.start+'" data-manual-focus="lesson-'+index+'" style="'+manualStyle(index)+';top:'+((a.start-m.first)*32+2)+'px;height:'+(a.lesson*32-4)+'px" aria-label="'+manualAttribute(a.name+', '+roundDays(m.rnd)[d]+' '+scheduleTimeFor(m.rnd.dayStartHour,a.start)+', '+a.lesson*15+' minutes. Select or drag to move.')+'"><strong>'+escapeHTML(a.name)+'</strong><small>'+scheduleTimeFor(m.rnd.dayStartHour,a.start)+'–'+scheduleTimeFor(m.rnd.dayStartHour,a.start+a.lesson)+'</small>'+(a.availabilityOverride?'<small class="agreed-badge">Agreed separately</small>':'')+'</button>';
     });
     html+='</div>';
   }
   grid.innerHTML=html;
+  syncManualOverride();
   manualDialog.querySelector('[data-manual="undo"]').disabled=!m.history.length;
   manualDialog.querySelector('[data-manual="reset"]').disabled=!manualDirty();
   manualDialog.querySelector('[data-manual="unplace"]').disabled=!m.assign.some(a=>a.id===selected.id);
@@ -1997,7 +2047,7 @@ function placeManualLesson(d,start) {
   const existing=m.assign.find(a=>a.id===p.id);
   if(!existing || existing.d!==d || existing.start!==start) {
     manualRemember();
-    m.assign=m.assign.filter(a=>a.id!==p.id).concat({id:p.id,name:p.name,lesson:p.lesson,d,start});
+    m.assign=m.assign.filter(a=>a.id!==p.id).concat({id:p.id,name:p.name,lesson:p.lesson,d,start,...(manualOutside(p,d,start)?{availabilityOverride:true}:{})});
   }
   m.pending=null;m.message=p.name+' placed on '+roundDays(m.rnd)[d]+' at '+scheduleTimeFor(m.rnd.dayStartHour,start)+'.';
   renderManualEditor();
@@ -2039,7 +2089,8 @@ manualDialog.addEventListener('click',e=>{
   if(slot){manualEditor.pending={d:Number(slot.dataset.day),start:Number(slot.dataset.slot)};manualEditor.message='';updateManualPreview();return;}
   const action=e.target.closest('[data-manual]')?.dataset.manual;
   const m=manualEditor;
-  if(action==='cancel') closeManualEditor();
+  if(action==='override') toggleManualOverride();
+  else if(action==='cancel') closeManualEditor();
   else if(action==='save') saveManualEditor();
   else if(action==='unplace') unplaceManualLesson();
   else if(action==='place' && m.pending) placeManualLesson(m.pending.d,m.pending.start);
@@ -2163,6 +2214,7 @@ manualDialog.addEventListener('touchstart',e=>{
       el.classList.toggle('available',manualEditor.offered.has(key(d,start)) && manualCurrent().avail.has(key(d,start)));
       el.classList.toggle('valid',!manualReason(manualCurrent(),d,start));
     });
+    syncManualOverride();
     moveManualDragVisual(p.x,p.y,null);
     manualEditor.message='Lesson picked up. Drag to a time or to Not placed.';updateManualPreview();
   },250);
@@ -4211,7 +4263,7 @@ function renderAgenda(assignments, weekNo, weekStart, startHour, confirmed) {
     const rows = lessons.map(lesson => {
       const start = scheduleTimeFor(startHour, lesson.start);
       const end = scheduleTimeFor(startHour, lesson.start + lesson.lesson);
-      const line = '<span class="agenda-name">' + escapeHTML(lesson.name) + '</span><span class="agenda-duration">' +
+      const line = '<span class="agenda-name">' + escapeHTML(lesson.name) + (lesson.availabilityOverride?' <small class="agreed-badge">Agreed separately</small>':'') + '</span><span class="agenda-duration">' +
         (lesson.lesson * SCHEDULE_SLOT_MIN) + ' min</span>';
       // Dataset keys can contain student IDs: escape quotes as well as HTML markup.
       const lessonKey = escapeHTML(lesson.key || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;");

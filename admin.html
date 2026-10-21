@@ -945,7 +945,7 @@
 </div>
 <div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
 <div id="sidebarPanel" class="sidebar-panel"></div>
-<div id="toast" class="toast" hidden></div>
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
 <dialog id="manualDialog" class="manual-dialog" aria-labelledby="manualTitle"></dialog>
 <script>
 const ACCENT_THEMES = {
@@ -2705,7 +2705,7 @@ function nextWeek() {
   render();
 }
 
-// Transient feedback belongs to a particular round, not to the global toast.
+// Keep pending/fallback details scoped to the round; successes use the toast.
 let offerTransitionBusy = false;
 let linkFeedback = null;
 let linkCopyToken = 0;
@@ -2736,12 +2736,35 @@ async function copyStudentLink() {
     // Called in the click turn, before waiting for any animation.
     await navigator.clipboard.writeText(url);
     if (token !== linkCopyToken || !rnd.sent) return;
-    linkFeedback = { round: rnd, message: "Link copied—ready to paste into your group." };
+    linkFeedback = null;
+    if (activeRound() === rnd) flash("Link copied—ready to paste into your group.");
   } catch (e) {
     if (token !== linkCopyToken || !rnd.sent) return;
     linkFeedback = { round: rnd, message: "Couldn't copy automatically. Select and copy this link:", url };
   }
   refreshLinkFeedback();
+}
+
+let linkShareBusy = false;
+async function shareStudentLink() {
+  const rnd = activeRound();
+  if (!rnd.sent || linkShareBusy) return;
+  if (typeof navigator.share !== "function") {
+    await copyStudentLink();
+    return;
+  }
+  const url = window.location.origin + "/s/" + (ME.slug || "") + "/" + S.week;
+  linkShareBusy = true;
+  try {
+    // Invoke directly from the button click to retain Safari's user activation.
+    await navigator.share({ title: "Lesson availability", url });
+  } catch (error) {
+    if (error.name !== "AbortError" && activeRound() === rnd) {
+      flash("Sharing is unavailable. Use Copy link instead.");
+    }
+  } finally {
+    linkShareBusy = false;
+  }
 }
 
 async function transitionOffer(locked) {
@@ -4152,7 +4175,7 @@ function buildOfferActionsHTML(rnd) {
     '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
     '</div>';
   const locked = '<div class="btnrow"><button class="btn sig" data-action="copyStudentLink"' +
-    (linkFeedback && linkFeedback.round === rnd && linkFeedback.pending ? ' disabled' : '') + '>Copy link</button></div>' +
+    (linkFeedback && linkFeedback.round === rnd && linkFeedback.pending ? ' disabled' : '') + '>Copy link</button><button class="btn schedule-icon-btn" data-action="shareStudentLink"><svg class="schedule-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 15V3m-4 4 4-4 4 4M7 10H4v11h16V10h-3"/></svg>Share link</button></div>' +
     '<div class="btnrow"><button class="btn" data-action="editAvailability">Edit availability</button></div>';
   return '<div class="offer-actions" id="offerActions">' +
     '<div class="offer-mode' + (!rnd.sent ? ' active' : '') + '" data-mode="editing"' + (rnd.sent ? ' inert aria-hidden="true"' : '') + '>' + editing + '</div>' +
@@ -4683,6 +4706,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "nextWeek") nextWeek();
   else if (action === "sendToStudents") sendToStudents();
   else if (action === "copyStudentLink") copyStudentLink();
+  else if (action === "shareStudentLink") shareStudentLink();
   else if (action === "editAvailability") editAvailability();
   else if (action === "cycleDayPref") cycleDayPreference(Number(el.dataset.day));
   else if (action === "toggleMoreOptions") toggleMoreOptions();

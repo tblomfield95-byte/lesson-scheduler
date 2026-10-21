@@ -341,10 +341,12 @@
   .placement-help{font-size:12px;color:var(--ink-soft);margin:8px 0 0}
   .btn{font:inherit;font-size:13px;padding:9px 14px;border-radius:8px;border:1px solid var(--rule);
        background:var(--panel);color:var(--ink);cursor:pointer}
-  .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:560}
-  .btn.sig{background:var(--sig);color:#fff;border-color:var(--sig);font-weight:560}
-  .btn.outline-sig{background:none;color:var(--sig);border-color:var(--sig)}
-  .btn.confirm-pending{background:var(--warn);color:#fff;border-color:var(--warn);font-weight:560;
+  /* Actions: accent commits, neutral utilities, red destructive actions.
+     Selected tabs, preferences and response statuses have their own state colours. */
+  .btn.primary,.btn.sig{background:var(--sig);color:#fff;border-color:var(--sig);font-weight:560}
+  .btn.danger{background:var(--panel);color:#A12C38;border-color:#DEC1C5}
+  .btn.danger:hover:not(:disabled){background:#FBEDEE}
+  .btn.confirm-pending{background:#FBEDEE;color:#A12C38;border-color:#A12C38;font-weight:560;
                         animation:confirmPulse 0.35s ease}
   @keyframes confirmPulse{0%{transform:scale(1)}35%{transform:scale(1.07)}65%{transform:scale(0.97)}100%{transform:scale(1)}}
   .btn.notteaching-active{background:var(--sig-soft);border-color:var(--sig);color:var(--sig);font-weight:560}
@@ -719,6 +721,8 @@
   .mini{font:inherit;font-size:11.5px;padding:5px 9px;border-radius:16px;
         border:1px solid var(--rule);background:var(--paper);color:var(--ink-soft);cursor:pointer}
   .mini.warnb{color:var(--warn);border-color:#E7CDBE}
+  .x[data-action="removeEntry"],.x[data-action="removeStudent"],
+  .mini[data-action="cancelEarly"],.mini[data-action="cancelLate"]{color:#A12C38;border-color:#DEC1C5;background:var(--panel)}
   .mini:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
   .struck{text-decoration:line-through;color:var(--ink-soft)}
 
@@ -916,7 +920,7 @@
   /* Refined action symbols; compact reply choices stay text-only. */
   [data-action="copyStudentLink"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M10%2013a5%205%200%200%200%207%20.5l3-3a5%205%200%200%200-7-7l-2%202M14%2011a5%205%200%200%200-7-.5l-3%203a5%205%200%200%200%207%207l2-2%22%2F%3E%3C%2Fsvg%3E")}
   [data-action="runSolver"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m3.6%2017.6%209-9a1.4%201.4%200%200%201%202%200l.8.8a1.4%201.4%200%200%201%200%202l-9%209a2%202%200%200%201-2.8-2.8ZM11%2010.2l2.8%202.8%22%2F%3E%3Cpath%20d%3D%22M6%202c.4%202%201%202.6%203%203-2%20.4-2.6%201-3%203-.4-2-1-2.6-3-3%202-.4%202.6-1%203-3ZM19%202c.4%202%201%202.6%203%203-2%20.4-2.6%201-3%203-.4-2-1-2.6-3-3%202-.4%202.6-1%203-3ZM19%2014c.4%202%201%202.6%203%203-2%20.4-2.6%201-3%203-.4-2-1-2.6-3-3%202-.4%202.6-1%203-3Z%22%2F%3E%3C%2Fsvg%3E")}  
-  [data-action="resetYearConfirm"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M17.657%206.343A8%208%200%201%201%2012%204M17.657%2011.343v-5h5%22%2F%3E%3C%2Fsvg%3E")}
+  [data-action="resetYearConfirm"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M16.243%204.929L17.657%206.343A8%208%200%201%201%2012%204M16.243%209.929v-5h5%22%2F%3E%3C%2Fsvg%3E")}
   [data-action="setSchedulingMode"][data-mode="rolling"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M20%208a8%208%200%200%200-13-3L3%209M3%203v6h6M4%2016a8%208%200%200%200%2013%203l4-4M21%2021v-6h-6%22%2F%3E%3C%2Fsvg%3E")}
   [data-action="sendToStudents"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%225%22%20y%3D%2210%22%20width%3D%2214%22%20height%3D%2211%22%20rx%3D%222%22%2F%3E%3Cpath%20d%3D%22M8%2010V7a4%204%200%200%201%208%200v3M12%2014v3%22%2F%3E%3C%2Fsvg%3E")}
   [data-action="clearOffer"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cg%20transform%3D%22rotate%2845%2012%2012%29%22%3E%3Crect%20x%3D%228%22%20y%3D%223%22%20width%3D%228%22%20height%3D%2218%22%20rx%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M8%2014h8%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")}  
@@ -3004,7 +3008,7 @@ function renderTeachingLocation() {
     '<div class="field"><label for="teachingAddress">Address <span class="hint">(optional)</span></label><input id="teachingAddress" maxlength="300" data-location-field="address" value="'+manualAttribute(d.address)+'" placeholder="Street, city and postcode"></div>'+
     '<details'+(d.coordinates?' open':'')+'><summary style="cursor:pointer;margin-bottom:12px">Map pin <span class="hint">(optional)</span></summary><div class="field"><label for="teachingCoordinates">Latitude, longitude</label><input id="teachingCoordinates" type="text" maxlength="80" autocapitalize="off" spellcheck="false" data-location-field="coordinates" value="'+manualAttribute(d.coordinates)+'" placeholder="51.52352, -0.15188"><p class="hint">Coordinates attach a map pin, not just a text label. Every preset fills these in for you. Other venues can use coordinates copied from a map.</p></div></details>'+
     '<p class="hint" id="teachingMapPreview">'+teachingLocationMapPreview(d)+'</p>'+
-    '<div class="profile-card-footer"><p class="hint">Saves only your teaching location for future calendar exports.</p><div class="btnrow"><button class="btn" data-action="clearTeachingLocation">Clear fields</button><button class="btn sig" data-action="saveTeachingLocation">Save teaching location</button></div></div><p class="hint">To remove your saved location, clear the fields and save. Existing calendar events are not changed.</p></section>';
+    '<div class="profile-card-footer"><p class="hint">Saves only your teaching location for future calendar exports.</p><div class="btnrow"><button class="btn danger" data-action="clearTeachingLocation">Clear fields</button><button class="btn sig" data-action="saveTeachingLocation">Save teaching location</button></div></div><p class="hint">To remove your saved location, clear the fields and save. Existing calendar events are not changed.</p></section>';
 }
 let newStudentDraft = { name: "", allocated: "" };
 function addStudent() {
@@ -3887,8 +3891,8 @@ function renderProfileSection() {
     (confirmingDeleteAccount
       ? '<p class="lede" style="color:var(--sig);font-weight:600;margin-bottom:10px">Are you absolutely sure? This can\u2019t be undone.</p>' +
         '<div class="btnrow"><button class="btn" data-action="cancelDeleteAccount">Cancel</button>' +
-        '<button class="btn sig" data-action="confirmDeleteAccount">Yes, delete my account</button></div>'
-      : '<div class="btnrow"><button class="btn outline-sig" data-action="requestDeleteAccount">Delete my account</button></div>') +
+        '<button class="btn danger" data-action="confirmDeleteAccount">Yes, delete my account</button></div>'
+      : '<div class="btnrow"><button class="btn danger" data-action="requestDeleteAccount">Delete my account</button></div>') +
     "</details></div>";
 }
 
@@ -4171,10 +4175,10 @@ function renderWeekPicker() {
 function buildOfferActionsHTML(rnd) {
   const editing = '<div class="btnrow"><button class="btn sig" data-action="sendToStudents" ' +
     (rnd.offered.size && !rnd.notTeaching ? '' : 'disabled') + '>Lock &amp; copy link</button></div>' +
-    '<div class="btnrow"><button class="btn" data-action="clearOffer">Clear grid</button>' +
+    '<div class="btnrow"><button class="btn danger" data-action="clearOffer">Clear grid</button>' +
     '<button class="btn' + (rnd.notTeaching ? " notteaching-active" : "") + '" data-action="skipWeek">Not teaching this week</button>' +
     '</div>';
-  const locked = '<div class="btnrow"><button class="btn sig" data-action="copyStudentLink"' +
+  const locked = '<div class="btnrow"><button class="btn" data-action="copyStudentLink"' +
     (linkFeedback && linkFeedback.round === rnd && linkFeedback.pending ? ' disabled' : '') + '>Copy link</button><button class="btn schedule-icon-btn" data-action="shareStudentLink"><svg class="schedule-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 15V3m-4 4 4-4 4 4M7 10H4v11h16V10h-3"/></svg>Share link</button></div>' +
     '<div class="btnrow"><button class="btn" data-action="editAvailability">Edit availability</button></div>';
   return '<div class="offer-actions" id="offerActions">' +
@@ -4308,7 +4312,7 @@ function renderRepliesTab() {
     : "";
   return '<div class="pad" style="padding-top:0">' +
     lede +
-    (DEV_MODE ? '<div class="btnrow"><button class="btn sig" data-action="sampleReplies" ' + (rnd.offered.size ? "" : "disabled") + ">Load sample replies</button></div>" : "") +
+    (DEV_MODE ? '<div class="btnrow"><button class="btn" data-action="sampleReplies" ' + (rnd.offered.size ? "" : "disabled") + ">Load sample replies</button></div>" : "") +
     body + heatPanel +
     '<div class="btnrow"><button class="btn sig" data-action="runSolver" ' + (participants.length ? "" : "disabled") + ">Work out the schedule</button></div>" +
     "</div>";
@@ -4524,7 +4528,7 @@ function renderHoursTab() {
     ? '<div class="panel completed-summary"><h3>✓ Week completed</h3><p>' +
       completionEntries.length + ' logged ' + (completionEntries.length === 1 ? 'entry' : 'entries') +
       ' · ' + compactHours(completionHours) + 'h moved to completed hours. Offer, Replies and Schedule are now kept as a read-only record of this week.</p>' +
-      '<div class="btnrow" style="margin-bottom:0"><button class="btn outline-sig" data-action="undoEndWeek">Undo end week</button></div></div>'
+      '<div class="btnrow" style="margin-bottom:0"><button class="btn" data-action="undoEndWeek">Undo end week</button></div></div>'
     : "";
   const weeksLeft = Math.max(1, termWeeks() - S.weeksCompleted);
   const totalTaught = S.students.reduce((s, x) => s + taughtFor(x.id), 0);
@@ -4598,7 +4602,7 @@ function renderHoursTab() {
             return '<div class="entry"><input type="date" data-bind="editDate" value="' + editDraft.date + '" style="flex:1;margin-right:6px">' +
               '<select data-bind="editHours" style="margin-right:6px">' + [0.5, 1, 1.5, 2, 2.5, 3].map(h =>
                 '<option value="' + h + '" ' + (parseFloat(editDraft.hours) === h ? "selected" : "") + ">" + h + "h</option>").join("") + "</select>" +
-              '<span class="entryright"><button class="btn" style="padding:5px 10px;font-size:12.5px" data-action="saveEditEntry" data-id="' + e.id + '">Save</button>' +
+              '<span class="entryright"><button class="btn sig" style="padding:5px 10px;font-size:12.5px" data-action="saveEditEntry" data-id="' + e.id + '">Save</button>' +
               '<button class="x" data-action="cancelEditEntry" aria-label="Cancel editing"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button></span></div>';
           }
           return '<div class="entry"><span>' + fmtDateShort(e.date) +
@@ -4620,7 +4624,7 @@ function renderHoursTab() {
         manualDate + '" aria-label="Select date for manual teaching hours" required></div>' +
         '<select data-bind="draftHours">' + [0.5, 1, 1.5, 2, 2.5, 3].map(h =>
           '<option value="' + h + '" ' + (parseFloat(S.draft.hours) === h ? "selected" : "") + ">" + h + "h</option>").join("") + "</select>" +
-        '<button class="btn" data-action="addEntry" data-id="' + s.id + '">Add</button></div></div></div></div></div></div>';
+        '<button class="btn sig" data-action="addEntry" data-id="' + s.id + '">Add</button></div></div></div></div></div></div>';
     }
 
     return '<div class="hrow"><div class="htop" style="cursor:pointer" data-action="toggleHoursOpen" data-id="' + s.id +
@@ -4644,7 +4648,7 @@ function renderHoursTab() {
     '<select id="hoursExportSelect" data-bind="hoursExportTimeframe">' +
     exportOptions.map(([val, label]) => '<option value="' + val + '" ' + ((S.hoursExportTimeframe || "week") === val ? "selected" : "") + '>' + label + '</option>').join("") +
     '</select></div>' +
-    '<button class="btn sig" data-action="exportHours">Copy summary</button>' +
+    '<button class="btn" data-action="exportHours">Copy summary</button>' +
     (S.hoursExportText ? '<textarea class="fallback" readonly rows="' + (S.hoursExportText.split("\n").length + 1) + '" onfocus="this.select()">' + escapeHTML(S.hoursExportText) + "</textarea>" : "") +
     "</div>";
 
@@ -4661,7 +4665,7 @@ function renderHoursTab() {
     '</select></div>' +
     '<div class="panel">' + rows + "</div>" +
     exportPanel +
-    '<div class="btnrow"><button class="btn' + (confirmingReset ? " confirm-pending" : "") + '" data-action="resetYearConfirm">' +
+    '<div class="btnrow"><button class="btn danger' + (confirmingReset ? " confirm-pending" : "") + '" data-action="resetYearConfirm">' +
     (confirmingReset ? "Tap again to confirm" : "Reset year") + '</button></div></div>';
 }
 

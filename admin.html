@@ -745,6 +745,9 @@
   .agenda-day-heading span{flex:none;font-size:11px;color:var(--ink-soft)}
   .agenda-row{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:start;gap:10px;margin-bottom:9px}
   .agenda-time{font-size:11px;color:var(--ink-soft);padding-top:15px;font-variant-numeric:tabular-nums}
+  .agenda-break .agenda-time{padding-top:6px}
+  .agenda-break-line{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 12px;border-block:1px dashed var(--rule);color:var(--ink-soft);font-size:11px;line-height:1.5}
+  .agenda-break-duration{white-space:nowrap}
   .agenda-lesson{min-width:0;background:#EEE5DA;border-left:3px solid #93674F;border-radius:5px}
   .agenda-lesson.rose{background:#F0E0E1;border-color:#9F5F6B}
   .agenda-lesson.sage{background:#E4E8DC;border-color:#7C8960}
@@ -920,7 +923,7 @@
   /* Refined action symbols; compact reply choices stay text-only. */
   [data-action="copyStudentLink"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M10%2013a5%205%200%200%200%207%20.5l3-3a5%205%200%200%200-7-7l-2%202M14%2011a5%205%200%200%200-7-.5l-3%203a5%205%200%200%200%207%207l2-2%22%2F%3E%3C%2Fsvg%3E")}
   [data-action="runSolver"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m3.6%2017.6%209-9a1.4%201.4%200%200%201%202%200l.8.8a1.4%201.4%200%200%201%200%202l-9%209a2%202%200%200%201-2.8-2.8ZM11%2010.2l2.8%202.8%22%2F%3E%3Cpath%20d%3D%22M6%202c.4%202%201%202.6%203%203-2%20.4-2.6%201-3%203-.4-2-1-2.6-3-3%202-.4%202.6-1%203-3ZM19%202c.4%202%201%202.6%203%203-2%20.4-2.6%201-3%203-.4-2-1-2.6-3-3%202-.4%202.6-1%203-3ZM19%2014c.4%202%201%202.6%203%203-2%20.4-2.6%201-3%203-.4-2-1-2.6-3-3%202-.4%202.6-1%203-3Z%22%2F%3E%3C%2Fsvg%3E")}  
-  [data-action="resetYearConfirm"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M16.243%204.929L17.657%206.343A8%208%200%201%201%2012%204M16.243%209.929v-5h5%22%2F%3E%3C%2Fsvg%3E")}
+  [data-action="resetYearConfirm"],[data-manual="reset"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M16.243%204.929L17.657%206.343A8%208%200%201%201%2012%204M16.243%209.929v-5h5%22%2F%3E%3C%2Fsvg%3E")}
   [data-action="setSchedulingMode"][data-mode="rolling"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M20%208a8%208%200%200%200-13-3L3%209M3%203v6h6M4%2016a8%208%200%200%200%2013%203l4-4M21%2021v-6h-6%22%2F%3E%3C%2Fsvg%3E")}
   [data-action="sendToStudents"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%225%22%20y%3D%2210%22%20width%3D%2214%22%20height%3D%2211%22%20rx%3D%222%22%2F%3E%3Cpath%20d%3D%22M8%2010V7a4%204%200%200%201%208%200v3M12%2014v3%22%2F%3E%3C%2Fsvg%3E")}
   [data-action="clearOffer"]{--action-glyph:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cg%20transform%3D%22rotate%2845%2012%2012%29%22%3E%3Crect%20x%3D%228%22%20y%3D%223%22%20width%3D%228%22%20height%3D%2218%22%20rx%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M8%2014h8%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")}  
@@ -4337,8 +4340,15 @@ function renderAgenda(assignments, weekNo, weekStart, startHour, confirmed) {
   const minutes = assignments.reduce((total, lesson) => total + lesson.lesson * SCHEDULE_SLOT_MIN, 0);
   const duration = minutes < 60 ? minutes + " min" : Math.floor(minutes / 60) + "h" + (minutes % 60 ? " " + minutes % 60 + " min" : "");
   const days = Object.keys(by).sort((a, b) => Number(a) - Number(b)).map(d => {
-    const lessons = by[d];
+    const lessons = by[d].slice().sort((a, b) => a.start - b.start);
+    let occupiedUntil = null;
     const rows = lessons.map(lesson => {
+      let breakRow = '';
+      if (occupiedUntil !== null && lesson.start > occupiedUntil) {
+        const breakStart = scheduleTimeFor(startHour, occupiedUntil);
+        breakRow = '<div class="agenda-row agenda-break"><time class="agenda-time" datetime="' + breakStart + '">' + breakStart + '</time><div class="agenda-break-line"><span>Break</span><span class="agenda-break-duration">' + ((lesson.start - occupiedUntil) * SCHEDULE_SLOT_MIN) + ' min</span></div></div>';
+      }
+      occupiedUntil = Math.max(occupiedUntil === null ? 0 : occupiedUntil, lesson.start + lesson.lesson);
       const start = scheduleTimeFor(startHour, lesson.start);
       const end = scheduleTimeFor(startHour, lesson.start + lesson.lesson);
       const line = '<span class="agenda-name">' + escapeHTML(lesson.name) + (lesson.availabilityOverride?' <small class="agreed-badge">Agreed separately</small>':'') + '</span><span class="agenda-duration">' +
@@ -4351,7 +4361,7 @@ function renderAgenda(assignments, weekNo, weekStart, startHour, confirmed) {
           '<button class="mini" data-action="cancelEarly" data-id="' + lessonKey + '">Cancelled, ' + (S.settings.cancellationWindowHours || 24) + 'h+ notice</button>' +
           '<button class="mini warnb" data-action="cancelLate" data-id="' + lessonKey + '">Cancelled late</button></div></div></details>'
         : '<div class="agenda-lesson ' + agendaLessonColour(lesson) + '"><div class="agenda-lesson-line">' + line + '</div></div>';
-      return '<div class="agenda-row"><time class="agenda-time" datetime="' + start + '">' + start + '</time>' + card + '</div>';
+      return breakRow + '<div class="agenda-row"><time class="agenda-time" datetime="' + start + '">' + start + '</time>' + card + '</div>';
     }).join("");
     return '<section class="agenda-day"><div class="agenda-day-heading"><h3>' + escapeHTML(dayDateLong(weekStart, Number(d))) +
       '</h3><span>' + lessons.length + ' lesson' + (lessons.length === 1 ? '' : 's') + '</span></div>' + rows + '</section>';

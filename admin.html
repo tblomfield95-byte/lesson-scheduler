@@ -4624,7 +4624,7 @@ function renderHoursTab() {
         '" aria-hidden="' + (!open) + '"' + (open ? '' : ' inert') + '>' +
         '<div class="hours-detail-expander-inner"><div class="ledger"><section class="scheduled-hours"><div class="ledger-heading"><span>Scheduled</span><span>' +
         compactHours(scheduled) + 'h</span></div>' + scheduledRows +
-        '<p class="scheduled-note">These hours will move to completed when you end the week.</p></section>' +
+        (scheduled > 0 ? '<p class="scheduled-note">These hours will move to completed when you end the week.</p>' : '') + '</section>' +
         '<div class="ledger-heading"><span>Completed hours</span><span>' + compactHours(taught) + 'h</span></div>' + entryRows +
         '<button type="button" class="btn manual-entry-toggle" data-action="toggleManualEntry" data-id="' + s.id +
         '" aria-expanded="' + manualEntryOpen + '">' + (manualEntryOpen ? 'Cancel manual entry' : 'Add hours manually') + '</button>' +

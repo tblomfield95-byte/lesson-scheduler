@@ -683,7 +683,9 @@
   .tag{font-style:normal;font-size:11px;color:var(--ink-soft);margin-left:8px;
        border:1px solid var(--rule);border-radius:8px;padding:1px 6px}
   .x{font:inherit;font-size:17px;line-height:1;width:24px;height:24px;border-radius:12px;
-     border:1px solid var(--rule);background:var(--panel);color:var(--ink-soft);cursor:pointer}
+     border:1px solid var(--rule);background:var(--panel);color:var(--ink-soft);cursor:pointer;
+     display:inline-flex;align-items:center;justify-content:center;padding:0;box-sizing:border-box;flex-shrink:0}
+  .x > svg{display:block;flex:none;margin:0}
   .x:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
   .addrow{display:flex;gap:7px;align-items:center;padding-top:10px}
   .addrow input,.addrow select{font:inherit;font-size:13px;padding:7px 8px;border-radius:7px;

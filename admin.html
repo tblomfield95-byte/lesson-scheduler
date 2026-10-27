@@ -290,6 +290,20 @@
   .tab{position:relative;z-index:1;flex:1;min-width:74px;border:none;background:none;padding:7px 6px;font:inherit;font-size:13px;
        color:var(--ink-soft);border-radius:7px;cursor:pointer;white-space:nowrap;transition:color .18s ease,font-weight .18s ease}
   .tab.sel{background:none;color:#fff;font-weight:560}
+  .editorial .bartop{align-items:center;padding:16px 18px 13px}
+  .header-identity{min-width:0}
+  .header-brand{display:flex;align-items:center;gap:10px;color:var(--sig)}
+  .header-brand svg{flex:none}
+  .header-brand h1{font:600 34px/1.1 var(--serif);letter-spacing:-1px;margin:0}
+  .header-subtitle{font-size:12px;line-height:1.4;color:var(--ink-soft);margin:5px 0 0 42px;overflow-wrap:anywhere}
+  .editorial .header-menu{width:44px;height:44px;border:1px solid var(--rule);border-radius:50%;color:var(--ink);padding:0}
+  .editorial .tabs{margin:0 16px 12px;padding:4px;gap:2px;background:rgba(110,100,80,.08);border:1px solid var(--rule);border-radius:12px;overflow:hidden}
+  .editorial .tab{min-width:0;min-height:38px;padding:8px 4px;border-radius:8px}
+  .editorial .tab.sel{color:var(--sig);font-weight:600}
+  .editorial .tab-highlight{top:4px;height:calc(100% - 8px);background:var(--panel);border-radius:8px;box-shadow:0 1px 4px rgba(40,30,20,.12)}
+  .editorial .tabs:not(.highlight-ready) .tab.sel{background:var(--panel)}
+  .weekpicker{flex-wrap:wrap}
+  .week-year-progress{flex-basis:100%;text-align:center;border-top:1px solid var(--rule);padding-top:9px;margin-top:9px;font-size:11px;color:var(--ink-soft)}
   .subtabs{position:relative;display:inline-flex;gap:3px;background:var(--paper);border:1px solid var(--rule);
            border-radius:9px;padding:3px;margin-bottom:18px}
   .subtab-highlight{position:absolute;z-index:0;top:3px;left:0;bottom:3px;width:0;
@@ -3801,14 +3815,13 @@ async function animatedRender(direction) {
 
 function renderHeader() {
   const tabs = [["week", "Offer"], ["replies", "Replies"], ["plan", "Schedule"], ["hours", "Hours"]];
-  const title = (ME.instrument ? ME.instrument + " Lessons" : "Cadence.") + (ME.name ? " - " + ME.name : "");
+  const identity = [ME.name, ME.instrument].filter(Boolean).map(escapeHTML).join(" · ");
   const sectionTitles = { profile: "Profile", students: "Students", termdates: "Term Dates", settings: "Settings" };
   const inScheduler = currentSection === "scheduler";
-  let header = '<div class="bar"><div class="bartop">' +
-    '<span class="hbrow"><button class="hamburger" data-action="toggleSidebar" aria-label="Menu"><svg width="24" height="18" viewBox="0 0 24 18" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="3" rx="1.5" fill="currentColor"/><rect y="7.5" width="24" height="3" rx="1.5" fill="currentColor"/><rect y="15" width="24" height="3" rx="1.5" fill="currentColor"/></svg></button>' +
-    '<h1 class="title">' + (inScheduler ? title : sectionTitles[currentSection]) + '</h1></span>' +
-    (inScheduler ? '<div class="wk">' + (S.settings.schedulingMode === "rolling" ? S.weeksCompleted + " weeks taught" : S.weeksCompleted + " of " + termWeeks() + " weeks done") + '</div>' : '<span></span>') +
-    '</div>';
+  let header = '<div class="bar editorial"><div class="bartop"><div class="header-identity">' +
+    '<div class="header-brand"><svg width="32" height="32" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="9" fill="var(--sig)"/><rect x="8" y="9" width="6" height="22" rx="2" fill="#F2EFE7"/><rect x="20" y="9" width="12" height="22" rx="3" fill="#F2EFE7"/></svg><h1>Cadence.</h1></div>' +
+    '<p class="header-subtitle">' + (inScheduler ? identity : escapeHTML(sectionTitles[currentSection] || "")) + '</p></div>' +
+    '<button class="hamburger header-menu" data-action="toggleSidebar" aria-label="Open menu"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button></div>';
   if (inScheduler) {
     header += '<div class="tabs"><span class="tab-highlight" aria-hidden="true"></span>' +
       tabs.map(([k, label]) => '<button class="tab' + (S.tab === k ? " sel" : "") + '" data-action="tab" data-tab="' + k +
@@ -4174,6 +4187,7 @@ function renderWeekPicker() {
     (context ? '<span class="week-context-pill ' + ({"Current week":"current", "Previous week":"previous", "Next week":"next"}[context]) + '">' + context + '</span>' : '') +
     '<span>' + (weekRangeLabel(rnd.weekStart) || "") + '</span></div>' +
     '<button class="step" data-action="nextWeek" ' + (!rolling && S.week >= termWeeks() ? "disabled" : "") + '>\u203a</button>' +
+    '<div class="week-year-progress">' + (rolling ? S.weeksCompleted + ' weeks completed' : 'Year progress · ' + S.weeksCompleted + ' of ' + termWeeks() + ' weeks completed') + '</div>' +
     "</div>";
 }
 

@@ -306,6 +306,17 @@
   .editorial .tabs:not(.highlight-ready) .tab.sel{background:var(--panel)}
   .weekpicker{flex-wrap:wrap}
   .week-year-progress{flex-basis:100%;text-align:center;border-top:1px solid var(--rule);padding-top:9px;margin-top:9px;font-size:11px;color:var(--ink-soft)}
+  .class-dialog{width:min(720px,calc(100vw - 24px));max-height:90dvh;padding:0;border:1px solid var(--rule);border-radius:20px;background:var(--paper);color:var(--ink)}
+  .class-dialog::backdrop{background:rgba(27,36,48,.45)}
+  .class-body{padding:20px}.class-body fieldset{border:1px solid var(--rule);border-radius:12px;padding:12px;margin:16px 0}
+  .class-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}.class-fields label{display:grid;gap:6px;min-width:0}.class-fields input,.class-fields select{width:100%;box-sizing:border-box;font:inherit;font-size:16px;padding:11px 12px;border:1px solid var(--rule);border-radius:8px;background:var(--panel);color:var(--ink)}
+  .class-dialog[open]{animation:manual-appear .28s cubic-bezier(.22,.72,.16,1)}
+  .class-dialog details{margin:16px 0}.class-dialog details summary{cursor:pointer;padding:10px 0;font-weight:600}.class-dialog .grid-wrap{overflow:auto}.class-dialog .cell{cursor:default}
+  @media(prefers-reduced-motion:reduce){.class-dialog[open]{animation:none}}
+  .class-student{display:flex;align-items:center;gap:8px;margin:10px 0}.class-student input{width:18px;height:18px;flex:none;accent-color:var(--sig)}
+  .class-time{padding:16px;margin:12px 0;border:1px solid var(--rule);border-radius:12px;background:var(--panel)}.class-time p{margin:7px 0}.class-time meter{width:100%;accent-color:var(--sig)}
+  .agenda-name .class-detail{display:block;font-size:12px;font-weight:400;line-height:1.5;margin-top:5px}.agenda-lesson.agenda-class{outline:1px solid var(--sig);background:var(--sig-soft)}
+  @media(max-width:420px){.class-fields{grid-template-columns:1fr}.class-body{padding:14px}}
   .subtabs{position:relative;display:flex;gap:2px;background:rgba(110,100,80,.08);border:1px solid var(--rule);
            border-radius:12px;padding:4px;margin-bottom:18px}
   .subtab-highlight{position:absolute;z-index:0;top:4px;left:0;bottom:4px;width:0;
@@ -1002,7 +1013,8 @@ function applyAccent(id) {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
   const selector = 'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])';
-  const fields = Array.from(document.querySelectorAll(selector)).filter(el => el.offsetParent !== null);
+  const scope = document.querySelector("dialog[open]") || document;
+  const fields = Array.from(scope.querySelectorAll(selector)).filter(el => el.offsetParent !== null);
   const idx = fields.indexOf(document.activeElement);
   if (idx === -1) return;
   const next = fields[e.shiftKey ? idx - 1 : idx + 1];
@@ -1499,6 +1511,7 @@ function blankRound(weekStart) {
     blockPreferences: [],
     replies: {},
     plan: null,
+    classes: [],
     result: null,
     chosen: 0,
     notTeaching: false,
@@ -1599,6 +1612,7 @@ function serializeState() {
         lessonMinutes: Number.isInteger(rep.lessonMinutes) ? rep.lessonMinutes : lessonMinutesFor(rr, id),
         source: rep.source || null,
       }])),
+      classes: rr.classes || [],
       plan: rr.plan,
       result: rr.result,
       chosen: rr.chosen,
@@ -1672,6 +1686,7 @@ function applySavedState(saved) {
           Number.isInteger(rep.lessonMinutes) ? rep.lessonMinutes : ((rep.lesson || 2) * GRID_SLOT_MIN))),
         source: rep.source || null,
       }])),
+      classes: Array.isArray(rr.classes) ? rr.classes : [],
       plan: rr.plan ? { ...rr.plan, lessons: (rr.plan.lessons || []).map(migrateLesson) } : null,
       // Old solver results used 30-minute coordinates. They are cheap and
       // safer to regenerate than to migrate every cached score field.
@@ -1787,14 +1802,14 @@ async function loadState() {
 async function refreshSavedState() {
   // Opening Safari's native date picker can produce a window-focus event.
   // Never let a background state refresh replace the DOM underneath it.
-  if (manualEditor || teachingLocationHasEdits() || Date.now() < suppressStateRefreshUntil) return;
+  if (classPlanner || manualEditor || teachingLocationHasEdits() || Date.now() < suppressStateRefreshUntil) return;
   if (document.activeElement && document.activeElement.matches('.manual-date-field input[type="date"]')) return;
   if (!stateReady || stateBlocked || saveInFlight || refreshInFlight || stateFingerprint() !== savedFingerprint) return;
   refreshInFlight = true;
   try {
     const saved = await readLatestState();
     // The user may have edited while the read was in flight.
-    if (manualEditor || teachingLocationHasEdits() || saveInFlight || stateBlocked || stateFingerprint() !== savedFingerprint || saved._revision <= stateRevision) return;
+    if (classPlanner || manualEditor || teachingLocationHasEdits() || saveInFlight || stateBlocked || stateFingerprint() !== savedFingerprint || saved._revision <= stateRevision) return;
     const view = {tab:S.tab,week:S.week,scheduleView:S.scheduleView,hoursSort:S.hoursSort,draft:S.draft};
     applySavedState(saved); Object.assign(S,view); ensureRound(S.week);
     if(currentSection==='profile')openTeachingLocationDraft();
@@ -1815,13 +1830,14 @@ const taughtFor = (id) => S.log.filter(e => e.studentId === id).reduce((s, e) =>
 const scheduledLessonsFor = (id) => Object.values(S.rounds || {}).flatMap(rnd => {
   if (rnd.completed || !rnd.plan || !Array.isArray(rnd.plan.lessons)) return [];
   return rnd.plan.lessons
-    .filter(lesson => lesson.id === id && (lesson.status === "planned" || lesson.status === "cancelled_late"))
+    .filter(lesson => (lesson.kind === "class" ? lesson.creditHours && classMembers(lesson).includes(id) : lesson.id === id) && (lesson.status === "planned" || lesson.status === "cancelled_late"))
     .map(lesson => ({ lesson, plan: rnd.plan, startHour: rnd.dayStartHour != null ? rnd.dayStartHour : 9 }));
 }).sort((a, b) => a.plan.weekStart.localeCompare(b.plan.weekStart) || a.lesson.d - b.lesson.d || a.lesson.start - b.lesson.start);
 const scheduledFor = (id) => scheduledLessonsFor(id)
   .reduce((sum, item) => sum + (item.lesson.lesson * SCHEDULE_SLOT_MIN) / 60, 0);
 const compactHours = value => String(Number(Number(value || 0).toFixed(2)));
 const getParticipants = (rnd) => S.students
+  .filter(s => !(rnd.classes || []).some(c => c.replacesIndividual && classMembers(c).includes(s.id)))
   .filter(s => !(rnd.excludedStudentIds || []).includes(s.id))
   .filter(s => rnd.replies[s.id] && rnd.replies[s.id].status === "in" && rnd.replies[s.id].avail.size > 0)
   .map(s => ({ id: s.id, name: s.name, lesson: lessonFor(rnd, s.id), avail: rnd.replies[s.id].avail }));
@@ -1830,15 +1846,24 @@ function solveRound(participants, rnd) {
     ...person,
     avail: expandGridAvailability(person.avail),
   }));
-  return solve(
+  const fixed = rnd.plan ? rnd.plan.lessons.filter(l=>l.kind==='class' && l.status==='planned') : (rnd.classes || []);
+  const free = expandGridAvailability(rnd.offered);
+  if(fixed.some(c=>Array.from({length:c.lesson},(_,i)=>key(c.d,c.start+i)).some(k=>!free.has(k))))
+    return {ok:false,options:[],unplaced:['A class is outside your current offer. Extend the offer or remove the class.'],blockers:[]};
+  fixed.forEach(c=>{for(let i=c.start;i<c.start+c.lesson;i++)free.delete(key(c.d,i));});
+  const solved = expandedParticipants.length ? solve(
     expandedParticipants,
-    expandGridAvailability(rnd.offered),
+    free,
     rnd.dayPreferences || {},
     roundDays(rnd),
     roundSlots(rnd) * 2,
     S.settings.priorityOrder,
     solverBlockPreferences(rnd)
-  );
+  ) : {ok:true,options:[{assign:[]}],unplaced:[],blockers:[]};
+  if(!solved.options.length && fixed.length) solved.options=[{assign:[]}];
+  solved.options=solved.options.map(o=>{const assign=[...o.assign,...fixed];return {...o,assign,...scoreSolution(assign,rnd.dayPreferences,solverBlockPreferences(rnd))};});
+  solved.options.sort(buildPriorityComparator(S.settings.priorityOrder));
+  return solved;
 }
 const getHeat = (rnd) => {
   const h = {};
@@ -2030,7 +2055,7 @@ function toggleManualOverride() {
 function manualCurrent() { return manualEditor && manualEditor.people[manualEditor.selected]; }
 function manualDirty() { return manualEditor && JSON.stringify(manualEditor.assign) !== JSON.stringify(manualEditor.initial); }
 function openManualEditor() {
-  const rnd = activeRound(), people = getParticipants(rnd).map(p => ({ ...p, avail: expandGridAvailability(p.avail) }));
+  const rnd = activeRound(), people = getParticipants(rnd).map(p => ({ ...p, avail: expandGridAvailability(p.avail) })).concat((rnd.classes || []).map(c=>({...c,avail:classAvailability(rnd,c)})));
   if (!stateReady || stateBlocked || rnd.plan || !people.length || !rnd.offered.size) return;
   const selected = rnd.result && rnd.result.options[rnd.chosen];
   const offered = expandGridAvailability(rnd.offered);
@@ -2041,9 +2066,9 @@ function openManualEditor() {
     assign:[], initial:[], history:[], selected:0, pending:null, message:"", trigger:document.activeElement };
   // Revalidate cached options against the current inclusion, duration and availability.
   for (const p of people) {
-    const a = selected && selected.assign.find(a => a.id === p.id);
+    const a = (selected && selected.assign.find(a => a.id === p.id)) || (p.kind === "class" ? p : null);
     p.override=!!a?.availabilityOverride;
-    if (a && !manualReason(p, a.d, a.start)) manualEditor.assign.push({id:p.id,name:p.name,lesson:p.lesson,d:a.d,start:a.start,...(p.override && manualOutside(p,a.d,a.start)?{availabilityOverride:true}:{})});
+    if (a && !manualReason(p, a.d, a.start)) manualEditor.assign.push({id:p.id,name:p.name,lesson:p.lesson,...classFields(p),d:a.d,start:a.start,...(p.override && manualOutside(p,a.d,a.start)?{availabilityOverride:true}:{})});
   }
   manualEditor.initial = manualCopy(manualEditor.assign);
   manualDialog.innerHTML = '<div class="manual-shell"><header class="manual-head"><div><h2 id="manualTitle">Rearrange your week</h2><p>Hold to drag on touchscreens; swipe to scroll. Or select a student and tap a time.</p></div><button type="button" class="btn" data-manual="cancel" autofocus>Cancel</button></header><div class="manual-main"><aside class="manual-people" aria-label="Included students"></aside><section class="manual-workspace" aria-label="Teaching days"><div class="manual-override"><div><strong class="manual-override-name"></strong><span id="manualOverrideLabel">Allow outside submitted availability</span><small id="manualOverrideHint">Use when you’ve agreed another time directly. This lesson and week only.</small></div><button type="button" class="manual-switch" role="switch" aria-checked="false" aria-describedby="manualOverrideHint" data-manual="override"><span></span></button></div><div class="manual-legend" aria-live="polite">Pale colour: student availability · Deeper shading: a valid start · Grey: not offered</div><div class="manual-scroll"><div class="manual-grid"></div></div></section></div><footer class="manual-bottom"><p class="manual-status" role="status" aria-live="polite"></p><div class="manual-actions"><button type="button" class="btn" data-manual="undo">Undo</button><button type="button" class="btn" data-manual="reset">Reset</button><button type="button" class="btn" data-manual="unplace">Move to Not placed</button><button type="button" class="btn" data-manual="place" hidden>Place lesson</button><button type="button" class="btn sig manual-save" data-manual="save">Use this arrangement</button></div></footer></div>';
@@ -2125,7 +2150,7 @@ function placeManualLesson(d,start) {
   const existing=m.assign.find(a=>a.id===p.id);
   if(!existing || existing.d!==d || existing.start!==start) {
     manualRemember();
-    m.assign=m.assign.filter(a=>a.id!==p.id).concat({id:p.id,name:p.name,lesson:p.lesson,d,start,...(manualOutside(p,d,start)?{availabilityOverride:true}:{})});
+    m.assign=m.assign.filter(a=>a.id!==p.id).concat({id:p.id,name:p.name,lesson:p.lesson,...classFields(p),d,start,...(manualOutside(p,d,start)?{availabilityOverride:true}:{})});
   }
   m.pending=null;m.message=p.name+' placed on '+roundDays(m.rnd)[d]+' at '+scheduleTimeFor(m.rnd.dayStartHour,start)+'.';
   renderManualEditor();
@@ -2149,6 +2174,7 @@ function saveManualEditor() {
     const a=m.assign.find(a=>a.id===p.id);return !a || manualReason(p,a.d,a.start);
   })) return;
   const rnd=m.rnd;
+  rnd.classes=m.assign.filter(a=>a.kind==="class").map(a=>({...a}));
   if(!rnd.result) rnd.result={ok:true,options:[],unplaced:[],blockers:[]};
   const custom={custom:true,assign:manualCopy(m.assign),...scoreSolution(m.assign,rnd.dayPreferences,solverBlockPreferences(rnd))};
   rnd.result.options=rnd.result.options.filter(o=>!o.custom).concat(custom);
@@ -2326,13 +2352,101 @@ manualDialog.addEventListener('scroll',()=>{
 },true);
 manualDialog.addEventListener('contextmenu',e=>{if(e.target.closest('[data-person]'))e.preventDefault();});
 
+// Classes use the same quarter-hour coordinates as individual lessons.
+let classPlanner = null;
+const classDialog = document.createElement('dialog');
+classDialog.className = 'class-dialog';
+classDialog.setAttribute('aria-labelledby','classPlannerTitle');
+document.body.appendChild(classDialog);
+const classMembers = c => c.participantIds || [];
+const scheduleEventCount = list => {const classes=list.filter(l=>l.kind==='class').length,lessons=list.length-classes;return [lessons?lessons+' lesson'+(lessons===1?'':'s'):'',classes?classes+' class'+(classes===1?'':'es'):''].filter(Boolean).join(' · ') || '0 lessons';};
+const classNames = c => (c.participants || []).map(p=>p.name).join(', ');
+const classFields = p => p.kind === 'class' ? {kind:'class',participantIds:[...classMembers(p)],participants:(p.participants || []).map(s=>({...s})),creditHours:!!p.creditHours,replacesIndividual:!!p.replacesIndividual} : {};
+function classAvailability(rnd,c) {
+  const sets=classMembers(c).map(id=>rnd.replies[id]?.status==='in'?expandGridAvailability(rnd.replies[id].avail):new Set());
+  return new Set([...expandGridAvailability(rnd.offered)].filter(k=>sets.length && sets.every(s=>s.has(k))));
+}
+function classOccupies(a,b) { return a.d===b.d && a.start<b.start+b.lesson && a.start+a.lesson>b.start; }
+function classAssignments(rnd) { return rnd.result?.options[rnd.chosen]?.assign || rnd.classes || []; }
+function storeClassArrangement(rnd,assign) {
+  rnd.classes=assign.filter(a=>a.kind==='class').map(a=>({...a}));
+  rnd.result={ok:true,options:[{custom:true,assign,...scoreSolution(assign,rnd.dayPreferences,solverBlockPreferences(rnd))}],unplaced:[],blockers:[]};
+  if(!assign.length)rnd.result=null;
+  rnd.chosen=0; S.imgUrl='';S.fallbackText='';
+}
+function renderClassTools(rnd) {
+  if(rnd.plan) return '';
+  const unscheduled=getParticipants(rnd).filter(p=>!classAssignments(rnd).some(a=>a.id===p.id));
+  const reminder=(rnd.classes||[]).length && unscheduled.length ? '<p class="lede">'+unscheduled.length+' included individual lesson(s) are not in this draft. Recalculate options to schedule them around your classes.</p><button class="btn" data-action="runSolver">Recalculate options</button>' : '';
+  return '<div class="pad" style="padding-top:0"><section class="panel"><h3>Group classes</h3><p class="lede">Find a shared time using this week’s replies. A class reserves your teaching time once.</p><button class="btn" data-action="planClass"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" style="vertical-align:-4px;margin-right:8px" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Plan a class</button>'+(rnd.classes||[]).map(c=>'<div class="entry"><span><strong>'+escapeHTML(c.name)+'</strong><br><small>'+escapeHTML(classNames(c))+' · '+(c.creditHours?'Credits each attendee':'No allocation credit')+'</small></span><button class="btn danger" data-action="removeClass" data-id="'+escapeHTML(c.id)+'">Remove class</button></div>').join('')+reminder+'</section></div>';
+}
+function openClassPlanner() {
+  const rnd=activeRound();
+  if(!stateReady || stateBlocked || rnd.plan || rnd.completed) return;
+  if(rnd.notTeaching){flash('Turn teaching back on before adding a class.');return;}
+  if(!rnd.offered.size || !S.students.length){flash('Offer teaching times and add students first.');return;}
+  classPlanner={rnd,week:S.week,trigger:document.activeElement,candidates:[]};
+  classDialog.innerHTML='<form id="classForm"><header class="manual-head"><div><h2 id="classPlannerTitle">Plan a class</h2><p>'+escapeHTML(weekRangeLabel(rnd.weekStart))+'</p></div><button type="button" class="btn" data-class-close>Cancel</button></header><div class="class-body"><div class="class-fields"><label>Class name<input name="title" required maxlength="100" value="'+escapeHTML((ME.instrument||'Group')+' class')+'"></label><label>Duration<select name="minutes">'+[30,45,60,75,90,120,150,180].map(n=>'<option value="'+n+'"'+(n===60?' selected':'')+'>'+n+' minutes</option>').join('')+'</select></label></div><fieldset><legend>Students to consider</legend>'+S.students.map(s=>'<label class="class-student"><input type="checkbox" name="student" value="'+escapeHTML(s.id)+'" checked> '+escapeHTML(s.name)+'</label>').join('')+'</fieldset><div class="class-fields"><label>Attendance<select name="attendance"><option value="all">Everyone selected</option><option value="minimum">Minimum number</option></select></label><label>Minimum students<input name="minimum" type="number" min="1" max="'+S.students.length+'" value="'+Math.min(2,S.students.length)+'"></label></div><label class="class-student"><input type="checkbox" name="replace"> Replaces attendees’ individual lessons this week</label><p class="lede">Choosing a time will remove those attendees’ individual lessons from the draft. Other lessons stay in place.</p><label class="class-student"><input type="checkbox" name="credit"> Count the full class duration towards each attendee’s allocation</label><p class="lede">Off by default. Hours are completed when you end the week.</p><label class="class-student"><input type="checkbox" name="override"> Agreed separately — allow outside submitted availability</label><p class="lede">Includes everyone selected. Still respects your offered times and prevents overlaps.</p><button class="btn sig" type="submit">Find class times</button><div id="classResults" aria-live="polite"></div></div></form>';
+  classDialog.showModal();
+}
+function closeClassPlanner(){const trigger=classPlanner?.trigger;classPlanner=null;classDialog.close();trigger?.focus({preventScroll:true});}
+function readClassDraft() {
+  const f=classDialog.querySelector('form'),data=new FormData(f),ids=data.getAll('student');
+  return {name:String(data.get('title')||'').trim(),lesson:Number(data.get('minutes'))/15,ids,
+    minimum:data.get('attendance')==='all'?ids.length:Number(data.get('minimum')),
+    creditHours:data.has('credit'),replacesIndividual:data.has('replace'),override:data.has('override')};
+}
+function findClassTimes(rnd,draft) {
+  if(!draft.ids.length || !draft.name || !Number.isInteger(draft.lesson) || draft.lesson<2 || draft.lesson>12 || !Number.isInteger(draft.minimum) || draft.minimum<1 || draft.minimum>draft.ids.length) return [];
+  const offered=expandGridAvailability(rnd.offered),existing=classAssignments(rnd),results=[];
+  for(let d=0;d<roundDays(rnd).length;d++)for(let start=0;start+draft.lesson<=roundSlots(rnd)*2;start++){
+    const cells=Array.from({length:draft.lesson},(_,i)=>key(d,start+i));
+    if(!cells.every(k=>offered.has(k)))continue;
+    const groups={available:[],unavailable:[],missing:[],skipping:[]};
+    for(const id of draft.ids){const rep=rnd.replies[id];const status=!rep || rep.status==='clear'?'missing':rep.status==='skip'?'skipping':rep.status==='in'&&cells.every(k=>expandGridAvailability(rep.avail).has(k))?'available':'unavailable';groups[status].push(id);}
+    const attendees=draft.override?draft.ids:groups.available;
+    if(attendees.length<draft.minimum)continue;
+    const slot={d,start,lesson:draft.lesson};
+    if(existing.some(a=>!(draft.replacesIndividual&&a.kind!=='class'&&attendees.includes(a.id))&&classOccupies(a,slot)))continue;
+    results.push({...slot,groups,attendees});
+  }
+  return results.sort((a,b)=>b.groups.available.length-a.groups.available.length || Number(rnd.dayPreferences?.[a.d]||0)-Number(rnd.dayPreferences?.[b.d]||0) || a.d-b.d || a.start-b.start);
+}
+function showClassTimes() {
+  const draft=readClassDraft(),m=classPlanner;
+  if(JSON.stringify(draft)!==JSON.stringify(m.draft))m.visible=24;
+  m.draft=draft;m.candidates=findClassTimes(m.rnd,draft);
+  const names=ids=>ids.map(id=>S.students.find(s=>s.id===id)?.name||id).join(', ');
+  const heat={};draft.ids.forEach(id=>{const rep=m.rnd.replies[id];if(rep?.status==='in')rep.avail.forEach(k=>{heat[k]=(heat[k]||0)+1;});});
+  const overview='<details><summary>View the group’s availability grid</summary><p class="lede">Numbers show available students in each half-hour cell. Darker colour means more students. Suggestions below check the full class duration and existing lessons.</p>'+buildGridHTML('heat',{offered:m.rnd.offered,heat,days:roundDays(m.rnd),slots:roundSlots(m.rnd),startHour:m.rnd.dayStartHour})+'</details>';
+  classDialog.querySelector('#classResults').innerHTML=overview+'<h3>Available class times</h3><p class="lede">'+(draft.override?'Everyone selected will attend by separate agreement.':'Only students available for the whole class are added as attendees.')+' Ranked by attendance, then preferred days. Existing lessons are protected.</p>'+(m.candidates.length?m.candidates.slice(0,m.visible||24).map((c,i)=>'<article class="class-time"><div><strong>'+escapeHTML(dayDateLong(m.rnd.weekStart,c.d))+' · '+scheduleTimeFor(m.rnd.dayStartHour,c.start)+'–'+scheduleTimeFor(m.rnd.dayStartHour,c.start+c.lesson)+'</strong><p>'+c.groups.available.length+' of '+draft.ids.length+' available</p><meter min="0" max="'+draft.ids.length+'" value="'+c.groups.available.length+'">'+c.groups.available.length+'</meter>'+Object.entries({available:'Available',unavailable:'Unavailable',missing:'No reply',skipping:'Skipping this week'}).map(([k,label])=>c.groups[k].length?'<p><small><b>'+label+':</b> '+escapeHTML(names(c.groups[k]))+'</small></p>':'').join('')+(draft.replacesIndividual?'<p><small>Replaces '+classAssignments(m.rnd).filter(a=>a.kind!=='class'&&c.attendees.includes(a.id)).length+' individual lesson(s) in this draft.</small></p>':'')+'</div><button type="button" class="btn" data-class-choose="'+i+'">Choose time</button></article>').join('')+(m.candidates.length>(m.visible||24)?'<button type="button" class="btn" data-class-more>Show more times</button>':''):'<p>No matching times. Check your selection and minimum attendance, extend your offer, or use “Agreed separately” if you have checked with the students.</p>');
+}
+function chooseClassTime(index) {
+  const m=classPlanner;
+  if(!m || stateBlocked || !stateReady || activeRound()!==m.rnd || m.rnd.plan || m.rnd.completed)return;
+  if(JSON.stringify(readClassDraft())!==JSON.stringify(m.draft)){showClassTimes();return;}
+  const candidate=m.candidates[index];
+  if(!candidate)return;
+  const c=findClassTimes(m.rnd,m.draft).find(c=>c.d===candidate.d&&c.start===candidate.start);
+  if(!c){showClassTimes();return;}
+  const draft=m.draft,id='class-'+crypto.randomUUID();
+  const group={id,kind:'class',name:draft.name,d:c.d,start:c.start,lesson:c.lesson,participantIds:[...c.attendees],participants:c.attendees.map(id=>({id,name:S.students.find(s=>s.id===id)?.name||id})),creditHours:draft.creditHours,replacesIndividual:draft.replacesIndividual,...(c.attendees.some(id=>!c.groups.available.includes(id))?{availabilityOverride:true}:{})};
+  const assign=classAssignments(m.rnd).filter(a=>!(draft.replacesIndividual&&a.kind!=='class'&&c.attendees.includes(a.id)));
+  storeClassArrangement(m.rnd,[...assign,group]);S.scheduleView='agenda';
+  closeClassPlanner();render();flash('Class added to your draft. Confirm the schedule when ready.');
+}
+function removeClass(id){const rnd=activeRound();if(rnd.plan||rnd.completed)return;storeClassArrangement(rnd,classAssignments(rnd).filter(a=>a.id!==id));render();flash('Class removed. Recalculate to restore any replaced individual lessons.');}
+classDialog.addEventListener('submit',e=>{e.preventDefault();showClassTimes();});
+classDialog.addEventListener('cancel',e=>{e.preventDefault();closeClassPlanner();});
+classDialog.addEventListener('click',e=>{if(e.target.closest('[data-class-close]'))closeClassPlanner();const button=e.target.closest('[data-class-choose]');if(button)chooseClassTime(Number(button.dataset.classChoose));if(e.target.closest('[data-class-more]')){classPlanner.visible=(classPlanner.visible||24)+24;showClassTimes();}});
+
 function runSolver() {
   const rnd = activeRound();
   if (rnd.completed) return;
   if (rnd.plan) { flash("Undo confirmation before calculating new options"); return; }
   if (!rnd.offered.size) { flash("Paint some blocks first"); return; }
   const participants = getParticipants(rnd);
-  if (!participants.length) { flash("No students available this week"); return; }
+  if (!participants.length && !(rnd.classes || []).length) { flash("No students available this week"); return; }
   rnd.result = solveRound(participants, rnd);
   rnd.chosen = 0;
   rnd.optionsExpanded = false;
@@ -2385,7 +2499,7 @@ function buildShareText(assign, weekNoLabel, weekStartISO, startHour, note) {
   if (note) out += "\n" + note;
   Object.keys(by).sort().forEach(d => {
     out += "\n\n" + dayDateLong(weekStartISO, +d) + "\n";
-    by[d].forEach(a => { out += scheduleTimeFor(startHour, a.start) + "–" + scheduleTimeFor(startHour, a.start + a.lesson) + "  " + a.name.split(" ")[0] + "\n"; });
+    by[d].forEach(a => { out += scheduleTimeFor(startHour, a.start) + "–" + scheduleTimeFor(startHour, a.start + a.lesson) + "  " + (a.kind==='class'?a.name+' ('+classNames(a)+')':a.name.split(" ")[0]) + "\n"; });
   });
   return out.trim();
 }
@@ -2431,7 +2545,7 @@ async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startH
       x.fillStyle = "#211C17"; x.font = "500 32px " + FONT;
       x.fillText(scheduleTimeFor(startHour, a.start) + "–" + scheduleTimeFor(startHour, a.start + a.lesson), 64, y + 32);
       x.font = "600 32px " + FONT;
-      x.fillText(a.name.split(" ")[0], 360, y + 32);
+      x.fillText(a.kind==='class'?a.name+' · Class':a.name.split(" ")[0], 360, y + 32, W - 490);
       x.fillStyle = "#6B6157"; x.font = "400 26px " + FONT; x.textAlign = "right";
       x.fillText(((a.lesson * SCHEDULE_SLOT_MIN) / 60) + "h", W - 64, y + 32);
       x.textAlign = "left";
@@ -2456,7 +2570,12 @@ async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startH
 function confirmSchedule() {
   const rnd = activeRound();
   const opt = rnd.result && rnd.result.options[rnd.chosen];
-  if (!opt) return;
+  if (!opt || rnd.completed || rnd.plan) return;
+  if(opt.assign.some(a=>a.kind==='class' && !a.availabilityOverride && Array.from({length:a.lesson},(_,i)=>key(a.d,a.start+i)).some(k=>!classAvailability(rnd,a).has(k)))) {flash('A class no longer matches everyone’s availability. Rearrange it or mark it as agreed separately before confirming.');return;}
+  if(opt.assign.some((a,i)=>opt.assign.slice(i+1).some(b=>classOccupies(a,b)))) {flash('Some events overlap. Rearrange before confirming.');return;}
+  const offered=expandGridAvailability(rnd.offered);
+  if(opt.assign.some(a=>Array.from({length:a.lesson},(_,i)=>key(a.d,a.start+i)).some(k=>!offered.has(k)))) {flash('Some events are outside your offer. Update the offer before confirming.');return;}
+  rnd.classes=opt.assign.filter(a=>a.kind==="class").map(a=>({...a}));
   rnd.plan = {
     weekNo: S.week,
     weekStart: rnd.weekStart,
@@ -2558,7 +2677,8 @@ function buildScheduleCalendar(rnd) {
     lines.push("BEGIN:VEVENT", "UID:" + identity + "@cadenceplanner.co.uk", "DTSTAMP:" + stamp,
       "DTSTART;TZID=Europe/London:" + calendarLessonTimestamp(plan.weekStart, lesson.d, rnd.dayStartHour, lesson.start),
       "DTEND;TZID=Europe/London:" + calendarLessonTimestamp(plan.weekStart, lesson.d, rnd.dayStartHour, Number(lesson.start) + Number(lesson.lesson)),
-      "SUMMARY:" + calendarText(firstName + " lesson"), ...calendarLocationLines(), "STATUS:CONFIRMED", "END:VEVENT");
+      "SUMMARY:" + calendarText(lesson.kind==='class'?lesson.name:firstName + " lesson"),
+      ...(lesson.kind==='class'?["DESCRIPTION:"+calendarText('Class attendees: '+classNames(lesson))]:[]), ...calendarLocationLines(), "STATUS:CONFIRMED", "END:VEVENT");
   });
   lines.push("END:VCALENDAR");
   return lines.map(foldCalendarLine).join("\r\n") + "\r\n";
@@ -2615,6 +2735,7 @@ function undoConfirmSchedule() {
     }
   }
 
+  if(rnd.plan.lessons.some(l=>l.kind==="class")) storeClassArrangement(rnd,rnd.plan.lessons.filter(l=>l.status==="planned").map(({key,status,...a})=>a));
   rnd.plan = null;
   S.imgUrl = "";
   S.fallbackText = "";
@@ -2625,6 +2746,8 @@ function undoConfirmSchedule() {
 function setLessonStatus(k, status) {
   const rnd = activeRound();
   if (rnd.completed) return;
+  const target=rnd.plan.lessons.find(l=>l.key===k);
+  if(status==='planned' && target && rnd.plan.lessons.some(l=>l.key!==k && l.status==='planned' && classOccupies(l,target))){flash('That time is occupied. Undo confirmation to rearrange first.');return;}
   rnd.plan.lessons = rnd.plan.lessons.map(l => l.key === k ? { ...l, status } : l);
   S.imgUrl = ""; S.fallbackText = "";
   render();
@@ -2634,7 +2757,7 @@ function rescheduleWeek() {
   const rnd = activeRound();
   if (rnd.completed) return;
   const staying = rnd.plan.lessons.filter(l => l.status === "planned");
-  const pool = staying.map(l => ({
+  const pool = staying.filter(l=>l.kind!=="class").map(l => ({
     id: l.id, name: l.name, lesson: l.lesson,
     avail: (rnd.replies[l.id] && rnd.replies[l.id].avail) || new Set(),
   }));
@@ -2655,11 +2778,13 @@ function endWeek() {
   const completionId = "week-" + S.week + "-" + Date.now().toString(36);
   const { y, m, d } = isoParts(rnd.plan.weekStart);
   const billable = rnd.plan.lessons.filter(l => l.status === "planned" || l.status === "cancelled_late");
-  const entries = billable.map((l, index) => {
+  const credited = billable.flatMap(l=>l.kind==='class'?(l.creditHours?classMembers(l).map(id=>({...l,id,className:l.name})):[]):[l]);
+  const entries = credited.map((l, index) => {
     const dateISO = new Date(Date.UTC(y, m - 1, d + l.d)).toISOString().slice(0, 10);
     return {
       id: "s" + Date.now() + "-" + index + "-" + l.key,
       studentId: l.id,
+      className: l.className || null,
       date: dateISO,
       hours: (l.lesson * SCHEDULE_SLOT_MIN) / 60,
       manual: false,
@@ -2677,7 +2802,7 @@ function endWeek() {
   S.imgUrl = "";
   S.fallbackText = "";
   S.tab = "hours";
-  flash(entries.length + " lesson" + (entries.length === 1 ? "" : "s") + " logged · Week " + S.week + " completed");
+  flash(entries.length + " hour entr" + (entries.length === 1 ? "y" : "ies") + " logged · Week " + S.week + " completed");
   animatedRender(1);
 }
 
@@ -2708,6 +2833,7 @@ function skipWeek() {
   const rnd = activeRound();
   if (rnd.completed) return;
   if (rnd.plan) { flash("Finish or clear this week's schedule first"); return; }
+  if (!rnd.notTeaching && (rnd.classes || []).length) {flash("Remove your draft classes before marking this week as not teaching.");return;}
   if (rnd.notTeaching) {
     rnd.notTeaching = false;
     S.weeksCompleted = Math.max(0, S.weeksCompleted - 1);
@@ -4156,7 +4282,7 @@ function renderTabContent() {
   let content = "";
   if (S.tab === "week") content = renderOfferTab();
   else if (S.tab === "replies") content = renderRepliesTab();
-  else if (S.tab === "plan") content = renderStudentFilter() + (rnd.plan ? renderLivePlanTab() : renderPreConfirmPlanTab());
+  else if (S.tab === "plan") content = renderStudentFilter() + renderClassTools(rnd) + (rnd.plan ? renderLivePlanTab() : renderPreConfirmPlanTab());
   else if (S.tab === "hours") return renderHoursTab();
   else return "";
 
@@ -4357,6 +4483,7 @@ function agendaLessonColour(lesson) {
 function renderAgenda(assignments, weekNo, weekStart, startHour, confirmed) {
   const by = groupByDay(assignments);
   const count = assignments.length;
+  const summary = list => {const classes=list.filter(l=>l.kind==='class').length,lessons=list.length-classes;return [lessons?lessons+' lesson'+(lessons===1?'':'s'):'',classes?classes+' class'+(classes===1?'':'es'):''].filter(Boolean).join(' · ') || '0 lessons';};
   const minutes = assignments.reduce((total, lesson) => total + lesson.lesson * SCHEDULE_SLOT_MIN, 0);
   const duration = minutes < 60 ? minutes + " min" : Math.floor(minutes / 60) + "h" + (minutes % 60 ? " " + minutes % 60 + " min" : "");
   const days = Object.keys(by).sort((a, b) => Number(a) - Number(b)).map(d => {
@@ -4371,24 +4498,24 @@ function renderAgenda(assignments, weekNo, weekStart, startHour, confirmed) {
       occupiedUntil = Math.max(occupiedUntil === null ? 0 : occupiedUntil, lesson.start + lesson.lesson);
       const start = scheduleTimeFor(startHour, lesson.start);
       const end = scheduleTimeFor(startHour, lesson.start + lesson.lesson);
-      const line = '<span class="agenda-name">' + escapeHTML(lesson.name) + (lesson.availabilityOverride?' <small class="agreed-badge">Agreed separately</small>':'') + '</span><span class="agenda-duration">' +
+      const line = '<span class="agenda-name">' + escapeHTML(lesson.name) + (lesson.kind==='class'?' <small class="agreed-badge">Class</small><small class="class-detail">'+escapeHTML(classNames(lesson))+' · '+(lesson.creditHours?'Credits each attendee':'No allocation credit')+'</small>':'') + (lesson.availabilityOverride?' <small class="agreed-badge">Agreed separately</small>':'') + '</span><span class="agenda-duration">' +
         (lesson.lesson * SCHEDULE_SLOT_MIN) + ' min</span>';
       // Dataset keys can contain student IDs: escape quotes as well as HTML markup.
       const lessonKey = escapeHTML(lesson.key || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
       const card = confirmed
-        ? '<details class="agenda-lesson ' + agendaLessonColour(lesson) + '"><summary class="agenda-lesson-line">' + line + '</summary>' +
+        ? '<details class="agenda-lesson ' + agendaLessonColour(lesson) + (lesson.kind==='class'?' agenda-class':'') + '"><summary class="agenda-lesson-line">' + line + '</summary>' +
           '<div class="agenda-controls"><p>' + start + '–' + end + '</p><div class="cancels">' +
           '<button class="mini" data-action="cancelEarly" data-id="' + lessonKey + '">Cancelled, ' + (S.settings.cancellationWindowHours || 24) + 'h+ notice</button>' +
           '<button class="mini warnb" data-action="cancelLate" data-id="' + lessonKey + '">Cancelled late</button></div></div></details>'
-        : '<div class="agenda-lesson ' + agendaLessonColour(lesson) + '"><div class="agenda-lesson-line">' + line + '</div></div>';
+        : '<div class="agenda-lesson ' + agendaLessonColour(lesson) + (lesson.kind==='class'?' agenda-class':'') + '"><div class="agenda-lesson-line">' + line + '</div></div>';
       return breakRow + '<div class="agenda-row"><time class="agenda-time" datetime="' + start + '">' + start + '</time>' + card + '</div>';
     }).join("");
     return '<section class="agenda-day"><div class="agenda-day-heading"><h3>' + escapeHTML(dayDateLong(weekStart, Number(d))) +
-      '</h3><span>' + lessons.length + ' lesson' + (lessons.length === 1 ? '' : 's') + '</span></div>' + rows + '</section>';
+      '</h3><span>' + summary(lessons) + '</span></div>' + rows + '</section>';
   }).join("");
   return '<section class="agenda" aria-label="Weekly lesson agenda"><div class="agenda-head">' +
     '<div class="agenda-heading"><h2>Your week</h2><span class="agenda-week">Week ' + escapeHTML(weekNo) + '</span></div>' +
-    '<p>' + count + ' lesson' + (count === 1 ? '' : 's') + ' · ' + duration +
+    '<p>' + summary(assignments) + ' · ' + duration +
     ' teaching · ' + (confirmed ? 'Confirmed' : 'Draft arrangement') + '</p></div><div class="agenda-body">' +
     (days || '<p class="empty">No lessons scheduled.</p>') +
     '<p class="agenda-foot"><span class="agenda-dot" aria-hidden="true"></span>' +
@@ -4437,7 +4564,7 @@ function renderPreConfirmPlanTab() {
         ? '<span class="prefavoid">Includes an avoided day</span>'
         : 'Neutral day preference';
     const lines = opt.assign.slice().sort((a, b) => a.d - b.d || a.start - b.start).map(a =>
-      '<div class="line"><span>' + days[a.d] + " " + scheduleTimeFor(rnd.dayStartHour, a.start) + "–" + scheduleTimeFor(rnd.dayStartHour, a.start + a.lesson) + "</span><span>" + a.name + "</span></div>"
+      '<div class="line"><span>' + days[a.d] + " " + scheduleTimeFor(rnd.dayStartHour, a.start) + "–" + scheduleTimeFor(rnd.dayStartHour, a.start + a.lesson) + "</span><span>" + escapeHTML(a.name) + (a.kind==='class'?' · Class · '+escapeHTML(classNames(a)):'') + "</span></div>"
     ).join("");
     return '<div class="opt' + (actualIdx === rnd.chosen ? " sel" : "") + '" data-action="chooseOption" data-idx="' + actualIdx + '">' +
       '<div class="opthead"><b>' + (opt.custom ? 'Custom · ' : '') + daysLabel + "</b><span>" + gapsLabel + "</span></div>" + lines +
@@ -4503,12 +4630,12 @@ function renderLivePlanTab() {
   const freed = plan.lessons.filter(l => l.status === "cancelled_early");
   const by = groupByDay(live);
 
-  const intro = '<p class="lede">Week ' + plan.weekNo + " is live. " + live.length + " lesson" + (live.length === 1 ? "" : "s") +
+  const intro = '<p class="lede">Week ' + plan.weekNo + " is live. " + scheduleEventCount(live) +
     " standing" + (cancelled.length > 0 ? ", " + cancelled.length + " cancelled" : "") + ".</p>";
 
   const dayPanels = Object.keys(by).sort().map(d => {
     const lessons = by[d].map(l =>
-      '<div class="live"><div class="livetop"><b>' + l.name.split(" ")[0] + "</b><span>" + scheduleTimeFor(rnd.dayStartHour, l.start) + "–" + scheduleTimeFor(rnd.dayStartHour, l.start + l.lesson) + "</span></div>" +
+      '<div class="live"><div class="livetop"><b>' + (l.kind==='class'?escapeHTML(l.name)+' · Class · '+escapeHTML(classNames(l)):escapeHTML(l.name.split(" ")[0])) + "</b><span>" + scheduleTimeFor(rnd.dayStartHour, l.start) + "–" + scheduleTimeFor(rnd.dayStartHour, l.start + l.lesson) + "</span></div>" +
       '<div class="cancels"><button class="mini" data-action="cancelEarly" data-id="' + l.key + '">Cancelled, ' + (S.settings.cancellationWindowHours || 24) + 'h+ notice</button>' +
       '<button class="mini warnb" data-action="cancelLate" data-id="' + l.key + '">Cancelled late</button></div></div>'
     ).join("");
@@ -4521,7 +4648,7 @@ function renderLivePlanTab() {
   if (cancelled.length > 0) {
     const days = roundDays(rnd);
     cancelledPanel = '<div class="panel"><h3>Cancelled</h3>' + cancelled.map(l =>
-      '<div class="entry"><span class="struck">' + days[l.d] + " " + scheduleTimeFor(rnd.dayStartHour, l.start) + " · " + l.name.split(" ")[0] +
+      '<div class="entry"><span class="struck">' + days[l.d] + " " + scheduleTimeFor(rnd.dayStartHour, l.start) + " · " + (l.kind==='class'?escapeHTML(l.name)+' · Class · '+escapeHTML(classNames(l)):escapeHTML(l.name.split(" ")[0])) +
       '<i class="tag">' + (l.status === "cancelled_late" ? "charged" : "slot freed") + "</i></span>" +
       '<button class="x" data-action="uncancel" data-id="' + l.key + '" aria-label="Restore cancelled lesson"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 4 4 9l5 5M4 9h10a6 6 0 0 1 0 12"/></svg></button></div>'
     ).join("") + "</div>";
@@ -4623,7 +4750,7 @@ function renderHoursTab() {
           return '<div class="scheduled-entry"><div class="scheduled-entry-main"><strong>' +
             dayDateLong(item.plan.weekStart, l.d) + '</strong><span>' +
             scheduleTimeFor(item.startHour, l.start) + '–' + scheduleTimeFor(item.startHour, l.start + l.lesson) +
-            ' · Week ' + escapeHTML(item.plan.weekNo) + '<i class="tag">' + statusTag + '</i></span></div>' +
+            (l.kind==='class'?' · '+escapeHTML(l.name)+' (class)':'') + ' · Week ' + escapeHTML(item.plan.weekNo) + '<i class="tag">' + statusTag + '</i></span></div>' +
             '<span class="scheduled-entry-hours">' + compactHours(hours) + 'h</span></div>';
         }).join("");
       const entryRows = entries.length === 0 ? '<div class="ledger-empty">No completed hours yet</div>' :
@@ -4636,7 +4763,7 @@ function renderHoursTab() {
               '<button class="x" data-action="cancelEditEntry" aria-label="Cancel editing"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button></span></div>';
           }
           return '<div class="entry"><span>' + fmtDateShort(e.date) +
-            (e.manual ? '<i class="tag">by hand</i>' : "") + (e.lateCancel ? '<i class="tag">late cancel</i>' : "") + "</span>" +
+            (e.className ? '<i class="tag">'+escapeHTML(e.className)+' · Class</i>' : "") + (e.manual ? '<i class="tag">by hand</i>' : "") + (e.lateCancel ? '<i class="tag">late cancel</i>' : "") + "</span>" +
             '<span class="entryright">' + e.hours + 'h<button class="x" data-action="editEntry" data-id="' + e.id + '" title="Edit" aria-label="Edit hours entry"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g transform="rotate(45 12 12)"><path d="M9 17V5a3 3 0 0 1 6 0v12l-3 4Z"/><path d="M9 7h6M9 17h6"/></g></svg></button>' +
             '<button class="x" data-action="removeEntry" data-id="' + e.id + '" aria-label="Delete hours entry"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button></span></div>';
         }).join("");
@@ -4734,6 +4861,8 @@ document.getElementById("app").addEventListener("click", (e) => {
     const selected = document.querySelector('[data-action="setScheduleView"][aria-pressed="true"]');
     if (selected) selected.focus({ preventScroll: true });
   }
+  else if (action === "planClass") openClassPlanner();
+  else if (action === "removeClass") removeClass(id);
   else if (action === "clearOffer") clearOffer();
   else if (action === "skipWeek") skipWeek();
   else if (action === "prevWeek") prevWeek();
@@ -4827,7 +4956,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "adjustLength") adjustLength(id, Number(el.dataset.delta));
   else if (action === "manualRearrange") openManualEditor();
   else if (action === "runSolver") runSolver();
-  else if (action === "chooseOption") { activeRound().chosen = Number(el.dataset.idx); render(); }
+  else if (action === "chooseOption") { const rnd=activeRound();rnd.chosen=Number(el.dataset.idx);rnd.classes=rnd.result.options[rnd.chosen].assign.filter(a=>a.kind==="class").map(a=>({...a}));render(); }
   else if (action === "copyChosen") { const rnd = activeRound(); doCopy(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, rnd.dayStartHour, rnd.note); }
   else if (action === "imageChosen") { const rnd = activeRound(); doImage(rnd.result.options[rnd.chosen].assign, S.week, rnd.weekStart, S.week, rnd.dayStartHour, rnd.note); }
   else if (action === "confirmSchedule") confirmSchedule();
@@ -4910,6 +5039,7 @@ document.getElementById("app").addEventListener("change", (e) => {
     const chosen = Number(el.value);
     if (!Number.isInteger(chosen) || !rnd.result || !rnd.result.options[chosen]) return;
     rnd.chosen = chosen;
+    rnd.classes=rnd.result.options[chosen].assign.filter(a=>a.kind==="class").map(a=>({...a}));
     S.imgUrl = ""; S.fallbackText = "";
     // Dismiss the native picker before replacing the select. Refocusing
     // its replacement can reopen the picker on iOS Safari.

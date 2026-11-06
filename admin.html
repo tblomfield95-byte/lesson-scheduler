@@ -1317,7 +1317,7 @@ function dayBlockers(withCands, offered, days) {
   }).filter(Boolean).sort((a, b) => a.blocked.length - b.blocked.length);
 }
 
-function solve(participants, offered, dayPreferences = {}, days, slots, priorityOrder, blockPreferences = []) {
+function solve(participants, offered, dayPreferences = {}, days, slots, priorityOrder, blockPreferences = [], accept = () => true) {
   const withCands = buildCandidates(participants, offered, days, slots);
   // The search is bounded, so visit the active placement/time preferences in
   // their ranked order before the solution cap is reached (not only re-rank
@@ -1356,7 +1356,7 @@ function solve(participants, offered, dayPreferences = {}, days, slots, priority
     const place = (idx, acc) => {
       if (found.length >= 240 || nodes > 60000) return;
       nodes++;
-      if (idx === pool.length) { found.push(acc.slice()); return; }
+      if (idx === pool.length) { if (accept(acc)) found.push(acc.slice()); return; }
       const p = pool[idx];
       for (const c of p.cands) {
         let clash = false;
@@ -1612,6 +1612,7 @@ function serializeState() {
         lessonMinutes: Number.isInteger(rep.lessonMinutes) ? rep.lessonMinutes : lessonMinutesFor(rr, id),
         source: rep.source || null,
       }])),
+      breakSettings: rr.breakSettings || null,
       classes: rr.classes || [],
       plan: rr.plan,
       result: rr.result,
@@ -1686,6 +1687,7 @@ function applySavedState(saved) {
           Number.isInteger(rep.lessonMinutes) ? rep.lessonMinutes : ((rep.lesson || 2) * GRID_SLOT_MIN))),
         source: rep.source || null,
       }])),
+      breakSettings: rr.breakSettings || null,
       classes: Array.isArray(rr.classes) ? rr.classes : [],
       plan: rr.plan ? { ...rr.plan, lessons: (rr.plan.lessons || []).map(migrateLesson) } : null,
       // Old solver results used 30-minute coordinates. They are cheap and
@@ -1858,10 +1860,13 @@ function solveRound(participants, rnd) {
     roundDays(rnd),
     roundSlots(rnd) * 2,
     S.settings.priorityOrder,
-    solverBlockPreferences(rnd)
+    solverBlockPreferences(rnd),
+    assign => hasRequestedBreaks(rnd,[...assign,...fixed])
   ) : {ok:true,options:[{assign:[]}],unplaced:[],blockers:[]};
   if(!solved.options.length && fixed.length) solved.options=[{assign:[]}];
   solved.options=solved.options.map(o=>{const assign=[...o.assign,...fixed];return {...o,assign,...scoreSolution(assign,rnd.dayPreferences,solverBlockPreferences(rnd))};});
+  solved.options=solved.options.filter(o=>hasRequestedBreaks(rnd,o.assign));
+  if(!solved.options.length && rnd.breakSettings?.enabled){solved.ok=false;solved.unplaced=["No arrangement found with the requested breaks. Try shorter or fewer breaks, or offer more time."]; }
   solved.options.sort(buildPriorityComparator(S.settings.priorityOrder));
   return solved;
 }
@@ -2174,6 +2179,7 @@ function saveManualEditor() {
     const a=m.assign.find(a=>a.id===p.id);return !a || manualReason(p,a.d,a.start);
   })) return;
   const rnd=m.rnd;
+  if(!hasRequestedBreaks(rnd,m.assign)){m.message="This arrangement does not include your requested breaks. Leave the required gaps or change the break settings.";updateManualPreview();return;}
   rnd.classes=m.assign.filter(a=>a.kind==="class").map(a=>({...a}));
   if(!rnd.result) rnd.result={ok:true,options:[],unplaced:[],blockers:[]};
   const custom={custom:true,assign:manualCopy(m.assign),...scoreSolution(m.assign,rnd.dayPreferences,solverBlockPreferences(rnd))};
@@ -2440,6 +2446,22 @@ classDialog.addEventListener('submit',e=>{e.preventDefault();showClassTimes();})
 classDialog.addEventListener('cancel',e=>{e.preventDefault();closeClassPlanner();});
 classDialog.addEventListener('click',e=>{if(e.target.closest('[data-class-close]'))closeClassPlanner();const button=e.target.closest('[data-class-choose]');if(button)chooseClassTime(Number(button.dataset.classChoose));if(e.target.closest('[data-class-more]')){classPlanner.visible=(classPlanner.visible||24)+24;showClassTimes();}});
 
+function hasRequestedBreaks(rnd,assign) {
+  if(!rnd.breakSettings?.enabled)return true;
+  const required=(rnd.breakSettings.durations||[15]).map(n=>Number(n)/15).sort((a,b)=>b-a);
+  const gaps=[];
+  Object.values(groupByDay(assign)).forEach(list=>{let end=null;for(const a of list){if(end!==null && a.start>end)gaps.push(a.start-end);end=Math.max(end||0,a.start+a.lesson);}});
+  // Each requested break occupies a different gap between teaching events.
+  gaps.sort((a,b)=>b-a);
+  return required.every((n,i)=>Number.isFinite(n)&&n>0&&gaps[i]>=n);
+}
+function breakDurationFields(values){return values.map((n,i)=>'<label style="display:inline-grid;gap:6px;margin:8px 12px 8px 0">Break '+(i+1)+'<select name="breakMinutes" style="font:inherit;padding:8px;border:1px solid var(--rule);border-radius:8px;background:var(--panel);color:var(--ink)">'+[15,30,45,60,90,120].map(v=>'<option value="'+v+'"'+(v===n?' selected':'')+'>'+v+' minutes</option>').join('')+'</select></label>').join('');}
+function renderBreakControls(rnd){
+  if(rnd.plan)return '';
+  const b=rnd.breakSettings||{enabled:false,durations:[15]},durations=b.durations||[15];
+  return '<div class="pad" style="padding-top:0"><details class="panel" id="breakControls"><summary style="cursor:pointer;font-weight:600">Breaks · '+(b.enabled?durations.length+' requested':'Off')+'</summary><p class="lede" style="margin-top:12px">Reserve gaps between lessons or classes across this week. Each break needs a separate gap on a teaching day. Longer existing gaps can satisfy a break; overnight gaps cannot.</p><label><input type="checkbox" name="breakEnabled"'+(b.enabled?' checked':'')+'> Include breaks</label><label style="display:block;margin-top:12px">Number of breaks <select data-bind="breakCount">'+[1,2,3,4,5].map(n=>'<option value="'+n+'"'+(n===durations.length?' selected':'')+'>'+n+'</option>').join('')+'</select></label><div id="breakDurations">'+breakDurationFields(durations)+'</div><button class="btn sig" data-action="applyBreaks">Save break settings</button></details></div>';
+}
+
 function runSolver() {
   const rnd = activeRound();
   if (rnd.completed) return;
@@ -2571,6 +2593,7 @@ function confirmSchedule() {
   const rnd = activeRound();
   const opt = rnd.result && rnd.result.options[rnd.chosen];
   if (!opt || rnd.completed || rnd.plan) return;
+  if(!hasRequestedBreaks(rnd,opt.assign)){flash("This arrangement does not include the requested breaks. Recalculate or rearrange first.");return;}
   if(opt.assign.some(a=>a.kind==='class' && !a.availabilityOverride && Array.from({length:a.lesson},(_,i)=>key(a.d,a.start+i)).some(k=>!classAvailability(rnd,a).has(k)))) {flash('A class no longer matches everyone’s availability. Rearrange it or mark it as agreed separately before confirming.');return;}
   if(opt.assign.some((a,i)=>opt.assign.slice(i+1).some(b=>classOccupies(a,b)))) {flash('Some events overlap. Rearrange before confirming.');return;}
   const offered=expandGridAvailability(rnd.offered);
@@ -2774,6 +2797,10 @@ function rescheduleWeek() {
 function endWeek() {
   const rnd = activeRound();
   if (!rnd.plan || rnd.completed) return;
+  const today = new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const dates=rnd.plan.lessons.filter(l=>l.status==='planned').map(l=>calendarDate(rnd.plan.weekStart,l.d,0,0).toISOString().slice(0,10));
+  const last=dates.sort().at(-1);
+  if((rnd.plan.weekStart>today || (last && last>today)) && !window.confirm('End week '+rnd.plan.weekNo+' and log its hours?\n\n'+(last?'The last scheduled teaching date is '+fmtDateShort(last)+'.':'This week begins on '+fmtDateShort(rnd.plan.weekStart)+'.')+' These dates are still ahead. Hours will be marked as completed.')) return;
 
   const completionId = "week-" + S.week + "-" + Date.now().toString(36);
   const { y, m, d } = isoParts(rnd.plan.weekStart);
@@ -4282,7 +4309,7 @@ function renderTabContent() {
   let content = "";
   if (S.tab === "week") content = renderOfferTab();
   else if (S.tab === "replies") content = renderRepliesTab();
-  else if (S.tab === "plan") content = renderStudentFilter() + renderClassTools(rnd) + (rnd.plan ? renderLivePlanTab() : renderPreConfirmPlanTab());
+  else if (S.tab === "plan") content = renderStudentFilter() + renderBreakControls(rnd) + renderClassTools(rnd) + (rnd.plan ? renderLivePlanTab() : renderPreConfirmPlanTab());
   else if (S.tab === "hours") return renderHoursTab();
   else return "";
 
@@ -4861,6 +4888,12 @@ document.getElementById("app").addEventListener("click", (e) => {
     const selected = document.querySelector('[data-action="setScheduleView"][aria-pressed="true"]');
     if (selected) selected.focus({ preventScroll: true });
   }
+  else if (action === "applyBreaks") {
+    const rnd=activeRound();if(rnd.plan||rnd.completed)return;
+    const panel=document.getElementById('breakControls');
+    rnd.breakSettings={enabled:panel.querySelector('[name="breakEnabled"]').checked,durations:[...panel.querySelectorAll('[name="breakMinutes"]')].map(e=>Number(e.value))};
+    invalidateStudentOptions(rnd);flash('Break settings saved. Recalculate options to apply them.');
+  }
   else if (action === "planClass") openClassPlanner();
   else if (action === "removeClass") removeClass(id);
   else if (action === "clearOffer") clearOffer();
@@ -5012,6 +5045,10 @@ document.getElementById("app").addEventListener("change", (e) => {
   const el = e.target.closest("[data-bind]");
   if (!el) return;
   const bind = el.dataset.bind;
+  if(bind==='breakCount'){
+    const box=document.getElementById('breakDurations'),old=[...box.querySelectorAll('select')].map(e=>Number(e.value));
+    box.innerHTML=breakDurationFields(Array.from({length:Number(el.value)},(_,i)=>old[i]||15));return;
+  }
   if (bind === "scheduleStudent") {
     const id = el.dataset.id;
     setStudentIncluded(id, el.checked);

@@ -1630,6 +1630,7 @@ function serializeState() {
     };
   });
   return JSON.stringify({
+    cancellationLifecycleVersion: 1,
     tab: S.tab,
     scheduleView: S.scheduleView,
     week: S.week,
@@ -1650,6 +1651,8 @@ function applySavedState(saved) {
   S.scheduleView = saved.scheduleView === "agenda" ? "agenda" : "timetable";
   S.week = saved.week || S.week;
   S.weeksCompleted = saved.weeksCompleted || 0;
+  // Older versions counted a non-teaching week before it was ended.
+  if(!saved.cancellationLifecycleVersion) S.weeksCompleted=Math.max(0,S.weeksCompleted-Object.values(saved.rounds||{}).filter(r=>r.notTeaching&&!r.completed).length);
   S.termRanges = Array.isArray(saved.termRanges) ? saved.termRanges : S.termRanges;
   S.settings = migratePrioritySettings(saved.settings || S.settings);
   if (S.settings.schedulingMode !== "rolling") {
@@ -1830,7 +1833,7 @@ window.addEventListener("beforeunload",e=>{
 
 const taughtFor = (id) => S.log.filter(e => e.studentId === id).reduce((s, e) => s + e.hours, 0);
 const scheduledLessonsFor = (id) => Object.values(S.rounds || {}).flatMap(rnd => {
-  if (rnd.completed || !rnd.plan || !Array.isArray(rnd.plan.lessons)) return [];
+  if (rnd.notTeaching || rnd.completed || !rnd.plan || !Array.isArray(rnd.plan.lessons)) return [];
   return rnd.plan.lessons
     .filter(lesson => (lesson.kind === "class" ? lesson.creditHours && classMembers(lesson).includes(id) : lesson.id === id) && (lesson.status === "planned" || lesson.status === "cancelled_late"))
     .map(lesson => ({ lesson, plan: rnd.plan, startHour: rnd.dayStartHour != null ? rnd.dayStartHour : 9 }));
@@ -1965,7 +1968,7 @@ function flash(msg) {
 function clearOffer() {
   const rnd = activeRound();
   if (rnd.completed) return;
-  if (rnd.notTeaching) { rnd.notTeaching = false; S.weeksCompleted = Math.max(0, S.weeksCompleted - 1); }
+  if (rnd.notTeaching) { skipWeek(); return; }
   rnd.sent = false;
   rnd.offered = new Set(); rnd.blockPreferences = []; rnd.result = null;
   render();
@@ -2061,7 +2064,7 @@ function manualCurrent() { return manualEditor && manualEditor.people[manualEdit
 function manualDirty() { return manualEditor && JSON.stringify(manualEditor.assign) !== JSON.stringify(manualEditor.initial); }
 function openManualEditor() {
   const rnd = activeRound(), people = getParticipants(rnd).map(p => ({ ...p, avail: expandGridAvailability(p.avail) })).concat((rnd.classes || []).map(c=>({...c,avail:classAvailability(rnd,c)})));
-  if (!stateReady || stateBlocked || rnd.plan || !people.length || !rnd.offered.size) return;
+  if (!stateReady || stateBlocked || rnd.notTeaching || rnd.plan || !people.length || !rnd.offered.size) return;
   const selected = rnd.result && rnd.result.options[rnd.chosen];
   const offered = expandGridAvailability(rnd.offered);
   const cells = [...offered].map(k => k.split("-").map(Number));
@@ -2464,6 +2467,7 @@ function renderBreakControls(rnd){
 
 function runSolver() {
   const rnd = activeRound();
+  if(rnd.notTeaching)return;
   if (rnd.completed) return;
   if (rnd.plan) { flash("Undo confirmation before calculating new options"); return; }
   if (!rnd.offered.size) { flash("Paint some blocks first"); return; }
@@ -2592,7 +2596,7 @@ async function doImage(assign, weekNoLabel, weekStartISO, filenameWeekNo, startH
 function confirmSchedule() {
   const rnd = activeRound();
   const opt = rnd.result && rnd.result.options[rnd.chosen];
-  if (!opt || rnd.completed || rnd.plan) return;
+  if (!opt || rnd.notTeaching || rnd.completed || rnd.plan) return;
   if(!hasRequestedBreaks(rnd,opt.assign)){flash("This arrangement does not include the requested breaks. Recalculate or rearrange first.");return;}
   if(opt.assign.some(a=>a.kind==='class' && !a.availabilityOverride && Array.from({length:a.lesson},(_,i)=>key(a.d,a.start+i)).some(k=>!classAvailability(rnd,a).has(k)))) {flash('A class no longer matches everyone’s availability. Rearrange it or mark it as agreed separately before confirming.');return;}
   if(opt.assign.some((a,i)=>opt.assign.slice(i+1).some(b=>classOccupies(a,b)))) {flash('Some events overlap. Rearrange before confirming.');return;}
@@ -2686,7 +2690,7 @@ function foldCalendarLine(line) {
 
 function buildScheduleCalendar(rnd) {
   const plan = rnd.plan;
-  if (!plan) return "";
+  if (rnd.notTeaching || !plan) return "";
   const lessons = plan.lessons.filter(l => l.status === "planned")
     .slice().sort((a, b) => a.d - b.d || a.start - b.start);
   if (!lessons.length) return "";
@@ -2796,6 +2800,7 @@ function rescheduleWeek() {
 
 function endWeek() {
   const rnd = activeRound();
+  if(rnd.notTeaching){endCancelledWeek();return;}
   if (!rnd.plan || rnd.completed) return;
   const today = new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const dates=rnd.plan.lessons.filter(l=>l.status==='planned').map(l=>calendarDate(rnd.plan.weekStart,l.d,0,0).toISOString().slice(0,10));
@@ -2852,24 +2857,26 @@ function undoEndWeek() {
   animatedRender(-1);
 }
 
-// A toggle now, not a one-shot jump — tapping it marks the CURRENT week
-// (locking its grid) rather than immediately moving on. Tap it again, or
-// hit Clear, to undo. weeksCompleted moves with it either way, since it's
-// just a tally, not a gate.
+// Cancelling pauses the retained schedule; only ending the week increments progress.
 function skipWeek() {
-  const rnd = activeRound();
-  if (rnd.completed) return;
-  if (rnd.plan) { flash("Finish or clear this week's schedule first"); return; }
-  if (!rnd.notTeaching && (rnd.classes || []).length) {flash("Remove your draft classes before marking this week as not teaching.");return;}
-  if (rnd.notTeaching) {
-    rnd.notTeaching = false;
-    S.weeksCompleted = Math.max(0, S.weeksCompleted - 1);
-  } else {
-    rnd.notTeaching = true;
-    S.weeksCompleted++;
-    flash("Week " + S.week + " marked as not teaching");
-  }
-  render();
+  const rnd=activeRound();
+  if(!stateReady || stateBlocked || rnd.completed)return;
+  if(!rnd.notTeaching && (rnd.plan || rnd.result?.options?.length || rnd.classes?.length) && !window.confirm('Cancel teaching for Week '+S.week+'?\n\nAll lessons and classes will be inactive. No scheduled hours will be logged. Previously recorded hours stay unchanged. You can restore the arrangement later.'))return;
+  rnd.notTeaching=!rnd.notTeaching;
+  S.imgUrl='';S.fallbackText='';
+  render();flash(rnd.notTeaching?'Teaching cancelled. End this week from Schedule without logging hours.':'Teaching restored. Your previous arrangement is available again.');
+}
+function endCancelledWeek(){
+  const rnd=activeRound();
+  if(!stateReady || stateBlocked || !rnd.notTeaching || rnd.completed)return;
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  if(rnd.weekStart>today && !window.confirm('End future Week '+S.week+' without logging hours?'))return;
+  rnd.completed=true;rnd.completionId='cancelled-week-'+S.week+'-'+Date.now().toString(36);rnd.completedAt=new Date().toISOString();
+  S.weeksCompleted++;S.tab='hours';S.imgUrl='';S.fallbackText='';animatedRender(1);flash('Week completed · No additional hours logged');
+}
+function renderCancelledWeek(){
+  const rnd=activeRound();
+  return '<div class="pad" style="padding-top:0"><section class="panel"><h3>Not teaching this week</h3><p class="lede">'+(rnd.completed?'Week completed without logging any additional hours.':'No scheduled hours will be logged. Previously recorded hours are unchanged.')+'</p><p class="hint">Your previous arrangement and replies are retained so you can restore teaching.</p>'+(!rnd.completed?'<div class="btnrow"><button class="btn sig" data-action="endCancelledWeek">End week without logging hours</button><button class="btn" data-action="skipWeek">Restore teaching</button></div>':'')+'</section></div>';
 }
 
 function prevWeek() {
@@ -4301,7 +4308,7 @@ function renderStudentFilter() {
 }
 
 function renderCompletedWeekBanner() {
-  return '<div class="completed-week-banner"><span class="completed-tick" aria-hidden="true">✓</span><span>Week completed · Hours logged</span></div>';
+  return '<div class="completed-week-banner"><span class="completed-tick" aria-hidden="true">✓</span><span>Week completed · '+(activeRound().notTeaching?'No additional hours logged':'Hours logged')+'</span></div>';
 }
 
 function renderTabContent() {
@@ -4309,7 +4316,7 @@ function renderTabContent() {
   let content = "";
   if (S.tab === "week") content = renderOfferTab();
   else if (S.tab === "replies") content = renderRepliesTab();
-  else if (S.tab === "plan") content = renderStudentFilter() + renderBreakControls(rnd) + renderClassTools(rnd) + (rnd.plan ? renderLivePlanTab() : renderPreConfirmPlanTab());
+  else if (S.tab === "plan") content = rnd.notTeaching ? renderCancelledWeek() : renderStudentFilter() + renderBreakControls(rnd) + renderClassTools(rnd) + (rnd.plan ? renderLivePlanTab() : renderPreConfirmPlanTab());
   else if (S.tab === "hours") return renderHoursTab();
   else return "";
 
@@ -4365,10 +4372,10 @@ function buildOfferActionsHTML(rnd) {
 
 function renderOfferTab() {
   const rnd = activeRound();
-  const hours = (rnd.offered.size * GRID_SLOT_MIN) / 60;
+  const hours = rnd.notTeaching ? 0 : (rnd.offered.size * GRID_SLOT_MIN) / 60;
   const grid = buildGridHTML("offer", { selected: rnd.offered, offered: null, heat: null, days: roundDays(rnd), slots: roundSlots(rnd), startHour: rnd.dayStartHour });
   const gridBlock = rnd.notTeaching
-    ? '<div class="grid-locked">Marked as not teaching this week.<br>Tap \u201cNot teaching this week\u201d again, or \u201cClear grid\u201d, to paint times.</div>'
+    ? '<div class="grid-locked">Marked as not teaching this week.<br>Restore teaching to return to your previous arrangement, or finish the week without logging hours from Schedule.</div>'
     : '<div id="offerGrid"' + (rnd.sent ? ' class="offer-locked"' : "") + '>' + grid + "</div>";
   return '<div class="pad" style="padding-top:0">' +
     '<label class="dateline" style="margin-bottom:4px">Week beginning <input type="date" data-bind="weekStart" value="' + rnd.weekStart + '"></label>' +
@@ -4898,6 +4905,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (action === "removeClass") removeClass(id);
   else if (action === "clearOffer") clearOffer();
   else if (action === "skipWeek") skipWeek();
+  else if (action === "endCancelledWeek") endCancelledWeek();
   else if (action === "prevWeek") prevWeek();
   else if (action === "nextWeek") nextWeek();
   else if (action === "sendToStudents") sendToStudents();
